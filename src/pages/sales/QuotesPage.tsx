@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { ComponentProps } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -83,7 +84,7 @@ export function QuotesPage() {
       accessorKey: 'status',
       header: 'Status',
       cell: ({ row }: { row: { original: typeof quotes[0] } }) => {
-        const statusConfig = {
+        const statusConfig: Record<typeof row.original.status, { variant: NonNullable<ComponentProps<typeof Badge>['variant']>; icon: typeof Clock }> = {
           draft: { variant: 'secondary', icon: Clock },
           sent: { variant: 'default', icon: Send },
           accepted: { variant: 'default', icon: CheckCircle2 },
@@ -92,7 +93,7 @@ export function QuotesPage() {
         const config = statusConfig[row.original.status];
         const Icon = config.icon;
         return (
-          <Badge variant={config.variant as any}>
+          <Badge variant={config.variant}>
             <Icon className="mr-1 h-3 w-3" />
             {row.original.status}
           </Badge>

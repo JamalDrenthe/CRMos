@@ -31,6 +31,7 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
+import type { Job } from '@/types';
 
 export function JobsPage() {
   const { jobs, addJob, publishJob, closeJob } = useRecruitmentStore();
@@ -40,7 +41,7 @@ export function JobsPage() {
     title: '',
     department: '',
     location: '',
-    type: 'full-time' as const,
+    type: 'full-time' as Job['type'],
     description: '',
     requirements: [] as string[],
     salary_min: 0,
@@ -68,7 +69,7 @@ export function JobsPage() {
       title: '',
       department: '',
       location: '',
-      type: 'full-time',
+      type: 'full-time' as Job['type'],
       description: '',
       requirements: [],
       salary_min: 0,
@@ -225,7 +226,7 @@ export function JobsPage() {
                 <select
                   className="w-full rounded-md border border-input bg-background px-3 py-2"
                   value={newJob.type}
-                  onChange={(e) => setNewJob({ ...newJob, type: e.target.value as any })}
+                  onChange={(e) => setNewJob({ ...newJob, type: e.target.value as Job['type'] })}
                 >
                   <option value="full-time">Full-time</option>
                   <option value="part-time">Part-time</option>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -53,6 +53,32 @@ export function AgentWorkspace() {
     return () => clearInterval(interval);
   }, [activeCall]);
 
+  const handleStartCall = useCallback(() => {
+    const randomContact = contacts[Math.floor(Math.random() * contacts.length)];
+    setActiveCall({
+      id: 'call-' + Date.now(),
+      direction: 'outbound',
+      from_number: '+15550001111',
+      to_number: randomContact.phone || '+15551234567',
+      contact_id: randomContact.id,
+      contact_name: `${randomContact.first_name} ${randomContact.last_name}`,
+      status: 'in-progress',
+      agent_id: 'user1',
+      agent_name: 'Alex Johnson',
+      campaign_id: '1',
+      started_at: new Date().toISOString(),
+    });
+    setCallDuration(0);
+    setCurrentStep(0);
+    setShowDisposition(false);
+    setNotes('');
+    toast.success('Call started - Press W to end');
+  }, [contacts, setActiveCall]);
+
+  const handleEndCall = useCallback(() => {
+    setShowDisposition(true);
+  }, []);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -75,33 +101,7 @@ export function AgentWorkspace() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeCall, showDisposition]);
-
-  const handleStartCall = () => {
-    const randomContact = contacts[Math.floor(Math.random() * contacts.length)];
-    setActiveCall({
-      id: 'call-' + Date.now(),
-      direction: 'outbound',
-      from_number: '+15550001111',
-      to_number: randomContact.phone || '+15551234567',
-      contact_id: randomContact.id,
-      contact_name: `${randomContact.first_name} ${randomContact.last_name}`,
-      status: 'in-progress',
-      agent_id: 'user1',
-      agent_name: 'Alex Johnson',
-      campaign_id: '1',
-      started_at: new Date().toISOString(),
-    });
-    setCallDuration(0);
-    setCurrentStep(0);
-    setShowDisposition(false);
-    setNotes('');
-    toast.success('Call started - Press W to end');
-  };
-
-  const handleEndCall = () => {
-    setShowDisposition(true);
-  };
+  }, [activeCall, handleEndCall, handleStartCall, showDisposition, toggleMute, togglePause]);
 
   const handleDisposition = (disposition: string) => {
     if (activeCall) {

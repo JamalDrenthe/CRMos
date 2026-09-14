@@ -25,6 +25,7 @@ import {
   ArrowDownRight,
   Clock,
 } from 'lucide-react';
+import type { Candidate } from '@/types';
 
 interface StatCardProps {
   title: string;
@@ -428,7 +429,7 @@ export function Dashboard() {
               <CardContent>
                 <div className="space-y-4">
                   {['new', 'screening', 'interview', 'offer', 'hired'].map((stage) => {
-                    const count = useRecruitmentStore.getState().getCandidatesByStage(stage as any).length;
+                    const count = useRecruitmentStore.getState().getCandidatesByStage(stage as Candidate['status']).length;
                     return (
                       <div key={stage} className="flex items-center justify-between">
                         <span className="capitalize">{stage}</span>

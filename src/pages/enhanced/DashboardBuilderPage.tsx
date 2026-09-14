@@ -28,6 +28,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
+import type { DashboardWidget } from '@/types';
 
 const widgetTypes = [
   { type: 'stats', name: 'Key Metrics', icon: BarChart3 },
@@ -47,7 +48,7 @@ export function DashboardBuilderPage() {
   const { candidates } = useRecruitmentStore();
   const [isAddWidgetOpen, setIsAddWidgetOpen] = useState(false);
 
-  const renderWidget = (widget: any) => {
+  const renderWidget = (widget: DashboardWidget) => {
     switch (widget?.type) {
       case 'stats':
         return (
@@ -167,7 +168,7 @@ export function DashboardBuilderPage() {
                   onClick={() => {
                     if (currentDashboard) {
                       addWidget(currentDashboard.id, {
-                        type: widget.type as any,
+                        type: widget.type as DashboardWidget['type'],
                         title: widget.name,
                         config: {},
                         position: { x: 0, y: 0, w: 2, h: 2 },

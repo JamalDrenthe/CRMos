@@ -33,6 +33,7 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
+import type { Activity } from '@/types';
 
 export function ActivitiesPage() {
   const { activities, contacts, deals, addActivity, completeActivity, deleteActivity } = useCRMStore();
@@ -40,7 +41,7 @@ export function ActivitiesPage() {
   const [filter, setFilter] = useState<'all' | 'pending' | 'completed'>('all');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [newActivity, setNewActivity] = useState({
-    type: 'task' as const,
+    type: 'task' as Activity['type'],
     title: '',
     description: '',
     due_date: '',
@@ -84,7 +85,7 @@ export function ActivitiesPage() {
     });
     setIsAddDialogOpen(false);
     setNewActivity({
-      type: 'task',
+      type: 'task' as Activity['type'],
       title: '',
       description: '',
       due_date: '',
@@ -214,7 +215,7 @@ export function ActivitiesPage() {
                 <select
                   className="w-full rounded-md border border-input bg-background px-3 py-2"
                   value={newActivity.type}
-                  onChange={(e) => setNewActivity({ ...newActivity, type: e.target.value as any })}
+                  onChange={(e) => setNewActivity({ ...newActivity, type: e.target.value as Activity['type'] })}
                 >
                   <option value="task">Task</option>
                   <option value="call">Call</option>
