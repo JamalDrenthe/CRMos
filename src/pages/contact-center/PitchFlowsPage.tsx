@@ -52,7 +52,7 @@ export function PitchFlowsPage() {
     addPitchFlow({
       ...newPitchFlow,
       steps: [
-        { id: '1', order: 0, type: 'intro', title: 'Introduction', content: 'Hi, this is [Agent] from JamCRM.' },
+        { id: '1', order: 0, type: 'intro', title: 'Introduction', content: 'Hi, this is [Agent] from CRMos.' },
       ],
       is_active: true,
     });

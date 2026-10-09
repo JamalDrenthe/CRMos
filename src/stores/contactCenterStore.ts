@@ -11,7 +11,7 @@ const sampleCampaigns: Campaign[] = [
     type: 'outbound',
     status: 'active',
     description: 'Target enterprise accounts for Q4 closing',
-    script: 'Hi [Name], this is [Agent] from JamCRM. I noticed your company is growing rapidly...',
+    script: 'Hi [Name], this is [Agent] from CRMos. I noticed your company is growing rapidly...',
     pitch_flow_id: '1',
     target_contacts: 500,
     completed_contacts: 320,
@@ -339,7 +339,7 @@ export const useContactCenterStore = create<ContactCenterState>()(
       },
     }),
     {
-      name: 'jamcrm-contactcenter-storage',
+      name: 'crmos-contactcenter-storage',
     }
   )
 );

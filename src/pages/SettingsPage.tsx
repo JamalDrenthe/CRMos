@@ -103,7 +103,7 @@ export function SettingsPage() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label>Organization Name</Label>
-                <Input defaultValue="JamCRM Demo" />
+                <Input defaultValue="CRMos" />
               </div>
               <div className="space-y-2">
                 <Label>Currency</Label>

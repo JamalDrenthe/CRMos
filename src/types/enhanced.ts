@@ -1,4 +1,4 @@
-// Enhanced Types for JamCRM v2.0
+// Enhanced Types for CRMos
 import type { Contact, GeoJSONPolygon } from './index';
 
 // Organization & Multi-tenant

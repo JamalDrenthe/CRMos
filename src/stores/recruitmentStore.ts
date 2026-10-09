@@ -363,7 +363,7 @@ export const useRecruitmentStore = create<RecruitmentState>()(
       },
     }),
     {
-      name: 'jamcrm-recruitment-storage',
+      name: 'crmos-recruitment-storage',
     }
   )
 );

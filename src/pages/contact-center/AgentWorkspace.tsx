@@ -24,9 +24,9 @@ import {
 } from 'lucide-react';
 
 const pitchSteps = [
-  { id: 1, title: 'Introduction', content: 'Hi [Name], this is [Agent] from JamCRM. How are you today?' },
+  { id: 1, title: 'Introduction', content: 'Hi [Name], this is [Agent] from CRMos. How are you today?' },
   { id: 2, title: 'Discovery', content: 'I\'m calling because I noticed your company is growing rapidly. Are you currently using a CRM system?' },
-  { id: 3, title: 'Value Proposition', content: 'JamCRM helps companies like yours increase sales productivity by 40% on average.' },
+  { id: 3, title: 'Value Proposition', content: 'CRMos helps companies like yours increase sales productivity by 40% on average.' },
   { id: 4, title: 'Demo Offer', content: 'I\'d love to show you how it works. Are you available for a quick 15-minute demo this week?' },
   { id: 5, title: 'Close', content: 'Great! I\'ll send you a calendar invite. What\'s the best email to reach you?' },
 ];

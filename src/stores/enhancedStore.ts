@@ -140,14 +140,14 @@ const samplePitchFlows: PitchFlow[] = [
     name: 'Enterprise Software Pitch',
     description: 'Standard pitch for enterprise prospects',
     steps: [
-      { id: '1', order: 0, type: 'intro', title: 'Introduction', content: 'Hi [Name], this is [Agent] from JamCRM. How are you today?' },
+      { id: '1', order: 0, type: 'intro', title: 'Introduction', content: 'Hi [Name], this is [Agent] from CRMos. How are you today?' },
       { id: '2', order: 1, type: 'question', title: 'Discovery', content: 'Can you tell me about your current CRM challenges?', branching: [
         { condition: 'has_crm', next_step_id: '3', label: 'Has CRM' },
         { condition: 'no_crm', next_step_id: '4', label: 'No CRM' },
       ]},
       { id: '3', order: 2, type: 'value_prop', title: 'Migration Value', content: 'Our migration tool makes switching seamless. Most customers are up and running in 48 hours.' },
       { id: '4', order: 3, type: 'value_prop', title: 'First CRM Value', content: 'Starting with a CRM can transform your sales process. Our customers see 40% productivity gains on average.' },
-      { id: '5', order: 4, type: 'close', title: 'Schedule Demo', content: 'I\'d love to show you how JamCRM can help. Are you available for a 15-minute demo this week?' },
+      { id: '5', order: 4, type: 'close', title: 'Schedule Demo', content: 'I\'d love to show you how CRMos can help. Are you available for a 15-minute demo this week?' },
     ],
     is_active: true,
     created_at: new Date(Date.now() - 2592000000).toISOString(),
@@ -546,7 +546,7 @@ export const useEnhancedStore = create<EnhancedState>()(
       },
     }),
     {
-      name: 'jamcrm-enhanced-storage',
+      name: 'crmos-enhanced-storage',
     }
   )
 );

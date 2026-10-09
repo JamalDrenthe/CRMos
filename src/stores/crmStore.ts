@@ -766,7 +766,7 @@ export const useCRMStore = create<CRMState>()(
       },
     }),
     {
-      name: 'jamcrm-crm-storage',
+      name: 'crmos-crm-storage',
     }
   )
 );

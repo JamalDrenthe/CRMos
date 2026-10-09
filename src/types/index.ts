@@ -1,5 +1,5 @@
 // ============================================
-// JAMCRM v2.0 - Complete Type Definitions
+// CRMos - Complete Type Definitions
 // ============================================
 
 // ===== User & Organization =====

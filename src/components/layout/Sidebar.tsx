@@ -219,7 +219,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
               <Briefcase className="h-5 w-5 text-primary-foreground" />
             </div>
             {!isCollapsed && (
-              <span className="text-lg font-bold">JamCRM</span>
+              <span className="text-lg font-bold">CRMos</span>
             )}
           </NavLink>
         </div>

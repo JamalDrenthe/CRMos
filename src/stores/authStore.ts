@@ -114,7 +114,7 @@ export const useAuthStore = create<AuthState>()(
       },
     }),
     {
-      name: 'jamcrm-auth-storage',
+      name: 'crmos-auth-storage',
       partialize: (state) => ({
         user: state.user,
         organization: state.organization,
