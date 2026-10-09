@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Header } from '@/components/layout/Header';
@@ -28,6 +28,7 @@ import { SettingsPage } from '@/pages/SettingsPage';
 import { LoginPage } from '@/pages/LoginPage';
 
 import { useAuthStore } from '@/stores/authStore';
+import { useCRMStore } from '@/stores/crmStore';
 import { cn } from '@/lib/utils';
 
 function Layout({ children }: { children: React.ReactNode }) {
@@ -62,6 +63,31 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function App() {
+  const { initAuthListener, organization } = useAuthStore();
+  const { syncWithFirestore } = useCRMStore();
+
+  // Initialize Firebase Auth listener on app start
+  useEffect(() => {
+    const unsubAuth = initAuthListener();
+    return () => {
+      if (typeof unsubAuth === 'function') {
+        unsubAuth();
+      }
+    };
+  }, [initAuthListener]);
+
+  // Sync CRM data with Firestore for active organization
+  useEffect(() => {
+    if (organization?.id) {
+      const unsubFirestore = syncWithFirestore(organization.id);
+      return () => {
+        if (typeof unsubFirestore === 'function') {
+          unsubFirestore();
+        }
+      };
+    }
+  }, [organization?.id, syncWithFirestore]);
+
   return (
     <TooltipProvider>
       <BrowserRouter>

@@ -1,0 +1,41 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function om te controleren of de gebruiker ingelogd is
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Gebruikersprofielen
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Organisaties
+    match /organizations/{orgId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Contacten
+    match /crm_contacts/{contactId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Bedrijven
+    match /crm_companies/{companyId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Deals / Verkoopkansen
+    match /crm_deals/{dealId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Activiteiten & taken
+    match /crm_activities/{activityId} {
+      allow read, write: if isAuthenticated();
+    }
+  }
+}

@@ -1,6 +1,22 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Contact, Contact360, Company, Deal, Pipeline, Activity, TimelineEvent } from '@/types';
+import {
+  saveContactToFirestore,
+  deleteContactFromFirestore,
+  subscribeToContacts,
+  saveCompanyToFirestore,
+  deleteCompanyFromFirestore,
+  subscribeToCompanies,
+  saveDealToFirestore,
+  deleteDealFromFirestore,
+  subscribeToDeals,
+  saveActivityToFirestore,
+  deleteActivityFromFirestore,
+  subscribeToActivities,
+} from '@/services/firestoreService';
+import { useAuthStore } from '@/stores/authStore';
+import { isFirebaseConfigured } from '@/lib/firebase';
 
 // Generate IDs
 const generateId = () => Math.random().toString(36).substring(2, 15);
@@ -412,6 +428,11 @@ interface CRMState {
   searchContacts: (query: string) => Contact[];
   searchCompanies: (query: string) => Company[];
   searchDeals: (query: string) => Deal[];
+
+  // Firestore Sync
+  isFirestoreSynced: boolean;
+  syncStatus: 'idle' | 'syncing' | 'synced' | 'offline';
+  syncWithFirestore: (orgId: string) => () => void;
 }
 
 export const useCRMStore = create<CRMState>()(
@@ -425,6 +446,8 @@ export const useCRMStore = create<CRMState>()(
       selectedContact: null,
       selectedDeal: null,
       selectedCompany: null,
+      isFirestoreSynced: false,
+      syncStatus: 'idle',
 
       setContacts: (contacts) => set({ contacts }),
       setCompanies: (companies) => set({ companies }),
@@ -440,21 +463,30 @@ export const useCRMStore = create<CRMState>()(
           updated_at: new Date().toISOString(),
         };
         set((state) => ({ contacts: [...state.contacts, newContact] }));
+        const orgId = useAuthStore.getState().organization?.id || 'default_org';
+        saveContactToFirestore(newContact, orgId);
         return newContact;
       },
 
       updateContact: (id, updates) => {
-        set((state) => ({
-          contacts: state.contacts.map((c) =>
+        set((state) => {
+          const updatedContacts = state.contacts.map((c) =>
             c.id === id ? { ...c, ...updates, updated_at: new Date().toISOString() } : c
-          ),
-        }));
+          );
+          const updated = updatedContacts.find((c) => c.id === id);
+          if (updated) {
+            const orgId = useAuthStore.getState().organization?.id || 'default_org';
+            saveContactToFirestore(updated, orgId);
+          }
+          return { contacts: updatedContacts };
+        });
       },
 
       deleteContact: (id) => {
         set((state) => ({
           contacts: state.contacts.filter((c) => c.id !== id),
         }));
+        deleteContactFromFirestore(id);
       },
 
       addCompany: (companyData) => {
@@ -465,21 +497,30 @@ export const useCRMStore = create<CRMState>()(
           updated_at: new Date().toISOString(),
         };
         set((state) => ({ companies: [...state.companies, newCompany] }));
+        const orgId = useAuthStore.getState().organization?.id || 'default_org';
+        saveCompanyToFirestore(newCompany, orgId);
         return newCompany;
       },
 
       updateCompany: (id, updates) => {
-        set((state) => ({
-          companies: state.companies.map((c) =>
+        set((state) => {
+          const updatedCompanies = state.companies.map((c) =>
             c.id === id ? { ...c, ...updates, updated_at: new Date().toISOString() } : c
-          ),
-        }));
+          );
+          const updated = updatedCompanies.find((c) => c.id === id);
+          if (updated) {
+            const orgId = useAuthStore.getState().organization?.id || 'default_org';
+            saveCompanyToFirestore(updated, orgId);
+          }
+          return { companies: updatedCompanies };
+        });
       },
 
       deleteCompany: (id) => {
         set((state) => ({
           companies: state.companies.filter((c) => c.id !== id),
         }));
+        deleteCompanyFromFirestore(id);
       },
 
       addDeal: (dealData) => {
@@ -490,31 +531,46 @@ export const useCRMStore = create<CRMState>()(
           updated_at: new Date().toISOString(),
         };
         set((state) => ({ deals: [...state.deals, newDeal] }));
+        const orgId = useAuthStore.getState().organization?.id || 'default_org';
+        saveDealToFirestore(newDeal, orgId);
         return newDeal;
       },
 
       updateDeal: (id, updates) => {
-        set((state) => ({
-          deals: state.deals.map((d) =>
+        set((state) => {
+          const updatedDeals = state.deals.map((d) =>
             d.id === id ? { ...d, ...updates, updated_at: new Date().toISOString() } : d
-          ),
-        }));
+          );
+          const updated = updatedDeals.find((d) => d.id === id);
+          if (updated) {
+            const orgId = useAuthStore.getState().organization?.id || 'default_org';
+            saveDealToFirestore(updated, orgId);
+          }
+          return { deals: updatedDeals };
+        });
       },
 
       deleteDeal: (id) => {
         set((state) => ({
           deals: state.deals.filter((d) => d.id !== id),
         }));
+        deleteDealFromFirestore(id);
       },
 
       moveDeal: (dealId, newStage) => {
-        set((state) => ({
-          deals: state.deals.map((d) =>
+        set((state) => {
+          const updatedDeals = state.deals.map((d) =>
             d.id === dealId
               ? { ...d, stage: newStage, updated_at: new Date().toISOString() }
               : d
-          ),
-        }));
+          );
+          const updated = updatedDeals.find((d) => d.id === dealId);
+          if (updated) {
+            const orgId = useAuthStore.getState().organization?.id || 'default_org';
+            saveDealToFirestore(updated, orgId);
+          }
+          return { deals: updatedDeals };
+        });
       },
 
       addActivity: (activityData) => {
@@ -525,31 +581,111 @@ export const useCRMStore = create<CRMState>()(
           updated_at: new Date().toISOString(),
         };
         set((state) => ({ activities: [...state.activities, newActivity] }));
+        const orgId = useAuthStore.getState().organization?.id || 'default_org';
+        saveActivityToFirestore(newActivity, orgId);
         return newActivity;
       },
 
       updateActivity: (id, updates) => {
-        set((state) => ({
-          activities: state.activities.map((a) =>
+        set((state) => {
+          const updatedActivities = state.activities.map((a) =>
             a.id === id ? { ...a, ...updates, updated_at: new Date().toISOString() } : a
-          ),
-        }));
+          );
+          const updated = updatedActivities.find((a) => a.id === id);
+          if (updated) {
+            const orgId = useAuthStore.getState().organization?.id || 'default_org';
+            saveActivityToFirestore(updated, orgId);
+          }
+          return { activities: updatedActivities };
+        });
       },
 
       completeActivity: (id) => {
-        set((state) => ({
-          activities: state.activities.map((a) =>
+        set((state) => {
+          const updatedActivities = state.activities.map((a) =>
             a.id === id
-              ? { ...a, status: 'completed', completed_at: new Date().toISOString(), updated_at: new Date().toISOString() }
+              ? { ...a, status: 'completed' as const, completed_at: new Date().toISOString(), updated_at: new Date().toISOString() }
               : a
-          ),
-        }));
+          );
+          const updated = updatedActivities.find((a) => a.id === id);
+          if (updated) {
+            const orgId = useAuthStore.getState().organization?.id || 'default_org';
+            saveActivityToFirestore(updated, orgId);
+          }
+          return { activities: updatedActivities };
+        });
       },
 
       deleteActivity: (id) => {
         set((state) => ({
           activities: state.activities.filter((a) => a.id !== id),
         }));
+        deleteActivityFromFirestore(id);
+      },
+
+      syncWithFirestore: (orgId: string) => {
+        if (!isFirebaseConfigured()) {
+          set({ syncStatus: 'offline', isFirestoreSynced: false });
+          return () => {};
+        }
+
+        set({ syncStatus: 'syncing' });
+
+        const unsubs: (() => void)[] = [];
+
+        // Contacts subscription
+        const unsubContacts = subscribeToContacts(orgId, (firestoreContacts) => {
+          if (firestoreContacts && firestoreContacts.length > 0) {
+            set((state) => {
+              const existingIds = new Set(firestoreContacts.map((c) => c.id));
+              const nonFirestore = state.contacts.filter((c) => !existingIds.has(c.id));
+              return { contacts: [...firestoreContacts, ...nonFirestore], syncStatus: 'synced', isFirestoreSynced: true };
+            });
+          }
+        });
+        unsubs.push(unsubContacts);
+
+        // Companies subscription
+        const unsubCompanies = subscribeToCompanies(orgId, (firestoreCompanies) => {
+          if (firestoreCompanies && firestoreCompanies.length > 0) {
+            set((state) => {
+              const existingIds = new Set(firestoreCompanies.map((c) => c.id));
+              const nonFirestore = state.companies.filter((c) => !existingIds.has(c.id));
+              return { companies: [...firestoreCompanies, ...nonFirestore] };
+            });
+          }
+        });
+        unsubs.push(unsubCompanies);
+
+        // Deals subscription
+        const unsubDeals = subscribeToDeals(orgId, (firestoreDeals) => {
+          if (firestoreDeals && firestoreDeals.length > 0) {
+            set((state) => {
+              const existingIds = new Set(firestoreDeals.map((d) => d.id));
+              const nonFirestore = state.deals.filter((d) => !existingIds.has(d.id));
+              return { deals: [...firestoreDeals, ...nonFirestore] };
+            });
+          }
+        });
+        unsubs.push(unsubDeals);
+
+        // Activities subscription
+        const unsubActivities = subscribeToActivities(orgId, (firestoreActivities) => {
+          if (firestoreActivities && firestoreActivities.length > 0) {
+            set((state) => {
+              const existingIds = new Set(firestoreActivities.map((a) => a.id));
+              const nonFirestore = state.activities.filter((a) => !existingIds.has(a.id));
+              return { activities: [...firestoreActivities, ...nonFirestore] };
+            });
+          }
+        });
+        unsubs.push(unsubActivities);
+
+        set({ isFirestoreSynced: true, syncStatus: 'synced' });
+
+        return () => {
+          unsubs.forEach((u) => u());
+        };
       },
 
       selectContact: (contact) => set({ selectedContact: contact }),

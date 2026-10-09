@@ -1,0 +1,7 @@
+{
+  "projects": {
+    "default": "crmosone-dev",
+    "dev": "crmosone-dev",
+    "prod": "crmosone-prod"
+  }
+}

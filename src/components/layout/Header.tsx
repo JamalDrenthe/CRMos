@@ -31,7 +31,10 @@ import {
   Phone,
   CheckCircle2,
   Command,
+  Cloud,
+  CloudOff,
 } from 'lucide-react';
+import { isFirebaseConfigured } from '@/lib/firebase';
 
 export function Header() {
   const navigate = useNavigate();
@@ -66,8 +69,8 @@ export function Header() {
     }
   };
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     navigate('/login');
   };
 
@@ -187,7 +190,27 @@ export function Header() {
       </div>
 
       {/* Right side - Actions */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-3">
+        {/* Firestore Status Badge */}
+        {isFirebaseConfigured() ? (
+          <div 
+            title="Firebase Firestore is verbonden en actief"
+            className="hidden items-center gap-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 text-xs font-medium text-emerald-600 sm:flex"
+          >
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <Cloud className="h-3 w-3" />
+            <span>Firestore Live</span>
+          </div>
+        ) : (
+          <div 
+            title="Lokale demomodus actief. Configureer Firebase in .env voor live cloud-opslag."
+            className="hidden items-center gap-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 text-xs font-medium text-amber-600 sm:flex"
+          >
+            <CloudOff className="h-3 w-3" />
+            <span>Demo Opslag</span>
+          </div>
+        )}
+
         {/* Active Call Indicator */}
         {activeCall && (
           <div className="flex items-center gap-2 rounded-full bg-green-500/10 px-3 py-1.5">
