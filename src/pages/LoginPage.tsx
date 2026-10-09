@@ -6,11 +6,15 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuthStore } from '@/stores/authStore';
 import { isFirebaseConfigured } from '@/lib/firebase';
+import { ThemeToggle } from '@/components/common/ThemeToggle';
+import { LanguageToggle } from '@/components/common/LanguageToggle';
+import { useTranslation } from '@/stores/languageStore';
 import { Briefcase, Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react';
 
 export function LoginPage() {
   const navigate = useNavigate();
   const { login, loginWithGoogleAction } = useAuthStore();
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -93,7 +97,13 @@ export function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-primary/5 via-background to-primary/10 p-4">
+    <div className="relative flex min-h-screen items-center justify-center bg-gradient-to-br from-primary/5 via-background to-primary/10 p-4">
+      {/* Top right language and theme controls */}
+      <div className="absolute top-4 right-4 flex items-center gap-2.5">
+        <LanguageToggle />
+        <ThemeToggle />
+      </div>
+
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="mb-8 flex justify-center">
@@ -104,9 +114,9 @@ export function LoginPage() {
 
         <Card className="border-0 shadow-2xl backdrop-blur-sm bg-card/95">
           <CardHeader className="space-y-1 text-center pb-4">
-            <CardTitle className="text-2xl font-bold tracking-tight">Welkom bij CRMos</CardTitle>
+            <CardTitle className="text-2xl font-bold tracking-tight">{t('Welcome to CRMos')}</CardTitle>
             <CardDescription>
-              Log in op je CRM-account via Google of met je inloggegevens
+              {t('Log in to your account with Google or your credentials')}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
@@ -147,12 +157,12 @@ export function LoginPage() {
                   />
                 </svg>
               )}
-              <span>{isGoogleLoading ? 'Verbinden met Google...' : 'Inloggen met Google'}</span>
+              <span>{isGoogleLoading ? t('Connecting with Google...') : t('Sign in with Google')}</span>
             </Button>
 
             {!hasFirebase && (
               <p className="text-[11px] text-center text-muted-foreground bg-muted/40 p-2 rounded border border-muted">
-                Tip: Voeg je Firebase-gegevens toe aan <code className="font-semibold text-primary">.env</code> om live in te loggen met je echte Google-account.
+                {t('Tip: Add Firebase credentials in .env')}
               </p>
             )}
 
@@ -161,13 +171,13 @@ export function LoginPage() {
                 <span className="w-full border-t border-muted" />
               </div>
               <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-card px-2 text-muted-foreground">Of met e-mail</span>
+                <span className="bg-card px-2 text-muted-foreground">{t('Or with email')}</span>
               </div>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="email">E-mailadres</Label>
+                <Label htmlFor="email">{t('Email')}</Label>
                 <Input
                   id="email"
                   type="email"
@@ -180,12 +190,12 @@ export function LoginPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="password">Wachtwoord</Label>
+                <Label htmlFor="password">{t('Password')}</Label>
                 <div className="relative">
                   <Input
                     id="password"
                     type={showPassword ? 'text' : 'password'}
-                    placeholder="Voer je wachtwoord in"
+                    placeholder="••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
@@ -207,12 +217,12 @@ export function LoginPage() {
                 disabled={isLoading || isGoogleLoading}
               >
                 {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                {isLoading ? 'Inloggen...' : 'Inloggen'}
+                {isLoading ? t('Signing in...') : t('Sign in')}
               </Button>
             </form>
 
             <div className="text-center text-xs text-muted-foreground pt-2">
-              <p>Demo-inloggen (elk gewenst e-mail/wachtwoord werkt)</p>
+              <p>{t('Demo credentials (any email/password works)')}</p>
             </div>
 
             <div className="grid grid-cols-2 gap-3 pt-1">
@@ -224,7 +234,7 @@ export function LoginPage() {
                 }}
                 className="rounded-lg border p-2 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent/60 transition-colors"
               >
-                Admin Demo
+                {t('Use Admin Account')}
               </button>
               <button
                 type="button"
@@ -234,7 +244,7 @@ export function LoginPage() {
                 }}
                 className="rounded-lg border p-2 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent/60 transition-colors"
               >
-                Agent Demo
+                {t('Use Agent Account')}
               </button>
             </div>
           </CardContent>

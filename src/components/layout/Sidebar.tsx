@@ -35,6 +35,7 @@ import {
   MessageSquare,
   Shield,
 } from 'lucide-react';
+import { useTranslation } from '@/stores/languageStore';
 
 interface SidebarProps {
   isCollapsed: boolean;
@@ -107,6 +108,7 @@ const adminNavItems: NavItem[] = [
 
 function NavItemComponent({ item, isCollapsed }: { item: NavItem; isCollapsed: boolean }) {
   const location = useLocation();
+  const { t } = useTranslation();
   const hasChildren = item.children && item.children.length > 0;
   const isActive = location.pathname === item.href || location.pathname.startsWith(item.href + '/');
   const [isOpen, setIsOpen] = useState(isActive);
@@ -125,7 +127,7 @@ function NavItemComponent({ item, isCollapsed }: { item: NavItem; isCollapsed: b
           >
             <div className="flex items-center gap-3">
               <item.icon className="h-5 w-5" />
-              {!isCollapsed && <span>{item.title}</span>}
+              {!isCollapsed && <span>{t(item.title)}</span>}
             </div>
             {!isCollapsed && (
               <ChevronDown className={cn('h-4 w-4 transition-transform', isOpen && 'rotate-180')} />
@@ -147,7 +149,7 @@ function NavItemComponent({ item, isCollapsed }: { item: NavItem; isCollapsed: b
                   }
                 >
                   <child.icon className="h-4 w-4" />
-                  <span>{child.title}</span>
+                  <span>{t(child.title)}</span>
                 </NavLink>
               ))}
             </div>
@@ -175,7 +177,7 @@ function NavItemComponent({ item, isCollapsed }: { item: NavItem; isCollapsed: b
             </NavLink>
           </TooltipTrigger>
           <TooltipContent side="right">
-            <p>{item.title}</p>
+            <p>{t(item.title)}</p>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
@@ -193,7 +195,7 @@ function NavItemComponent({ item, isCollapsed }: { item: NavItem; isCollapsed: b
       }
     >
       <item.icon className="h-5 w-5" />
-      <span>{item.title}</span>
+      <span>{t(item.title)}</span>
       {item.badge && (
         <span className="ml-auto flex h-5 w-5 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground">
           {item.badge}
@@ -204,6 +206,8 @@ function NavItemComponent({ item, isCollapsed }: { item: NavItem; isCollapsed: b
 }
 
 export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
+  const { t } = useTranslation();
+
   return (
     <TooltipProvider delayDuration={0}>
       <div
@@ -240,7 +244,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
             {/* Enhanced Features */}
             {!isCollapsed && (
               <p className="mb-2 px-3 text-xs font-semibold text-muted-foreground uppercase">
-                Enhanced
+                {t('Enhanced')}
               </p>
             )}
             {enhancedNavItems.map((item) => (
@@ -255,7 +259,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
             {/* Admin */}
             {!isCollapsed && (
               <p className="mb-2 px-3 text-xs font-semibold text-muted-foreground uppercase">
-                Admin
+                {t('Admin')}
               </p>
             )}
             {adminNavItems.map((item) => (
@@ -277,7 +281,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
             ) : (
               <>
                 <ChevronDown className="mr-2 h-4 w-4 rotate-90" />
-                <span>Collapse</span>
+                <span>{t('Collapse')}</span>
               </>
             )}
           </Button>

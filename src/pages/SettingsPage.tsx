@@ -6,6 +6,8 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuthStore } from '@/stores/authStore';
+import { useThemeStore } from '@/stores/themeStore';
+import { useLanguageStore } from '@/stores/languageStore';
 import { toast } from 'sonner';
 import {
   User,
@@ -21,6 +23,8 @@ import {
 
 export function SettingsPage() {
   const { user } = useAuthStore();
+  const { theme, setTheme } = useThemeStore();
+  const { language, setLanguage, t } = useLanguageStore();
   const [activeTab, setActiveTab] = useState('profile');
 
   return (
@@ -213,24 +217,79 @@ export function SettingsPage() {
         <TabsContent value="appearance" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Appearance</CardTitle>
+              <CardTitle>{t('Appearance')}</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-6">
               <div className="space-y-2">
-                <Label>Theme</Label>
+                <Label>{t('Theme')}</Label>
                 <div className="grid grid-cols-2 gap-4">
-                  <button className="rounded-lg border-2 border-primary bg-background p-4 text-left">
-                    <div className="mb-2 h-20 rounded bg-white border" />
-                    <p className="font-medium">Light</p>
+                  <button 
+                    type="button"
+                    onClick={() => setTheme('light')}
+                    className={`rounded-lg p-4 text-left transition-all ${
+                      theme === 'light' 
+                        ? 'border-2 border-primary bg-primary/5 shadow-xs' 
+                        : 'border border-input hover:bg-accent/40'
+                    }`}
+                  >
+                    <div className="mb-2 h-20 rounded bg-white border shadow-xs" />
+                    <p className="font-medium">{t('Light')}</p>
+                    <p className="text-xs text-muted-foreground">{language === 'nl' ? 'Lichte weergave' : 'Light mode'}</p>
                   </button>
-                  <button className="rounded-lg border border-input bg-background p-4 text-left">
-                    <div className="mb-2 h-20 rounded bg-slate-900" />
-                    <p className="font-medium">Dark</p>
+                  <button 
+                    type="button"
+                    onClick={() => setTheme('dark')}
+                    className={`rounded-lg p-4 text-left transition-all ${
+                      theme === 'dark' 
+                        ? 'border-2 border-primary bg-primary/5 shadow-xs' 
+                        : 'border border-input hover:bg-accent/40'
+                    }`}
+                  >
+                    <div className="mb-2 h-20 rounded bg-slate-900 border border-slate-700 shadow-xs" />
+                    <p className="font-medium">{t('Dark')}</p>
+                    <p className="text-xs text-muted-foreground">{language === 'nl' ? 'Donkere weergave' : 'Dark mode'}</p>
                   </button>
                 </div>
               </div>
+
               <div className="space-y-2">
-                <Label>Primary Color</Label>
+                <Label>{t('Language')}</Label>
+                <div className="grid grid-cols-2 gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setLanguage('nl')}
+                    className={`rounded-lg p-4 text-left transition-all ${
+                      language === 'nl'
+                        ? 'border-2 border-primary bg-primary/5 shadow-xs'
+                        : 'border border-input hover:bg-accent/40'
+                    }`}
+                  >
+                    <div className="mb-2 flex items-center justify-center h-20 rounded bg-accent/40 text-2xl font-bold">
+                      🇳🇱 NL
+                    </div>
+                    <p className="font-medium">Nederlands</p>
+                    <p className="text-xs text-muted-foreground">Standaard</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLanguage('en')}
+                    className={`rounded-lg p-4 text-left transition-all ${
+                      language === 'en'
+                        ? 'border-2 border-primary bg-primary/5 shadow-xs'
+                        : 'border border-input hover:bg-accent/40'
+                    }`}
+                  >
+                    <div className="mb-2 flex items-center justify-center h-20 rounded bg-accent/40 text-2xl font-bold">
+                      🇬🇧 EN
+                    </div>
+                    <p className="font-medium">English</p>
+                    <p className="text-xs text-muted-foreground">International</p>
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>{t('Primary Color')}</Label>
                 <div className="flex gap-2">
                   {['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#a855f7', '#ec4899'].map((color) => (
                     <button
@@ -241,9 +300,9 @@ export function SettingsPage() {
                   ))}
                 </div>
               </div>
-              <Button onClick={() => toast.success('Appearance settings saved')}>
+              <Button onClick={() => toast.success(t('Saved successfully'))}>
                 <Save className="mr-2 h-4 w-4" />
-                Save Changes
+                {t('Save')}
               </Button>
             </CardContent>
           </Card>

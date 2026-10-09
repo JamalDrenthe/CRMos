@@ -29,6 +29,7 @@ import { LoginPage } from '@/pages/LoginPage';
 
 import { useAuthStore } from '@/stores/authStore';
 import { useCRMStore } from '@/stores/crmStore';
+import { useThemeStore } from '@/stores/themeStore';
 import { cn } from '@/lib/utils';
 
 function Layout({ children }: { children: React.ReactNode }) {
@@ -65,6 +66,18 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 function App() {
   const { initAuthListener, organization } = useAuthStore();
   const { syncWithFirestore } = useCRMStore();
+  const { theme } = useThemeStore();
+
+  // Sync theme class on document element
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      if (theme === 'dark') {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    }
+  }, [theme]);
 
   // Initialize Firebase Auth listener on app start
   useEffect(() => {

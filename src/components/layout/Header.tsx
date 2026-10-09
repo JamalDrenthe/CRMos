@@ -35,12 +35,16 @@ import {
   CloudOff,
 } from 'lucide-react';
 import { isFirebaseConfigured } from '@/lib/firebase';
+import { ThemeToggle } from '@/components/common/ThemeToggle';
+import { LanguageToggle } from '@/components/common/LanguageToggle';
+import { useTranslation } from '@/stores/languageStore';
 
 export function Header() {
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
   const { searchContacts, searchCompanies, searchDeals } = useCRMStore();
   const { activeCall } = useContactCenterStore();
+  const { t } = useTranslation();
   
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<{
@@ -83,7 +87,7 @@ export function Header() {
         <div className="relative w-full max-w-md">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search contacts, companies, deals..."
+            placeholder={t('Search contacts, companies, deals...')}
             className="pl-10 pr-10"
             value={searchQuery}
             onChange={(e) => handleSearch(e.target.value)}
@@ -222,6 +226,12 @@ export function Header() {
           </div>
         )}
 
+        {/* Language Toggle */}
+        <LanguageToggle />
+
+        {/* Theme Toggle */}
+        <ThemeToggle />
+
         {/* Notifications */}
         <Popover>
           <PopoverTrigger asChild>
@@ -236,8 +246,8 @@ export function Header() {
           </PopoverTrigger>
           <PopoverContent className="w-80 p-0" align="end">
             <div className="flex items-center justify-between border-b p-3">
-              <p className="font-semibold">Notifications</p>
-              <Button variant="ghost" size="sm">Mark all read</Button>
+              <p className="font-semibold">{t('Notifications')}</p>
+              <Button variant="ghost" size="sm">{t('Mark all read')}</Button>
             </div>
             <ScrollArea className="h-64">
               {notifications.map((notification) => (
@@ -286,16 +296,16 @@ export function Header() {
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => navigate('/profile')}>
               <User className="mr-2 h-4 w-4" />
-              Profile
+              {t('Profile')}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => navigate('/settings')}>
               <Settings className="mr-2 h-4 w-4" />
-              Settings
+              {t('Settings')}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout}>
               <LogOut className="mr-2 h-4 w-4" />
-              Log out
+              {t('Log out')}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
