@@ -3,6 +3,9 @@ import {
   getAuth, 
   GoogleAuthProvider, 
   signInWithPopup, 
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  updateProfile,
   signOut, 
   onAuthStateChanged,
   type User as FirebaseUser 
@@ -76,6 +79,46 @@ export async function signInWithGoogle(): Promise<{ user: User; org: Organizatio
 }
 
 /**
+ * Register with Email and Password
+ */
+export async function registerWithEmailPassword(
+  name: string,
+  email: string,
+  password: string,
+  companyName?: string
+): Promise<{ user: User; org: Organization }> {
+  if (!isFirebaseConfigured()) {
+    throw new Error(
+      'Firebase is nog niet geconfigureerd. Voeg je Firebase configuratiesleutels toe aan het .env bestand.'
+    );
+  }
+
+  const credential = await createUserWithEmailAndPassword(auth, email, password);
+  if (name) {
+    await updateProfile(credential.user, { displayName: name });
+  }
+
+  return await syncFirebaseUserWithFirestore(credential.user, companyName);
+}
+
+/**
+ * Sign in using Email and Password
+ */
+export async function loginWithEmailPassword(
+  email: string,
+  password: string
+): Promise<{ user: User; org: Organization }> {
+  if (!isFirebaseConfigured()) {
+    throw new Error(
+      'Firebase is nog niet geconfigureerd. Voeg je Firebase configuratiesleutels toe aan het .env bestand.'
+    );
+  }
+
+  const credential = await signInWithEmailAndPassword(auth, email, password);
+  return await syncFirebaseUserWithFirestore(credential.user);
+}
+
+/**
  * Sign out current user
  */
 export async function logoutFirebase(): Promise<void> {
@@ -87,7 +130,7 @@ export async function logoutFirebase(): Promise<void> {
 /**
  * Synchronize Firebase User profile into Firestore users and organizations collections
  */
-export async function syncFirebaseUserWithFirestore(fbUser: FirebaseUser): Promise<{ user: User; org: Organization }> {
+export async function syncFirebaseUserWithFirestore(fbUser: FirebaseUser, companyName?: string): Promise<{ user: User; org: Organization }> {
   const orgId = `org_${fbUser.uid.substring(0, 8)}`;
   const userRef = doc(db, 'users', fbUser.uid);
   const orgRef = doc(db, 'organizations', orgId);
@@ -95,7 +138,7 @@ export async function syncFirebaseUserWithFirestore(fbUser: FirebaseUser): Promi
   // Default Organization
   const defaultOrg: Organization = {
     id: orgId,
-    name: `${fbUser.displayName || 'Mijn Organisatie'}'s CRM`,
+    name: companyName || `${fbUser.displayName || 'Mijn Organisatie'}'s CRM`,
     org_type: 'supplier',
     settings: {
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Amsterdam',

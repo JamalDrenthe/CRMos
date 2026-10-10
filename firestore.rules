@@ -7,10 +7,17 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.email == 'info@jamaldrenthe.com' ||
+        request.auth.token.get('admin', false) == true
+      );
+    }
+
     // Gebruikersprofielen
     match /users/{userId} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && request.auth.uid == userId;
+      allow write: if isAdmin() || (isAuthenticated() && request.auth.uid == userId);
     }
 
     // Organisaties

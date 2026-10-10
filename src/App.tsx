@@ -26,6 +26,9 @@ import { DashboardBuilderPage } from '@/pages/enhanced/DashboardBuilderPage';
 import { AuditLogsPage } from '@/pages/admin/AuditLogsPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { LoginPage } from '@/pages/LoginPage';
+import { LandingPage } from '@/pages/LandingPage';
+import { PricingPage } from '@/pages/PricingPage';
+import { RegisterPage } from '@/pages/RegisterPage';
 
 import { useAuthStore } from '@/stores/authStore';
 import { useCRMStore } from '@/stores/crmStore';
@@ -64,7 +67,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function App() {
-  const { initAuthListener, organization } = useAuthStore();
+  const { initAuthListener, organization, isAuthenticated } = useAuthStore();
   const { syncWithFirestore } = useCRMStore();
   const { theme } = useThemeStore();
 
@@ -106,11 +109,26 @@ function App() {
       <BrowserRouter>
         <Routes>
           {/* Public Routes */}
-          <Route path="/login" element={<LoginPage />} />
-
-          {/* Protected Routes */}
           <Route
             path="/"
+            element={
+              isAuthenticated ? (
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              ) : (
+                <LandingPage />
+              )
+            }
+          />
+          <Route path="/landing" element={<LandingPage />} />
+          <Route path="/pricing" element={<PricingPage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+
+          {/* Dedicated Dashboard Route */}
+          <Route
+            path="/dashboard"
             element={
               <ProtectedRoute>
                 <Dashboard />

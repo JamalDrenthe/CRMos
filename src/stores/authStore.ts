@@ -3,6 +3,8 @@ import { persist } from 'zustand/middleware';
 import type { User, Organization } from '@/types';
 import { 
   signInWithGoogle, 
+  registerWithEmailPassword,
+  loginWithEmailPassword,
   logoutFirebase, 
   onAuthStateChanged, 
   auth, 
@@ -22,6 +24,8 @@ interface AuthState {
   setOrganization: (org: Organization | null) => void;
   login: (user: User, org: Organization) => void;
   loginWithGoogleAction: () => Promise<{ user: User; org: Organization }>;
+  registerWithEmailAction: (name: string, email: string, password: string, companyName?: string, role?: User['role']) => Promise<{ user: User; org: Organization }>;
+  loginWithEmailAction: (email: string, password: string) => Promise<{ user: User; org: Organization }>;
   logout: () => Promise<void>;
   updateUser: (updates: Partial<User>) => void;
   initAuthListener: () => () => void;
@@ -59,8 +63,133 @@ export const useAuthStore = create<AuthState>()(
             error: null,
           });
           return { user, org };
-        } catch (error: any) {
-          const message = error?.message || 'Er is een fout opgetreden bij het inloggen met Google.';
+        } catch (error: unknown) {
+          const message = (error as Error)?.message || 'Er is een fout opgetreden bij het inloggen met Google.';
+          set({ isLoading: false, error: message });
+          throw error;
+        }
+      },
+
+      registerWithEmailAction: async (name, email, password, companyName, role = 'admin') => {
+        set({ isLoading: true, error: null });
+        try {
+          if (isFirebaseConfigured()) {
+            const { user, org } = await registerWithEmailPassword(name, email, password, companyName);
+            set({
+              user,
+              organization: org,
+              isAuthenticated: true,
+              isLoading: false,
+              error: null,
+            });
+            return { user, org };
+          } else {
+            // Local Demo/Offline Registration
+            const orgId = `org_${Math.random().toString(36).substring(2, 8)}`;
+            const mockOrg: Organization = {
+              id: orgId,
+              name: companyName || `${name}'s Bedrijf`,
+              org_type: 'supplier',
+              settings: {
+                timezone: 'Europe/Amsterdam',
+                currency: 'EUR',
+                date_format: 'DD/MM/YYYY',
+                branding: { primary_color: '#3b82f6' },
+                features: {
+                  recruitment: true,
+                  crm: true,
+                  sales: true,
+                  contact_center: true,
+                  gamification: true,
+                  workflows: true,
+                },
+              },
+              created_at: new Date().toISOString(),
+            };
+
+            const mockUser: User = {
+              id: `user_${Math.random().toString(36).substring(2, 8)}`,
+              email,
+              name,
+              role,
+              org_id: orgId,
+              timezone: 'Europe/Amsterdam',
+              created_at: new Date().toISOString(),
+            };
+
+            set({
+              user: mockUser,
+              organization: mockOrg,
+              isAuthenticated: true,
+              isLoading: false,
+              error: null,
+            });
+            return { user: mockUser, org: mockOrg };
+          }
+        } catch (error: unknown) {
+          const message = (error as Error)?.message || 'Er is een fout opgetreden bij het registreren.';
+          set({ isLoading: false, error: message });
+          throw error;
+        }
+      },
+
+      loginWithEmailAction: async (email, password) => {
+        set({ isLoading: true, error: null });
+        try {
+          if (isFirebaseConfigured()) {
+            const { user, org } = await loginWithEmailPassword(email, password);
+            set({
+              user,
+              organization: org,
+              isAuthenticated: true,
+              isLoading: false,
+              error: null,
+            });
+            return { user, org };
+          } else {
+            // Demo Fallback
+            const mockOrg: Organization = {
+              id: 'org1',
+              name: 'CRMos Demo Organisatie',
+              org_type: 'supplier',
+              settings: {
+                timezone: 'Europe/Amsterdam',
+                currency: 'EUR',
+                date_format: 'DD/MM/YYYY',
+                branding: { primary_color: '#3b82f6' },
+                features: {
+                  recruitment: true,
+                  crm: true,
+                  sales: true,
+                  contact_center: true,
+                  gamification: true,
+                  workflows: true,
+                },
+              },
+              created_at: new Date().toISOString(),
+            };
+
+            const mockUser: User = {
+              id: 'user1',
+              email,
+              name: email.split('@')[0].replace(/\./g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
+              role: 'admin',
+              org_id: 'org1',
+              timezone: 'Europe/Amsterdam',
+              created_at: new Date().toISOString(),
+            };
+
+            set({
+              user: mockUser,
+              organization: mockOrg,
+              isAuthenticated: true,
+              isLoading: false,
+              error: null,
+            });
+            return { user: mockUser, org: mockOrg };
+          }
+        } catch (error: unknown) {
+          const message = (error as Error)?.message || 'Er is een fout opgetreden bij het inloggen.';
           set({ isLoading: false, error: message });
           throw error;
         }
