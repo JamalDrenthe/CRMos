@@ -9,7 +9,8 @@ import { isFirebaseConfigured } from '@/lib/firebase';
 import { ThemeToggle } from '@/components/common/ThemeToggle';
 import { LanguageToggle } from '@/components/common/LanguageToggle';
 import { useTranslation } from '@/stores/languageStore';
-import { Briefcase, Eye, EyeOff, Loader2, AlertCircle, ArrowLeft } from 'lucide-react';
+import { Eye, EyeOff, Loader2, AlertCircle, ArrowLeft } from 'lucide-react';
+import { CRMosLogo } from '@/components/common/CRMosLogo';
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -69,52 +70,55 @@ export function LoginPage() {
   };
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-gradient-to-br from-primary/5 via-background to-primary/10 p-4">
+    <div className="relative flex min-h-screen items-center justify-center bg-gradient-to-b from-background via-muted/20 to-background p-4 sm:p-6 overflow-hidden">
+      {/* Apple-style background glow */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[350px] bg-primary/5 blur-[140px] rounded-full pointer-events-none" />
+
       {/* Top right language and theme controls */}
-      <div className="absolute top-4 right-4 flex items-center gap-2.5">
+      <div className="absolute top-5 right-5 flex items-center gap-2">
         <LanguageToggle />
         <ThemeToggle />
       </div>
 
       {/* Top left back to website link */}
-      <div className="absolute top-4 left-4">
+      <div className="absolute top-5 left-5">
         <Link
           to="/"
-          className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors py-1 px-2.5 rounded-full hover:bg-muted/50"
         >
-          <ArrowLeft className="h-4 w-4" />
+          <ArrowLeft className="h-3.5 w-3.5" />
           <span>{t('Back to website')}</span>
         </Link>
       </div>
 
-      <div className="w-full max-w-md">
-        {/* Logo */}
-        <div className="mb-8 flex justify-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary shadow-lg shadow-primary/25">
-            <Briefcase className="h-8 w-8 text-primary-foreground" />
-          </div>
+      <div className="w-full max-w-[420px] relative z-10">
+        {/* Brand Logo Header */}
+        <div className="mb-6 flex flex-col items-center justify-center text-center">
+          <Link to="/" className="transition-transform duration-200 hover:scale-[1.03]">
+            <CRMosLogo size="lg" showTagline={true} />
+          </Link>
         </div>
 
-        <Card className="border-0 shadow-2xl backdrop-blur-sm bg-card/95">
-          <CardHeader className="space-y-1 text-center pb-4">
-            <CardTitle className="text-2xl font-bold tracking-tight">{t('Welcome to CRMos')}</CardTitle>
-            <CardDescription>
+        <Card className="rounded-3xl border border-border/50 bg-card/85 backdrop-blur-2xl shadow-2xl overflow-hidden">
+          <CardHeader className="space-y-1.5 text-center pb-4 pt-6">
+            <CardTitle className="text-2xl font-semibold tracking-tight">{t('Welcome to CRMos')}</CardTitle>
+            <CardDescription className="text-xs sm:text-sm text-muted-foreground">
               {t('Log in to your account with Google or your credentials')}
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-5">
+          <CardContent className="space-y-4 px-6 pb-6">
             {error && (
-              <div className="flex items-start gap-2 rounded-lg bg-destructive/10 p-3 text-sm text-destructive border border-destructive/20">
+              <div className="flex items-start gap-2 rounded-xl bg-destructive/10 p-3 text-xs text-destructive border border-destructive/20">
                 <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
                 <span>{error}</span>
               </div>
             )}
 
-            {/* Google Login Button */}
+            {/* Google Login Button (Apple Pill Style) */}
             <Button
               type="button"
               variant="outline"
-              className="w-full h-11 border-border/80 bg-background hover:bg-accent/60 font-medium transition-all shadow-sm flex items-center justify-center gap-3 relative"
+              className="w-full h-11 rounded-full border-border/70 bg-background/80 hover:bg-accent/80 font-medium text-xs sm:text-sm transition-all shadow-sm flex items-center justify-center gap-2.5 hover:scale-[1.01] active:scale-[0.99]"
               onClick={handleGoogleSignIn}
               disabled={isGoogleLoading || isLoading}
             >
@@ -158,9 +162,9 @@ export function LoginPage() {
               </div>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">{t('Email')}</Label>
+            <form onSubmit={handleSubmit} className="space-y-3.5">
+              <div className="space-y-1.5">
+                <Label htmlFor="email" className="text-xs font-medium text-foreground">{t('Email')}</Label>
                 <Input
                   id="email"
                   type="email"
@@ -168,12 +172,12 @@ export function LoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="h-11"
+                  className="h-10 rounded-xl bg-background/60 border-border/70 text-xs sm:text-sm focus-visible:ring-1"
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="password">{t('Password')}</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="password" className="text-xs font-medium text-foreground">{t('Password')}</Label>
                 <div className="relative">
                   <Input
                     id="password"
@@ -182,7 +186,7 @@ export function LoginPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    className="h-11 pr-10"
+                    className="h-10 rounded-xl bg-background/60 border-border/70 text-xs sm:text-sm pr-10 focus-visible:ring-1"
                   />
                   <button
                     type="button"
@@ -196,7 +200,7 @@ export function LoginPage() {
 
               <Button
                 type="submit"
-                className="w-full h-11 font-medium"
+                className="w-full h-11 rounded-full font-medium text-xs sm:text-sm shadow-sm transition-all hover:scale-[1.01] active:scale-[0.99]"
                 disabled={isLoading || isGoogleLoading}
               >
                 {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
@@ -204,8 +208,8 @@ export function LoginPage() {
               </Button>
             </form>
 
-            <div className="text-center pt-2">
-              <p className="text-sm text-muted-foreground">
+            <div className="text-center pt-1">
+              <p className="text-xs text-muted-foreground">
                 {t("Don't have an account yet?")}{' '}
                 <Link to="/register" className="font-semibold text-primary hover:underline">
                   {t('Start for Free')}
@@ -213,18 +217,18 @@ export function LoginPage() {
               </p>
             </div>
 
-            <div className="text-center text-xs text-muted-foreground pt-2">
+            <div className="text-center text-[11px] text-muted-foreground pt-2">
               <p>{t('Demo credentials (any email/password works)')}</p>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 pt-1">
+            <div className="grid grid-cols-2 gap-2.5 pt-0.5">
               <button
                 type="button"
                 onClick={() => {
                   setEmail('info@jamaldrenthe.com');
                   setPassword('password');
                 }}
-                className="rounded-lg border p-2 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent/60 transition-colors"
+                className="rounded-full border border-border/60 bg-background/50 py-1.5 px-3 text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-accent/60 transition-colors"
               >
                 Jamal Drenthe (Admin)
               </button>
@@ -234,7 +238,7 @@ export function LoginPage() {
                   setEmail('agent@crmos.nl');
                   setPassword('password');
                 }}
-                className="rounded-lg border p-2 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent/60 transition-colors"
+                className="rounded-full border border-border/60 bg-background/50 py-1.5 px-3 text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-accent/60 transition-colors"
               >
                 {t('Use Agent Account')}
               </button>
@@ -242,8 +246,8 @@ export function LoginPage() {
           </CardContent>
         </Card>
 
-        <p className="mt-8 text-center text-xs text-muted-foreground">
-          CRMos &bull; Powered by Firebase &amp; Firestore
+        <p className="mt-6 text-center text-[11px] text-muted-foreground/75">
+          CRMos &bull; Powered by Google Cloud &amp; Firestore
         </p>
       </div>
     </div>

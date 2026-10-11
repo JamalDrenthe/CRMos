@@ -36,6 +36,7 @@ import {
   Shield,
 } from 'lucide-react';
 import { useTranslation } from '@/stores/languageStore';
+import { CRMosLogo } from '@/components/common/CRMosLogo';
 
 interface SidebarProps {
   isCollapsed: boolean;
@@ -219,12 +220,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         {/* Logo */}
         <div className="flex h-16 items-center border-b px-4">
           <NavLink to="/" className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-              <Briefcase className="h-5 w-5 text-primary-foreground" />
-            </div>
-            {!isCollapsed && (
-              <span className="text-lg font-bold">CRMos</span>
-            )}
+            <CRMosLogo size={isCollapsed ? 'sm' : 'md'} showText={!isCollapsed} />
           </NavLink>
         </div>
 

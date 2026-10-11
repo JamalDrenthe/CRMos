@@ -4,13 +4,8 @@ import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { useTranslation } from '@/stores/languageStore';
-import {
-  Check,
-  X,
-  ArrowRight,
-} from 'lucide-react';
+import { Check, X, ChevronRight, Sparkles } from 'lucide-react';
 
 export function PricingPage() {
   const navigate = useNavigate();
@@ -110,11 +105,11 @@ export function PricingPage() {
       ],
     },
     {
-      category: t('Recruitment & ATS'),
+      category: t('Recruitment (ATS)'),
       items: [
-        { name: t('Candidate Profile Management'), starter: false, pro: true, enterprise: true },
-        { name: t('Job Openings & Pipeline Stages'), starter: false, pro: true, enterprise: true },
-        { name: t('Resume & Skills Matching'), starter: false, pro: true, enterprise: true },
+        { name: t('Candidate Pipeline & Tracking'), starter: false, pro: true, enterprise: true },
+        { name: t('Job Opening Management'), starter: false, pro: true, enterprise: true },
+        { name: t('Candidate Skills & Match Score'), starter: false, pro: true, enterprise: true },
       ],
     },
     {
@@ -161,55 +156,54 @@ export function PricingPage() {
       {/* Top Header */}
       <Navbar />
 
-      <main className="flex-1 pb-20">
+      <main className="flex-1 pb-24">
         {/* ===================================================================== */}
         {/* PRICING HEADER */}
         {/* ===================================================================== */}
-        <section className="pt-16 pb-12 text-center px-4 sm:px-6 lg:px-8">
+        <section className="relative pt-20 pb-16 text-center px-4 sm:px-6 lg:px-8 overflow-hidden">
+          {/* Subtle Apple-style glow */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] bg-primary/5 blur-[140px] rounded-full pointer-events-none -z-10" />
+
           <div className="max-w-3xl mx-auto space-y-4">
-            <Badge variant="outline" className="text-primary border-primary/30">
-              {t('Transparent Pricing')}
-            </Badge>
-            <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-secondary/80 text-foreground border border-border/50">
+              <Sparkles className="h-3 w-3 text-primary" />
+              <span>{t('Transparent Pricing')}</span>
+            </span>
+            <h1 className="text-4xl sm:text-6xl font-bold tracking-tight text-foreground text-balance">
               {t('Simple, transparent pricing for every team')}
             </h1>
-            <p className="text-lg text-muted-foreground leading-relaxed">
+            <p className="text-base sm:text-lg text-muted-foreground leading-relaxed max-w-2xl mx-auto">
               {t('Start for free with a 14-day trial. No credit card required. Cancel anytime.')}
             </p>
 
-            {/* Monthly / Annual Billing Toggle */}
-            <div className="pt-6 flex items-center justify-center gap-4">
-              <span
-                className={`text-sm font-medium cursor-pointer ${
-                  billingCycle === 'monthly' ? 'text-foreground font-semibold' : 'text-muted-foreground'
-                }`}
-                onClick={() => setBillingCycle('monthly')}
-              >
-                {t('Monthly')}
-              </span>
-              <button
-                type="button"
-                onClick={() => setBillingCycle(billingCycle === 'monthly' ? 'annual' : 'monthly')}
-                className="relative inline-flex h-7 w-12 items-center rounded-full bg-primary/20 p-1 transition-colors focus:outline-none"
-              >
-                <span
-                  className={`inline-block h-5 w-5 transform rounded-full bg-primary transition-transform shadow-sm ${
-                    billingCycle === 'annual' ? 'translate-x-5' : 'translate-x-0'
+            {/* Apple-style Pill Billing Toggle */}
+            <div className="pt-6 flex items-center justify-center">
+              <div className="inline-flex items-center rounded-full border border-border/60 bg-muted/40 p-1 backdrop-blur-md">
+                <button
+                  type="button"
+                  onClick={() => setBillingCycle('monthly')}
+                  className={`rounded-full px-5 py-1.5 text-xs sm:text-sm font-medium transition-all ${
+                    billingCycle === 'monthly'
+                      ? 'bg-background text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
                   }`}
-                />
-              </button>
-              <div className="flex items-center gap-2">
-                <span
-                  className={`text-sm font-medium cursor-pointer ${
-                    billingCycle === 'annual' ? 'text-foreground font-semibold' : 'text-muted-foreground'
-                  }`}
-                  onClick={() => setBillingCycle('annual')}
                 >
-                  {t('Annual')}
-                </span>
-                <Badge className="bg-emerald-500/15 text-emerald-600 border-emerald-500/30 text-xs">
-                  {t('Save 20%')}
-                </Badge>
+                  {t('Monthly')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBillingCycle('annual')}
+                  className={`inline-flex items-center gap-1.5 rounded-full px-5 py-1.5 text-xs sm:text-sm font-medium transition-all ${
+                    billingCycle === 'annual'
+                      ? 'bg-background text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <span>{t('Annual')}</span>
+                  <span className="rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 text-[10px] font-semibold">
+                    {t('Save 20%')}
+                  </span>
+                </button>
               </div>
             </div>
           </div>
@@ -218,7 +212,7 @@ export function PricingPage() {
         {/* ===================================================================== */}
         {/* PRICING CARDS */}
         {/* ===================================================================== */}
-        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 pb-16">
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 pb-20">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch">
             {plans.map((plan) => {
               const price = billingCycle === 'annual' ? plan.priceAnnual : plan.priceMonthly;
@@ -226,58 +220,58 @@ export function PricingPage() {
               return (
                 <Card
                   key={plan.id}
-                  className={`relative flex flex-col justify-between transition-all duration-200 ${
+                  className={`relative flex flex-col justify-between rounded-3xl transition-all duration-300 ${
                     plan.popular
-                      ? 'border-primary ring-2 ring-primary/20 shadow-xl bg-card'
-                      : 'border-border/80 shadow-md bg-card/60 hover:shadow-lg'
+                      ? 'border-primary/80 ring-1 ring-primary/30 shadow-2xl bg-card/90 backdrop-blur-xl lg:-translate-y-2'
+                      : 'border-border/60 shadow-lg bg-card/60 backdrop-blur-md hover:border-border hover:shadow-xl'
                   }`}
                 >
                   {/* Badge for Popular or Power tier */}
                   {plan.badge && (
-                    <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
-                      <Badge className="bg-primary text-primary-foreground font-semibold shadow-sm px-3 py-0.5">
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                      <span className="rounded-full bg-primary text-primary-foreground font-medium text-[11px] px-3.5 py-1 shadow-md">
                         {plan.badge}
-                      </Badge>
+                      </span>
                     </div>
                   )}
 
-                  <div>
-                    <CardHeader className="pb-6">
-                      <CardTitle className="text-2xl font-bold">{plan.name}</CardTitle>
-                      <CardDescription className="text-sm mt-1 min-h-[40px]">
+                  <div className="p-6 sm:p-8">
+                    <CardHeader className="p-0 pb-6">
+                      <CardTitle className="text-2xl font-bold tracking-tight">{plan.name}</CardTitle>
+                      <CardDescription className="text-xs sm:text-sm mt-1 min-h-[40px] text-muted-foreground">
                         {plan.description}
                       </CardDescription>
                       <div className="mt-6 flex items-baseline gap-1">
                         <span className="text-4xl sm:text-5xl font-extrabold tracking-tight">€{price}</span>
                         <span className="text-sm font-medium text-muted-foreground">/{t('month')}</span>
                         {billingCycle === 'annual' && (
-                          <span className="ml-2 text-xs text-muted-foreground">(jaarlijks gefactureerd)</span>
+                          <span className="ml-2 text-[11px] text-muted-foreground">(jaarlijks gefactureerd)</span>
                         )}
                       </div>
                     </CardHeader>
 
-                    <CardContent className="space-y-6">
-                      {/* Action Button */}
+                    <CardContent className="p-0 space-y-6">
+                      {/* Apple Pill Action Button */}
                       <Button
                         size="lg"
                         variant={plan.buttonVariant}
-                        className={`w-full font-semibold transition-all ${
-                          plan.popular ? 'shadow-md shadow-primary/25' : ''
+                        className={`w-full h-11 rounded-full font-medium text-xs sm:text-sm transition-all hover:scale-[1.02] active:scale-[0.98] ${
+                          plan.popular ? 'shadow-md shadow-primary/20' : ''
                         }`}
                         onClick={() => navigate(`/register?plan=${plan.id}`)}
                       >
                         <span>{plan.cta}</span>
-                        <ArrowRight className="h-4 w-4 ml-1.5" />
+                        <ChevronRight className="h-3.5 w-3.5 ml-1" />
                       </Button>
 
                       {/* Included Features */}
-                      <div className="space-y-3 pt-4 border-t">
-                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      <div className="space-y-3 pt-6 border-t border-border/40">
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                           {t('What is included:')}
                         </p>
                         <ul className="space-y-2.5">
                           {plan.features.map((feature, idx) => (
-                            <li key={idx} className="flex items-start gap-2.5 text-sm">
+                            <li key={idx} className="flex items-start gap-2.5 text-xs sm:text-sm">
                               <Check className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
                               <span className="text-foreground">{feature}</span>
                             </li>
@@ -286,9 +280,9 @@ export function PricingPage() {
 
                         {/* Excluded Features */}
                         {plan.notIncluded.length > 0 && (
-                          <div className="pt-2 space-y-2.5 opacity-60">
+                          <div className="pt-3 space-y-2.5 opacity-50">
                             {plan.notIncluded.map((feature, idx) => (
-                              <li key={idx} className="flex items-start gap-2.5 text-sm list-none text-muted-foreground">
+                              <li key={idx} className="flex items-start gap-2.5 text-xs sm:text-sm list-none text-muted-foreground">
                                 <X className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
                                 <span>{feature}</span>
                               </li>
@@ -305,64 +299,64 @@ export function PricingPage() {
         </section>
 
         {/* ===================================================================== */}
-        {/* DETAILED COMPARISON TABLE */}
+        {/* DETAILED FEATURE COMPARISON TABLE */}
         {/* ===================================================================== */}
-        <section className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-          <div className="text-center mb-12">
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <div className="text-center max-w-3xl mx-auto mb-12">
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">
-              {t('Detailed Feature Comparison')}
+              {t('Compare all plan capabilities')}
             </h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              {t('Compare all capabilities across Starter, Professional and Enterprise.')}
+              {t('A complete overview of modules, limits and features.')}
             </p>
           </div>
 
-          <div className="rounded-xl border bg-card overflow-hidden shadow-sm">
+          <div className="rounded-3xl border border-border/60 bg-card/60 backdrop-blur-xl overflow-hidden shadow-lg">
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
+              <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="border-b bg-muted/40">
-                    <th className="py-4 px-6 font-semibold text-foreground w-1/2">{t('Features')}</th>
-                    <th className="py-4 px-4 font-semibold text-center text-foreground">{t('Starter')}</th>
-                    <th className="py-4 px-4 font-semibold text-center text-primary">{t('Professional')}</th>
-                    <th className="py-4 px-4 font-semibold text-center text-foreground">{t('Enterprise')}</th>
+                  <tr className="border-b border-border/50 bg-muted/40">
+                    <th className="py-4 px-6 text-sm font-semibold text-foreground">{t('Features')}</th>
+                    <th className="py-4 px-6 text-sm font-semibold text-center text-foreground">{t('Starter (€200)')}</th>
+                    <th className="py-4 px-6 text-sm font-semibold text-center text-foreground bg-primary/5">{t('Professional (€100)')}</th>
+                    <th className="py-4 px-6 text-sm font-semibold text-center text-foreground">{t('Enterprise (€50)')}</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y">
-                  {comparisonFeatures.map((group, groupIdx) => (
-                    <div key={groupIdx} className="contents">
-                      <tr className="bg-muted/20">
-                        <td colSpan={4} className="py-2.5 px-6 font-bold text-xs uppercase tracking-wider text-muted-foreground">
-                          {group.category}
+                <tbody className="divide-y divide-border/30 text-xs sm:text-sm">
+                  {comparisonFeatures.map((category, catIdx) => (
+                    <>
+                      <tr key={`cat-${catIdx}`} className="bg-muted/20">
+                        <td colSpan={4} className="py-3 px-6 font-semibold text-xs tracking-wider uppercase text-muted-foreground">
+                          {category.category}
                         </td>
                       </tr>
-                      {group.items.map((item, itemIdx) => (
-                        <tr key={itemIdx} className="hover:bg-muted/10 transition-colors">
-                          <td className="py-3 px-6 text-foreground font-medium">{item.name}</td>
-                          <td className="py-3 px-4 text-center">
+                      {category.items.map((item, itemIdx) => (
+                        <tr key={`item-${catIdx}-${itemIdx}`} className="hover:bg-muted/30 transition-colors">
+                          <td className="py-3.5 px-6 font-medium text-foreground">{item.name}</td>
+                          <td className="py-3.5 px-6 text-center">
                             {item.starter ? (
                               <Check className="h-4 w-4 text-emerald-500 mx-auto" />
                             ) : (
-                              <span className="text-muted-foreground text-xs">—</span>
+                              <X className="h-4 w-4 text-muted-foreground/40 mx-auto" />
                             )}
                           </td>
-                          <td className="py-3 px-4 text-center bg-primary/5">
+                          <td className="py-3.5 px-6 text-center bg-primary/5 font-medium">
                             {item.pro ? (
                               <Check className="h-4 w-4 text-emerald-500 mx-auto" />
                             ) : (
-                              <span className="text-muted-foreground text-xs">—</span>
+                              <X className="h-4 w-4 text-muted-foreground/40 mx-auto" />
                             )}
                           </td>
-                          <td className="py-3 px-4 text-center">
+                          <td className="py-3.5 px-6 text-center">
                             {item.enterprise ? (
                               <Check className="h-4 w-4 text-emerald-500 mx-auto" />
                             ) : (
-                              <span className="text-muted-foreground text-xs">—</span>
+                              <X className="h-4 w-4 text-muted-foreground/40 mx-auto" />
                             )}
                           </td>
                         </tr>
                       ))}
-                    </div>
+                    </>
                   ))}
                 </tbody>
               </table>
@@ -373,25 +367,22 @@ export function PricingPage() {
         {/* ===================================================================== */}
         {/* PRICING FAQ */}
         {/* ===================================================================== */}
-        <section className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <section className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
           <div className="text-center mb-10">
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">
-              {t('Frequently Asked Questions About Pricing')}
-            </h2>
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">{t('Frequently Asked Questions')}</h2>
           </div>
-
-          <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {pricingFaqs.map((faq, idx) => (
-              <div key={idx} className="rounded-xl border bg-card p-6 shadow-sm">
-                <h3 className="text-base font-semibold text-foreground mb-2">{faq.q}</h3>
-                <p className="text-sm text-muted-foreground leading-relaxed">{faq.a}</p>
+              <div key={idx} className="rounded-2xl border border-border/50 bg-card/60 p-6 backdrop-blur-md">
+                <h4 className="font-semibold text-sm sm:text-base text-foreground mb-2">{faq.q}</h4>
+                <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">{faq.a}</p>
               </div>
             ))}
           </div>
         </section>
       </main>
 
-      {/* Global Footer */}
+      {/* Footer */}
       <Footer />
     </div>
   );

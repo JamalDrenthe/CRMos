@@ -10,7 +10,8 @@ import { isFirebaseConfigured } from '@/lib/firebase';
 import { ThemeToggle } from '@/components/common/ThemeToggle';
 import { LanguageToggle } from '@/components/common/LanguageToggle';
 import { useTranslation } from '@/stores/languageStore';
-import { Briefcase, Eye, EyeOff, Loader2, AlertCircle, ArrowLeft } from 'lucide-react';
+import { Eye, EyeOff, Loader2, AlertCircle, ArrowLeft } from 'lucide-react';
+import { CRMosLogo } from '@/components/common/CRMosLogo';
 import type { User } from '@/types';
 
 export function RegisterPage() {
@@ -90,61 +91,63 @@ export function RegisterPage() {
   };
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-gradient-to-br from-primary/5 via-background to-primary/10 p-4 py-12">
+    <div className="relative flex min-h-screen items-center justify-center bg-gradient-to-b from-background via-muted/20 to-background p-4 sm:p-6 py-12 overflow-hidden">
+      {/* Apple-style background glow */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[350px] bg-primary/5 blur-[140px] rounded-full pointer-events-none" />
+
       {/* Top right language and theme controls */}
-      <div className="absolute top-4 right-4 flex items-center gap-2.5">
+      <div className="absolute top-5 right-5 flex items-center gap-2">
         <LanguageToggle />
         <ThemeToggle />
       </div>
 
       {/* Top left back to website link */}
-      <div className="absolute top-4 left-4">
+      <div className="absolute top-5 left-5">
         <Link
           to="/"
-          className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors py-1 px-2.5 rounded-full hover:bg-muted/50"
         >
-          <ArrowLeft className="h-4 w-4" />
+          <ArrowLeft className="h-3.5 w-3.5" />
           <span>{t('Back to website')}</span>
         </Link>
       </div>
 
-      <div className="w-full max-w-lg mt-8">
+      <div className="w-full max-w-[460px] mt-6 relative z-10">
         {/* Brand Logo & Header */}
-        <div className="mb-6 flex flex-col items-center justify-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/25 mb-3">
-            <Briefcase className="h-7 w-7" />
-          </div>
-          <h2 className="text-2xl font-bold tracking-tight">CRMos</h2>
+        <div className="mb-6 flex flex-col items-center justify-center text-center">
+          <Link to="/" className="transition-transform duration-200 hover:scale-[1.03]">
+            <CRMosLogo size="lg" showTagline={true} />
+          </Link>
           {selectedPlan && (
-            <Badge variant="outline" className="mt-2 bg-primary/10 text-primary border-primary/20 capitalize">
-              Gekozen plan: {selectedPlan} (14 dagen gratis)
+            <Badge variant="outline" className="mt-3 rounded-full px-3 py-0.5 text-[11px] bg-primary/10 text-primary border-primary/20 capitalize font-medium">
+              Gekozen plan: {selectedPlan} (14 dagen gratis proef)
             </Badge>
           )}
         </div>
 
-        <Card className="border-0 shadow-2xl backdrop-blur-sm bg-card/95">
-          <CardHeader className="space-y-1 text-center pb-4">
-            <CardTitle className="text-2xl font-bold tracking-tight">
+        <Card className="rounded-3xl border border-border/50 bg-card/85 backdrop-blur-2xl shadow-2xl overflow-hidden">
+          <CardHeader className="space-y-1.5 text-center pb-4 pt-6">
+            <CardTitle className="text-2xl font-semibold tracking-tight">
               {t('Create your CRMos Account')}
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-xs sm:text-sm text-muted-foreground">
               {t('Start your 14-day free trial. No credit card required.')}
             </CardDescription>
           </CardHeader>
 
-          <CardContent className="space-y-5">
+          <CardContent className="space-y-4 px-6 pb-6">
             {error && (
-              <div className="flex items-start gap-2 rounded-lg bg-destructive/10 p-3 text-sm text-destructive border border-destructive/20">
+              <div className="flex items-start gap-2 rounded-xl bg-destructive/10 p-3 text-xs text-destructive border border-destructive/20">
                 <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
                 <span>{error}</span>
               </div>
             )}
 
-            {/* Google Quick Sign-Up */}
+            {/* Google Quick Sign-Up (Apple Pill Style) */}
             <Button
               type="button"
               variant="outline"
-              className="w-full h-11 border-border/80 bg-background hover:bg-accent/60 font-medium transition-all shadow-sm flex items-center justify-center gap-3 relative"
+              className="w-full h-11 rounded-full border-border/70 bg-background/80 hover:bg-accent/80 font-medium text-xs sm:text-sm transition-all shadow-sm flex items-center justify-center gap-2.5 hover:scale-[1.01] active:scale-[0.99]"
               onClick={handleGoogleSignUp}
               disabled={isGoogleLoading || isLoading}
             >
@@ -189,10 +192,10 @@ export function RegisterPage() {
             </div>
 
             {/* Email Registration Form */}
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="name">{t('Full Name')}</Label>
+            <form onSubmit={handleSubmit} className="space-y-3.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label htmlFor="name" className="text-xs font-medium text-foreground">{t('Full Name')}</Label>
                   <Input
                     id="name"
                     type="text"
@@ -200,11 +203,11 @@ export function RegisterPage() {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     required
-                    className="h-10"
+                    className="h-10 rounded-xl bg-background/60 border-border/70 text-xs sm:text-sm focus-visible:ring-1"
                   />
                 </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="companyName">{t('Company Name')}</Label>
+                <div className="space-y-1">
+                  <Label htmlFor="companyName" className="text-xs font-medium text-foreground">{t('Company Name')}</Label>
                   <Input
                     id="companyName"
                     type="text"
@@ -212,13 +215,13 @@ export function RegisterPage() {
                     value={companyName}
                     onChange={(e) => setCompanyName(e.target.value)}
                     required
-                    className="h-10"
+                    className="h-10 rounded-xl bg-background/60 border-border/70 text-xs sm:text-sm focus-visible:ring-1"
                   />
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="email">{t('Business Email')}</Label>
+              <div className="space-y-1">
+                <Label htmlFor="email" className="text-xs font-medium text-foreground">{t('Business Email')}</Label>
                 <Input
                   id="email"
                   type="email"
@@ -226,12 +229,12 @@ export function RegisterPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="h-10"
+                  className="h-10 rounded-xl bg-background/60 border-border/70 text-xs sm:text-sm focus-visible:ring-1"
                 />
               </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="password">{t('Password')}</Label>
+              <div className="space-y-1">
+                <Label htmlFor="password" className="text-xs font-medium text-foreground">{t('Password')}</Label>
                 <div className="relative">
                   <Input
                     id="password"
@@ -241,7 +244,7 @@ export function RegisterPage() {
                     onChange={(e) => setPassword(e.target.value)}
                     required
                     minLength={6}
-                    className="h-10 pr-10"
+                    className="h-10 rounded-xl bg-background/60 border-border/70 text-xs sm:text-sm pr-10 focus-visible:ring-1"
                   />
                   <button
                     type="button"
@@ -253,13 +256,13 @@ export function RegisterPage() {
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="role">{t('Your Role')}</Label>
+              <div className="space-y-1">
+                <Label htmlFor="role" className="text-xs font-medium text-foreground">{t('Your Role')}</Label>
                 <select
                   id="role"
                   value={role}
                   onChange={(e) => setRole(e.target.value as User['role'])}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex h-10 w-full rounded-xl border border-border/70 bg-background/60 px-3 py-1.5 text-xs sm:text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <option value="admin">{t('Sales Director / Managing Director')}</option>
                   <option value="manager">{t('Sales / Recruitment Manager')}</option>
@@ -269,22 +272,22 @@ export function RegisterPage() {
               </div>
 
               {/* Agreement Checkbox */}
-              <div className="flex items-start gap-2 pt-1">
+              <div className="flex items-start gap-2 pt-0.5">
                 <input
                   type="checkbox"
                   id="terms"
                   checked={agreedToTerms}
                   onChange={(e) => setAgreedToTerms(e.target.checked)}
-                  className="h-4 w-4 mt-0.5 rounded border-muted accent-primary cursor-pointer"
+                  className="h-3.5 w-3.5 mt-0.5 rounded border-muted accent-primary cursor-pointer"
                 />
-                <label htmlFor="terms" className="text-xs text-muted-foreground cursor-pointer">
+                <label htmlFor="terms" className="text-[11px] text-muted-foreground cursor-pointer">
                   Ik ga akkoord met de <span className="underline text-foreground">Algemene Voorwaarden</span> en het <span className="underline text-foreground">Privacybeleid</span>.
                 </label>
               </div>
 
               <Button
                 type="submit"
-                className="w-full h-11 font-semibold text-base mt-2"
+                className="w-full h-11 rounded-full font-medium text-xs sm:text-sm mt-1 shadow-sm transition-all hover:scale-[1.01] active:scale-[0.99]"
                 disabled={isLoading || isGoogleLoading}
               >
                 {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
@@ -293,8 +296,8 @@ export function RegisterPage() {
             </form>
 
             {/* Link to login */}
-            <div className="text-center pt-2">
-              <p className="text-sm text-muted-foreground">
+            <div className="text-center pt-1">
+              <p className="text-xs text-muted-foreground">
                 {t('Already have an account?')}{' '}
                 <Link to="/login" className="font-semibold text-primary hover:underline">
                   {t('Log in here')}
@@ -304,8 +307,8 @@ export function RegisterPage() {
           </CardContent>
         </Card>
 
-        <p className="mt-8 text-center text-xs text-muted-foreground">
-          CRMos &bull; Powered by Firebase &amp; Cloud Firestore
+        <p className="mt-6 text-center text-[11px] text-muted-foreground/75">
+          CRMos &bull; Powered by Google Cloud &amp; Firestore
         </p>
       </div>
     </div>

@@ -69,7 +69,57 @@
   * {
     @apply border-border;
   }
+  html {
+    scroll-behavior: smooth;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+}
+
+/* Apple-inspired visual effects & glassmorphism */
+@layer utilities {
+  .apple-glass {
+    background: rgba(255, 255, 255, 0.72);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+  }
+
+  .dark .apple-glass {
+    background: rgba(18, 18, 20, 0.75);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+  }
+
+  .apple-card {
+    border-radius: 1.5rem;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    background: rgba(255, 255, 255, 0.8);
+    box-shadow: 0 4px 24px -1px rgba(0, 0, 0, 0.06);
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .dark .apple-card {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(24, 24, 27, 0.65);
+    box-shadow: 0 4px 24px -1px rgba(0, 0, 0, 0.4);
+  }
+
+  .apple-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.1);
+  }
+
+  .dark .apple-card:hover {
+    box-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.6);
+  }
+
+  .text-balance {
+    text-wrap: balance;
   }
 }
