@@ -22,8 +22,8 @@ export function PricingPage() {
       id: 'starter',
       name: t('Starter'),
       description: t('For solopreneurs and small sales teams that need clean deal & relationship management.'),
-      priceMonthly: 29,
-      priceAnnual: 23,
+      priceMonthly: 200,
+      priceAnnual: 160,
       badge: null,
       popular: false,
       features: [
@@ -49,8 +49,8 @@ export function PricingPage() {
       id: 'pro',
       name: t('Professional'),
       description: t('For ambitious commercial and recruitment teams scaling operations.'),
-      priceMonthly: 79,
-      priceAnnual: 63,
+      priceMonthly: 100,
+      priceAnnual: 80,
       badge: t('Most Popular'),
       popular: true,
       features: [
@@ -77,8 +77,8 @@ export function PricingPage() {
       id: 'enterprise',
       name: t('Enterprise'),
       description: t('For large organizations, call centers and multi-branch agencies needing full control.'),
-      priceMonthly: 199,
-      priceAnnual: 159,
+      priceMonthly: 50,
+      priceAnnual: 40,
       badge: t('Ultimate Power'),
       popular: false,
       features: [

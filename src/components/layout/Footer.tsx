@@ -85,13 +85,13 @@ export function Footer() {
             <h4 className="text-sm font-semibold tracking-wider text-foreground uppercase">{t('Pricing & Plans')}</h4>
             <ul className="mt-4 space-y-2.5 text-sm text-muted-foreground">
               <li>
-                <Link to="/pricing" className="hover:text-foreground transition-colors">{t('Starter Plan (€29)')}</Link>
+                <Link to="/pricing" className="hover:text-foreground transition-colors">{t('Starter Plan (€200)')}</Link>
               </li>
               <li>
-                <Link to="/pricing" className="hover:text-foreground transition-colors">{t('Professional (€79)')}</Link>
+                <Link to="/pricing" className="hover:text-foreground transition-colors">{t('Professional (€100)')}</Link>
               </li>
               <li>
-                <Link to="/pricing" className="hover:text-foreground transition-colors">{t('Enterprise (€199)')}</Link>
+                <Link to="/pricing" className="hover:text-foreground transition-colors">{t('Enterprise (€50)')}</Link>
               </li>
               <li>
                 <Link to="/pricing" className="hover:text-foreground transition-colors">{t('Feature Comparison')}</Link>
