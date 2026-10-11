@@ -46,7 +46,9 @@ export function RegisterPage() {
       if (err.code === 'auth/popup-closed-by-user') {
         setError('Het inlogvenster van Google is gesloten voordat de registratie kon worden voltooid.');
       } else if (err.code === 'auth/unauthorized-domain') {
-        setError('Dit domein is nog niet geautoriseerd in de Firebase Console.');
+        setError('Dit domein is nog niet geautoriseerd in de Firebase Console (Authentication > Settings > Authorized domains).');
+      } else if (err.code === 'auth/operation-not-allowed' || err.code === 'auth/configuration-not-found') {
+        setError('Google Inloggen is nog niet ingeschakeld in de Firebase Console voor project crmosone-dev. Activeer Google onder Build > Authentication > Sign-in method.');
       } else {
         setError(err.message || 'Registreren met Google is mislukt. Probeer het opnieuw.');
       }

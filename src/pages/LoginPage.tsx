@@ -37,6 +37,8 @@ export function LoginPage() {
         setError('Het inlogvenster van Google is gesloten voordat het inloggen kon worden voltooid.');
       } else if (err.code === 'auth/unauthorized-domain') {
         setError('Dit domein is nog niet geautoriseerd in de Firebase Console (Authentication > Settings > Authorized domains).');
+      } else if (err.code === 'auth/operation-not-allowed' || err.code === 'auth/configuration-not-found') {
+        setError('Google Inloggen is nog niet ingeschakeld in de Firebase Console voor project crmosone-dev. Ga naar Build > Authentication > Sign-in method en activeer Google.');
       } else {
         setError(err.message || 'Inloggen met Google is mislukt. Probeer het opnieuw.');
       }
@@ -219,12 +221,12 @@ export function LoginPage() {
               <button
                 type="button"
                 onClick={() => {
-                  setEmail('admin@crmos.nl');
+                  setEmail('info@jamaldrenthe.com');
                   setPassword('password');
                 }}
                 className="rounded-lg border p-2 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent/60 transition-colors"
               >
-                {t('Use Admin Account')}
+                Jamal Drenthe (Admin)
               </button>
               <button
                 type="button"

@@ -176,13 +176,27 @@ export async function syncFirebaseUserWithFirestore(fbUser: FirebaseUser, compan
     console.warn('Kon organisatie niet ophalen uit Firestore, standaardwaarde gebruikt:', error);
   }
 
+  // Determine role: info@jamaldrenthe.com is always Super Admin
+  const isSuperAdmin = fbUser.email?.toLowerCase() === 'info@jamaldrenthe.com';
+  let userRole: User['role'] = isSuperAdmin ? 'admin' : 'admin';
+
+  try {
+    const userSnap = await getDoc(userRef);
+    if (userSnap.exists()) {
+      const data = userSnap.data();
+      userRole = isSuperAdmin ? 'admin' : (data.role || 'admin');
+    }
+  } catch (error) {
+    console.warn('Kon bestaand gebruikersprofiel niet controleren in Firestore:', error);
+  }
+
   // App User object
   const appUser: User = {
     id: fbUser.uid,
     email: fbUser.email || '',
-    name: fbUser.displayName || fbUser.email?.split('@')[0] || 'CRMos Gebruiker',
+    name: fbUser.displayName || fbUser.email?.split('@')[0] || (isSuperAdmin ? 'Jamal Drenthe' : 'CRMos Gebruiker'),
     avatar: fbUser.photoURL || undefined,
-    role: 'admin',
+    role: userRole,
     org_id: org.id,
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Amsterdam',
     created_at: new Date().toISOString(),
