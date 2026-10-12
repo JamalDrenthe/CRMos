@@ -1,9 +1,16 @@
 import { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, NavLink } from 'react-router-dom';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Header } from '@/components/layout/Header';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import {
+  LayoutDashboard,
+  Users,
+  PhoneCall,
+  GraduationCap,
+  Settings,
+} from 'lucide-react';
 
 // Pages
 import { Dashboard } from '@/pages/Dashboard';
@@ -25,6 +32,7 @@ import { WorkflowsPage } from '@/pages/enhanced/WorkflowsPage';
 import { DashboardBuilderPage } from '@/pages/enhanced/DashboardBuilderPage';
 import { AuditLogsPage } from '@/pages/admin/AuditLogsPage';
 import { SettingsPage } from '@/pages/SettingsPage';
+import { IntegrationsPage } from '@/pages/IntegrationsPage';
 import { LoginPage } from '@/pages/LoginPage';
 import { LandingPage } from '@/pages/LandingPage';
 import { PricingPage } from '@/pages/PricingPage';
@@ -40,6 +48,7 @@ import { cn } from '@/lib/utils';
 
 function Layout({ children }: { children: React.ReactNode }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
 
   // Global Spotlight Keyboard Listener (Cmd+K / Ctrl+K)
@@ -58,16 +67,126 @@ function Layout({ children }: { children: React.ReactNode }) {
     <div className="flex h-screen overflow-hidden bg-background">
       <Sidebar 
         isCollapsed={sidebarCollapsed} 
-        onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} 
+        onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+        isMobileOpen={mobileSidebarOpen}
+        onCloseMobile={() => setMobileSidebarOpen(false)}
       />
       <div className="flex flex-1 flex-col overflow-hidden">
-        <Header onOpenSearch={() => setSearchOpen(true)} />
+        <Header 
+          onOpenSearch={() => setSearchOpen(true)}
+          onToggleMobileMenu={() => setMobileSidebarOpen(true)}
+        />
         <main className={cn(
-          "flex-1 overflow-auto p-6 transition-all duration-300",
+          "flex-1 overflow-auto p-3.5 sm:p-5 md:p-6 pb-20 md:pb-6 transition-all duration-300",
         )}>
           {children}
         </main>
       </div>
+
+      {/* Apple-style Mobile Bottom Navigation Bar (md:hidden) */}
+      <nav className="fixed bottom-0 left-0 right-0 z-40 md:hidden bg-background/90 backdrop-blur-xl border-t border-border/60 px-3 py-1.5 flex items-center justify-around shadow-2xl safe-area-pb">
+        <NavLink
+          to="/dashboard"
+          className={({ isActive }) =>
+            cn(
+              "flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all duration-200 text-[11px] font-medium gap-1",
+              isActive
+                ? "text-primary font-semibold"
+                : "text-muted-foreground hover:text-foreground"
+            )
+          }
+        >
+          {({ isActive }) => (
+            <>
+              <div className={cn("p-1 rounded-lg transition-colors", isActive ? "bg-primary/10" : "")}>
+                <LayoutDashboard className="h-4 w-4" />
+              </div>
+              <span>Home</span>
+            </>
+          )}
+        </NavLink>
+        <NavLink
+          to="/crm/contacts"
+          className={({ isActive }) =>
+            cn(
+              "flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all duration-200 text-[11px] font-medium gap-1",
+              isActive
+                ? "text-primary font-semibold"
+                : "text-muted-foreground hover:text-foreground"
+            )
+          }
+        >
+          {({ isActive }) => (
+            <>
+              <div className={cn("p-1 rounded-lg transition-colors", isActive ? "bg-primary/10" : "")}>
+                <Users className="h-4 w-4" />
+              </div>
+              <span>CRM</span>
+            </>
+          )}
+        </NavLink>
+        <NavLink
+          to="/contact-center/workspace"
+          className={({ isActive }) =>
+            cn(
+              "flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all duration-200 text-[11px] font-medium gap-1",
+              isActive
+                ? "text-primary font-semibold"
+                : "text-muted-foreground hover:text-foreground"
+            )
+          }
+        >
+          {({ isActive }) => (
+            <>
+              <div className={cn("p-1 rounded-lg transition-colors", isActive ? "bg-primary/10" : "")}>
+                <PhoneCall className="h-4 w-4" />
+              </div>
+              <span>Bellen</span>
+            </>
+          )}
+        </NavLink>
+        <NavLink
+          to="/recruitment/candidates"
+          className={({ isActive }) =>
+            cn(
+              "flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all duration-200 text-[11px] font-medium gap-1",
+              isActive
+                ? "text-primary font-semibold"
+                : "text-muted-foreground hover:text-foreground"
+            )
+          }
+        >
+          {({ isActive }) => (
+            <>
+              <div className={cn("p-1 rounded-lg transition-colors", isActive ? "bg-primary/10" : "")}>
+                <GraduationCap className="h-4 w-4" />
+              </div>
+              <span>Werving</span>
+            </>
+          )}
+        </NavLink>
+        <NavLink
+          to="/settings"
+          className={({ isActive }) =>
+            cn(
+              "flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all duration-200 text-[11px] font-medium gap-1",
+              isActive
+                ? "text-primary font-semibold"
+                : "text-muted-foreground hover:text-foreground"
+            )
+          }
+        >
+          {({ isActive }) => (
+            <>
+              <div className={cn("p-1 rounded-lg transition-colors", isActive ? "bg-primary/10" : "")}>
+                <Settings className="h-4 w-4" />
+              </div>
+              <span>Account</span>
+            </>
+          )}
+        </NavLink>
+      </nav>
+
       <GlobalSearch isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
     </div>
   );
@@ -307,6 +426,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <SettingsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/integrations"
+            element={
+              <ProtectedRoute>
+                <IntegrationsPage />
               </ProtectedRoute>
             }
           />

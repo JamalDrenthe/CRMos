@@ -26,3 +26,9 @@ dist-ssr
 # Environment variables
 .env
 .env.production
+
+# Firebase
+.firebase/
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
