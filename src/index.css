@@ -122,4 +122,127 @@
   .text-balance {
     text-wrap: balance;
   }
+
+  /* CRMos Logo Living Animation Keyframes */
+  .crmos-anim-orbit {
+    transform-origin: 50px 50px;
+    animation: crmos-orbit 22s linear infinite;
+    transition: animation-duration 0.5s ease;
+  }
+
+  .group:hover .crmos-anim-orbit {
+    animation-duration: 7s;
+  }
+
+  .crmos-anim-orbit-reverse {
+    transform-origin: 50px 50px;
+    animation: crmos-orbit-reverse 28s linear infinite;
+    transition: animation-duration 0.5s ease;
+  }
+
+  .group:hover .crmos-anim-orbit-reverse {
+    animation-duration: 9s;
+  }
+
+  .crmos-anim-glow {
+    transform-origin: 50px 50px;
+    animation: crmos-pulse-glow 3.6s ease-in-out infinite alternate;
+  }
+
+  .crmos-anim-diamond {
+    transform-origin: 50px 50px;
+    animation: crmos-diamond-float 8s ease-in-out infinite alternate;
+  }
+
+  .crmos-anim-core {
+    transform-origin: 50px 50px;
+    animation: crmos-core-beam 2.2s ease-in-out infinite;
+  }
+
+  .crmos-anim-badge {
+    animation: crmos-badge-float 5s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes crmos-orbit {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes crmos-orbit-reverse {
+  from {
+    transform: rotate(360deg);
+  }
+  to {
+    transform: rotate(0deg);
+  }
+}
+
+@keyframes crmos-pulse-glow {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.28;
+  }
+  50% {
+    transform: scale(1.12);
+    opacity: 0.65;
+  }
+  100% {
+    transform: scale(0.95);
+    opacity: 0.35;
+  }
+}
+
+@keyframes crmos-diamond-float {
+  0% {
+    transform: scale(0.97) rotate(0deg);
+  }
+  50% {
+    transform: scale(1.03) rotate(3deg);
+  }
+  100% {
+    transform: scale(0.98) rotate(-3deg);
+  }
+}
+
+@keyframes crmos-core-beam {
+  0%, 100% {
+    transform: scale(0.88);
+    opacity: 0.85;
+  }
+  50% {
+    transform: scale(1.18);
+    opacity: 1;
+    filter: drop-shadow(0 0 6px rgba(147, 197, 253, 0.9));
+  }
+}
+
+@keyframes crmos-badge-float {
+  0% {
+    transform: translateY(0px) scale(1);
+    box-shadow: 0 10px 25px -5px rgba(59, 130, 246, 0.15);
+  }
+  50% {
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 16px 30px -5px rgba(147, 51, 234, 0.25);
+  }
+  100% {
+    transform: translateY(0px) scale(1);
+    box-shadow: 0 10px 25px -5px rgba(59, 130, 246, 0.15);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .crmos-anim-orbit,
+  .crmos-anim-orbit-reverse,
+  .crmos-anim-glow,
+  .crmos-anim-diamond,
+  .crmos-anim-core,
+  .crmos-anim-badge {
+    animation: none !important;
+  }
 }

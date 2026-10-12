@@ -4,6 +4,7 @@ import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
 import { Button } from '@/components/ui/button';
 import { useTranslation } from '@/stores/languageStore';
+import { CRMosLogo } from '@/components/common/CRMosLogo';
 import {
   Users,
   Phone,
@@ -89,13 +90,13 @@ export function LandingPage() {
           <div className="absolute top-1/3 right-10 w-[450px] h-[320px] bg-blue-500/10 blur-[150px] rounded-full pointer-events-none -z-10" />
 
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
-            {/* Apple Eyebrow Pill */}
-            <div className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-muted/40 px-3.5 py-1 text-xs sm:text-sm font-medium text-foreground backdrop-blur-md shadow-sm mb-8 hover:bg-muted/70 transition-all">
-              <span className="flex h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
+            {/* Apple Eyebrow Pill with Animated Logo */}
+            <div className="inline-flex items-center gap-2.5 rounded-full border border-border/60 bg-muted/40 px-4 py-1.5 text-xs sm:text-sm font-medium text-foreground backdrop-blur-md shadow-sm mb-8 hover:bg-muted/70 transition-all group">
+              <CRMosLogo size="xs" showText={false} />
               <span className="font-semibold text-foreground">CRMos 2.0</span>
               <span className="text-muted-foreground">•</span>
               <span className="text-muted-foreground">{t('The Operating System for Growth')}</span>
-              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
             </div>
 
             {/* Apple Hero Title */}
@@ -160,8 +161,9 @@ export function LandingPage() {
                     <span className="h-3 w-3 rounded-full bg-[#ffbd2e] inline-block shadow-sm" />
                     <span className="h-3 w-3 rounded-full bg-[#27c93f] inline-block shadow-sm" />
                   </div>
-                  <div className="rounded-full bg-white/5 border border-white/10 px-4 py-1 text-[11px] font-mono text-neutral-300">
-                    CRMos v2.4 • Operating System
+                  <div className="flex items-center gap-2 rounded-full bg-white/5 border border-white/10 px-4 py-1 text-[11px] font-mono text-neutral-300">
+                    <CRMosLogo size="xs" showText={false} />
+                    <span>CRMos v2.4 • Operating System</span>
                   </div>
                   <div className="flex items-center gap-1.5 text-[11px] text-emerald-400">
                     <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
