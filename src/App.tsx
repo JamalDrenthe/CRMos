@@ -28,8 +28,11 @@ import { SettingsPage } from '@/pages/SettingsPage';
 import { LoginPage } from '@/pages/LoginPage';
 import { LandingPage } from '@/pages/LandingPage';
 import { PricingPage } from '@/pages/PricingPage';
+import { SolutionsPage } from '@/pages/SolutionsPage';
+import { ComparePage } from '@/pages/ComparePage';
 import { RegisterPage } from '@/pages/RegisterPage';
 
+import { GlobalSearch } from '@/components/search/GlobalSearch';
 import { useAuthStore } from '@/stores/authStore';
 import { useCRMStore } from '@/stores/crmStore';
 import { useThemeStore } from '@/stores/themeStore';
@@ -37,6 +40,19 @@ import { cn } from '@/lib/utils';
 
 function Layout({ children }: { children: React.ReactNode }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  // Global Spotlight Keyboard Listener (Cmd+K / Ctrl+K)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setSearchOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -45,13 +61,14 @@ function Layout({ children }: { children: React.ReactNode }) {
         onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} 
       />
       <div className="flex flex-1 flex-col overflow-hidden">
-        <Header />
+        <Header onOpenSearch={() => setSearchOpen(true)} />
         <main className={cn(
           "flex-1 overflow-auto p-6 transition-all duration-300",
         )}>
           {children}
         </main>
       </div>
+      <GlobalSearch isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
     </div>
   );
 }
@@ -122,6 +139,8 @@ function App() {
             }
           />
           <Route path="/landing" element={<LandingPage />} />
+          <Route path="/solutions" element={<SolutionsPage />} />
+          <Route path="/compare" element={<ComparePage />} />
           <Route path="/pricing" element={<PricingPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />

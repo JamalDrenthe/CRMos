@@ -44,5 +44,35 @@ service cloud.firestore {
     match /crm_activities/{activityId} {
       allow read, write: if isAuthenticated();
     }
+
+    // Recruitment: Kandidaten
+    match /crm_candidates/{candidateId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Recruitment: Vacatures
+    match /crm_jobs/{jobId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Contact Center: Belcampagnes
+    match /crm_campaigns/{campaignId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Contact Center: Oproepen
+    match /crm_calls/{callId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Sales: Offertes
+    match /crm_quotes/{quoteId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Sales: Productencatalogus
+    match /crm_products/{productId} {
+      allow read, write: if isAuthenticated();
+    }
   }
 }

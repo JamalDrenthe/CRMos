@@ -1,0 +1,23 @@
+{
+  "name": "CRMos — Operating System for Growth",
+  "short_name": "CRMos",
+  "description": "One Platform. Three Disciplines. One Connected Workflow. Hybride CRM voor Sales, Callcenters en Recruitment.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#09090b",
+  "theme_color": "#09090b",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/crmos-logo-square.jpg",
+      "sizes": "1200x1200",
+      "type": "image/jpeg",
+      "purpose": "any"
+    }
+  ]
+}

@@ -19,13 +19,36 @@ import {
   Mail,
   Smartphone,
   Lock,
+  Database,
+  Sparkles,
+  CheckCircle2,
+  RefreshCw,
 } from 'lucide-react';
+import { seedDemoDataToFirestore } from '@/services/firestoreService';
 
 export function SettingsPage() {
   const { user } = useAuthStore();
   const { theme, setTheme } = useThemeStore();
   const { language, setLanguage, t } = useLanguageStore();
   const [activeTab, setActiveTab] = useState('profile');
+  const [isSeeding, setIsSeeding] = useState(false);
+
+  const handleSeedDemoData = async () => {
+    setIsSeeding(true);
+    const orgId = user?.org_id || 'default_org';
+    try {
+      const res = await seedDemoDataToFirestore(orgId);
+      if (res.success) {
+        toast.success(`Succesvol ${res.count} demorecords ingeladen voor Field Sales, Callcenter en Recruitment!`);
+      } else {
+        toast.info('Voorbeelddata lokaal beschikbaar (Firestore offline of ongeconfigureerd)');
+      }
+    } catch {
+      toast.error('Er is een fout opgetreden bij het inladen van de demodata');
+    } finally {
+      setIsSeeding(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -35,7 +58,7 @@ export function SettingsPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-5 lg:w-auto">
+        <TabsList className="grid w-full grid-cols-6 lg:w-auto">
           <TabsTrigger value="profile" className="flex items-center gap-2">
             <User className="h-4 w-4" />
             <span className="hidden sm:inline">Profile</span>
@@ -55,6 +78,10 @@ export function SettingsPage() {
           <TabsTrigger value="appearance" className="flex items-center gap-2">
             <Palette className="h-4 w-4" />
             <span className="hidden sm:inline">Appearance</span>
+          </TabsTrigger>
+          <TabsTrigger value="data" className="flex items-center gap-2">
+            <Database className="h-4 w-4" />
+            <span className="hidden sm:inline">Data &amp; Cloud</span>
           </TabsTrigger>
         </TabsList>
 
@@ -304,6 +331,52 @@ export function SettingsPage() {
                 <Save className="mr-2 h-4 w-4" />
                 {t('Save')}
               </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="data" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Database className="h-5 w-5 text-primary" />
+                <span>Google Cloud Firestore &amp; Voorbeelddata</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 space-y-1.5">
+                <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-semibold text-sm">
+                  <CheckCircle2 className="h-4 w-4" />
+                  <span>Cloud Firestore Verbonden</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Project: <strong className="text-foreground">crmosone-dev</strong> • Organisatie ID: <strong className="text-foreground">{user?.org_id || 'default_org'}</strong>
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Alle wijzigingen in contacten, deals, vacatures en belcampagnes worden direct realtime gesynchroniseerd.
+                </p>
+              </div>
+
+              <div className="space-y-3 pt-2 border-t border-border/40">
+                <div>
+                  <h4 className="font-semibold text-sm text-foreground flex items-center gap-1.5">
+                    <Sparkles className="h-4 w-4 text-amber-500" />
+                    <span>Voorbeelddata Inladen (3 Disciplines Demo)</span>
+                  </h4>
+                  <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                    Laad met één klik realistische Nederlandse demorecords in voor <strong>Field Sales</strong> (Singel 240, D2D orders), <strong>Callcenter</strong> (Q4 Glasvezel campagne, belscripts), en <strong>Recruitment</strong> (kandidaten voor werving-tot-omzet keten).
+                  </p>
+                </div>
+
+                <Button
+                  onClick={handleSeedDemoData}
+                  disabled={isSeeding}
+                  className="rounded-full gap-2 px-6"
+                >
+                  <RefreshCw className={`h-4 w-4 ${isSeeding ? 'animate-spin' : ''}`} />
+                  <span>{isSeeding ? 'Bezig met inladen...' : 'Laad 3 Disciplines Demodata In'}</span>
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

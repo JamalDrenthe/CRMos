@@ -5,11 +5,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuthStore } from '@/stores/authStore';
-import { isFirebaseConfigured } from '@/lib/firebase';
+import { isFirebaseConfigured, sendPasswordReset } from '@/lib/firebase';
 import { ThemeToggle } from '@/components/common/ThemeToggle';
 import { LanguageToggle } from '@/components/common/LanguageToggle';
 import { useTranslation } from '@/stores/languageStore';
-import { Eye, EyeOff, Loader2, AlertCircle, ArrowLeft } from 'lucide-react';
+import { Eye, EyeOff, Loader2, AlertCircle, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { CRMosLogo } from '@/components/common/CRMosLogo';
 
 export function LoginPage() {
@@ -22,6 +22,13 @@ export function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Password reset modal state
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [isResetLoading, setIsResetLoading] = useState(false);
+  const [resetSuccess, setResetSuccess] = useState(false);
+  const [resetError, setResetError] = useState('');
 
   const hasFirebase = isFirebaseConfigured();
 
@@ -177,7 +184,21 @@ export function LoginPage() {
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="password" className="text-xs font-medium text-foreground">{t('Password')}</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="password" className="text-xs font-medium text-foreground">{t('Password')}</Label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowResetModal(true);
+                      setResetEmail(email);
+                      setResetSuccess(false);
+                      setResetError('');
+                    }}
+                    className="text-[11px] font-medium text-primary hover:underline transition-colors"
+                  >
+                    {t('Forgot password?')}
+                  </button>
+                </div>
                 <div className="relative">
                   <Input
                     id="password"
@@ -207,6 +228,100 @@ export function LoginPage() {
                 {isLoading ? t('Signing in...') : t('Sign in')}
               </Button>
             </form>
+
+            {/* Apple-style Password Reset Drawer/Modal */}
+            {showResetModal && (
+              <div className="rounded-2xl border border-primary/20 bg-background/95 p-4 shadow-xl backdrop-blur-xl animate-in fade-in slide-in-from-top-2">
+                <div className="flex items-center justify-between pb-2 border-b border-border/40">
+                  <h4 className="font-semibold text-xs sm:text-sm text-foreground">
+                    {t('Reset Password')}
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => setShowResetModal(false)}
+                    className="text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {resetSuccess ? (
+                  <div className="py-3 text-center space-y-2">
+                    <CheckCircle2 className="h-6 w-6 text-emerald-500 mx-auto" />
+                    <p className="text-xs text-foreground font-medium">
+                      Reset-link verzonden naar <span className="font-semibold">{resetEmail}</span>.
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Controleer je inbox (en spambox) om je wachtwoord opnieuw in te stellen.
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="mt-2 rounded-full text-xs h-8"
+                      onClick={() => setShowResetModal(false)}
+                    >
+                      Sluiten
+                    </Button>
+                  </div>
+                ) : (
+                  <form
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      if (!resetEmail) return;
+                      setIsResetLoading(true);
+                      setResetError('');
+                      try {
+                        await sendPasswordReset(resetEmail);
+                        setResetSuccess(true);
+                      } catch (err: unknown) {
+                        const error = err as { message?: string };
+                        setResetError(error.message || 'Kon herstel e-mail niet versturen.');
+                      } finally {
+                        setIsResetLoading(false);
+                      }
+                    }}
+                    className="pt-3 space-y-2.5"
+                  >
+                    <p className="text-[11px] text-muted-foreground">
+                      Vul je e-mailadres in om een veilige herstellink te ontvangen.
+                    </p>
+                    {resetError && (
+                      <p className="text-[11px] text-destructive bg-destructive/10 p-2 rounded-lg">
+                        {resetError}
+                      </p>
+                    )}
+                    <Input
+                      type="email"
+                      placeholder="naam@bedrijf.nl"
+                      value={resetEmail}
+                      onChange={(e) => setResetEmail(e.target.value)}
+                      required
+                      className="h-9 rounded-xl text-xs bg-background"
+                    />
+                    <div className="flex items-center gap-2 pt-1">
+                      <Button
+                        type="submit"
+                        size="sm"
+                        disabled={isResetLoading}
+                        className="rounded-full text-xs h-8 flex-1"
+                      >
+                        {isResetLoading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                        Verstuur herstellink
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setShowResetModal(false)}
+                        className="rounded-full text-xs h-8"
+                      >
+                        Annuleer
+                      </Button>
+                    </div>
+                  </form>
+                )}
+              </div>
+            )}
 
             <div className="text-center pt-1">
               <p className="text-xs text-muted-foreground">

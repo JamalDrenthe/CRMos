@@ -8,6 +8,7 @@ import {
   updateProfile,
   signOut, 
   onAuthStateChanged,
+  sendPasswordResetEmail,
   type User as FirebaseUser 
 } from 'firebase/auth';
 import { 
@@ -217,6 +218,11 @@ export async function syncFirebaseUserWithFirestore(fbUser: FirebaseUser, compan
   }
 
   return { user: appUser, org };
+}
+
+export async function sendPasswordReset(email: string): Promise<void> {
+  if (!isFirebaseConfigured()) return;
+  await sendPasswordResetEmail(auth, email);
 }
 
 export { onAuthStateChanged };

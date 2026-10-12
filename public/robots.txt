@@ -1,0 +1,16 @@
+User-agent: *
+Allow: /
+Allow: /pricing
+Allow: /solutions
+Allow: /compare
+Allow: /login
+Allow: /register
+
+Disallow: /dashboard
+Disallow: /crm/
+Disallow: /recruitment/
+Disallow: /contact-center/
+Disallow: /admin/
+Disallow: /settings
+
+Sitemap: https://www.crmos.one/sitemap.xml

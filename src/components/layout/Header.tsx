@@ -39,7 +39,11 @@ import { ThemeToggle } from '@/components/common/ThemeToggle';
 import { LanguageToggle } from '@/components/common/LanguageToggle';
 import { useTranslation } from '@/stores/languageStore';
 
-export function Header() {
+interface HeaderProps {
+  onOpenSearch?: () => void;
+}
+
+export function Header({ onOpenSearch }: HeaderProps = {}) {
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
   const { searchContacts, searchCompanies, searchDeals } = useCRMStore();
@@ -94,9 +98,16 @@ export function Header() {
             onFocus={() => searchQuery.length >= 2 && setShowSearch(true)}
           />
           <div className="absolute right-3 top-1/2 -translate-y-1/2">
-            <kbd className="hidden rounded border bg-muted px-1.5 text-xs font-medium sm:inline-block">
-              <Command className="inline h-3 w-3" />K
-            </kbd>
+            <button
+              type="button"
+              onClick={onOpenSearch}
+              className="cursor-pointer focus:outline-none"
+              title="Global Spotlight Search (Cmd + K)"
+            >
+              <kbd className="hidden rounded border bg-muted px-1.5 text-xs font-medium sm:inline-block hover:bg-accent transition-colors">
+                <Command className="inline h-3 w-3" />K
+              </kbd>
+            </button>
           </div>
 
           {/* Search Results Popover */}

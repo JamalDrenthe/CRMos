@@ -67,65 +67,71 @@ export function Footer() {
             </div>
           </div>
 
-          {/* Product Modules */}
+          {/* Solutions & Disciplines (SEO) */}
           <div>
-            <h4 className="font-semibold tracking-wider text-foreground uppercase text-[11px]">{t('Product')}</h4>
+            <h4 className="font-semibold tracking-wider text-foreground uppercase text-[11px]">Oplossingen</h4>
             <ul className="mt-3.5 space-y-2 text-muted-foreground">
               <li>
-                <a href="/#modules" className="hover:text-foreground transition-colors">{t('CRM & Pipelines')}</a>
+                <Link to="/solutions?tab=field-sales" className="hover:text-foreground transition-colors">Field Sales &amp; D2D</Link>
               </li>
               <li>
-                <a href="/#modules" className="hover:text-foreground transition-colors">{t('Recruitment (ATS)')}</a>
+                <Link to="/solutions?tab=callcenter" className="hover:text-foreground transition-colors">Callcenter Software</Link>
               </li>
               <li>
-                <a href="/#modules" className="hover:text-foreground transition-colors">{t('Contact Center Workspace')}</a>
+                <Link to="/solutions?tab=recruitment" className="hover:text-foreground transition-colors">Recruitment CRM (ATS)</Link>
               </li>
               <li>
-                <a href="/#modules" className="hover:text-foreground transition-colors">{t('Quotes & Products')}</a>
+                <Link to="/solutions?tab=revenue" className="hover:text-foreground transition-colors">Recruitment to Revenue</Link>
               </li>
               <li>
-                <a href="/#modules" className="hover:text-foreground transition-colors">{t('Gamification & Streaks')}</a>
+                <Link to="/solutions?tab=automation" className="hover:text-foreground transition-colors">Sales Automation</Link>
               </li>
               <li>
-                <a href="/#modules" className="hover:text-foreground transition-colors">{t('Territories & Postcodes')}</a>
+                <Link to="/solutions" className="hover:text-foreground transition-colors">Alle Oplossingen</Link>
               </li>
             </ul>
           </div>
 
-          {/* Pricing & Solutions */}
+          {/* Comparisons */}
           <div>
-            <h4 className="font-semibold tracking-wider text-foreground uppercase text-[11px]">{t('Pricing & Plans')}</h4>
+            <h4 className="font-semibold tracking-wider text-foreground uppercase text-[11px]">Vergelijk Software</h4>
             <ul className="mt-3.5 space-y-2 text-muted-foreground">
               <li>
-                <Link to="/pricing" className="hover:text-foreground transition-colors">{t('Starter Plan (€200)')}</Link>
+                <Link to="/compare?competitor=salesdock" className="hover:text-foreground transition-colors">CRMos vs Salesdock</Link>
               </li>
               <li>
-                <Link to="/pricing" className="hover:text-foreground transition-colors">{t('Professional (€100)')}</Link>
+                <Link to="/compare?competitor=leaddesk" className="hover:text-foreground transition-colors">CRMos vs LeadDesk</Link>
               </li>
               <li>
-                <Link to="/pricing" className="hover:text-foreground transition-colors">{t('Enterprise (€50)')}</Link>
+                <Link to="/compare?competitor=recruit-crm" className="hover:text-foreground transition-colors">CRMos vs Recruit CRM</Link>
               </li>
               <li>
-                <Link to="/pricing" className="hover:text-foreground transition-colors">{t('Feature Comparison')}</Link>
+                <Link to="/compare" className="hover:text-foreground transition-colors">Alles-in-één Matrix</Link>
               </li>
               <li>
-                <Link to="/pricing" className="hover:text-foreground transition-colors">{t('FAQ & Billing')}</Link>
+                <Link to="/pricing" className="hover:text-foreground transition-colors">Kostenvergelijking</Link>
               </li>
             </ul>
           </div>
 
-          {/* Company & Support */}
+          {/* Pricing & Account */}
           <div>
-            <h4 className="font-semibold tracking-wider text-foreground uppercase text-[11px]">{t('Account & Contact')}</h4>
+            <h4 className="font-semibold tracking-wider text-foreground uppercase text-[11px]">Prijzen &amp; Contact</h4>
             <ul className="mt-3.5 space-y-2 text-muted-foreground">
+              <li>
+                <Link to="/pricing" className="hover:text-foreground transition-colors">Starter (€200)</Link>
+              </li>
+              <li>
+                <Link to="/pricing" className="hover:text-foreground transition-colors">Professional (€100)</Link>
+              </li>
+              <li>
+                <Link to="/pricing" className="hover:text-foreground transition-colors">Enterprise (€50)</Link>
+              </li>
               <li>
                 <Link to="/login" className="hover:text-foreground transition-colors">{t('Log in')}</Link>
               </li>
               <li>
-                <Link to="/register" className="hover:text-foreground transition-colors">{t('Create Account')}</Link>
-              </li>
-              <li>
-                <a href="#faq" className="hover:text-foreground transition-colors">{t('Help & Support')}</a>
+                <Link to="/register" className="hover:text-foreground transition-colors">Gratis Proefperiode</Link>
               </li>
               <li>
                 <a href="mailto:info@jamaldrenthe.com" className="hover:text-foreground transition-colors">info@jamaldrenthe.com</a>

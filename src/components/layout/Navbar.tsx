@@ -29,7 +29,7 @@ export function Navbar() {
         </Link>
 
         {/* Desktop Apple-style Minimal Navigation */}
-        <nav className="hidden items-center gap-8 text-[13px] font-medium tracking-tight md:flex">
+        <nav className="hidden items-center gap-7 text-[13px] font-medium tracking-tight md:flex">
           <Link
             to="/"
             className={`transition-colors hover:text-foreground ${
@@ -38,18 +38,22 @@ export function Navbar() {
           >
             {t('Overview')}
           </Link>
-          <a
-            href="/#features"
-            className="text-muted-foreground transition-colors hover:text-foreground"
+          <Link
+            to="/solutions"
+            className={`transition-colors hover:text-foreground ${
+              isCurrent('/solutions') ? 'text-foreground font-semibold' : 'text-muted-foreground'
+            }`}
           >
-            {t('Features')}
-          </a>
-          <a
-            href="/#modules"
-            className="text-muted-foreground transition-colors hover:text-foreground"
+            Oplossingen
+          </Link>
+          <Link
+            to="/compare"
+            className={`transition-colors hover:text-foreground ${
+              isCurrent('/compare') ? 'text-foreground font-semibold' : 'text-muted-foreground'
+            }`}
           >
-            {t('Modules')}
-          </a>
+            Vergelijk
+          </Link>
           <Link
             to="/pricing"
             className={`transition-colors hover:text-foreground ${
@@ -58,6 +62,12 @@ export function Navbar() {
           >
             {t('Pricing')}
           </Link>
+          <a
+            href="/#features"
+            className="text-muted-foreground transition-colors hover:text-foreground"
+          >
+            Pijlers
+          </a>
           <a
             href="/#faq"
             className="text-muted-foreground transition-colors hover:text-foreground"
@@ -130,20 +140,20 @@ export function Navbar() {
             >
               {t('Overview')}
             </Link>
-            <a
-              href="/#features"
+            <Link
+              to="/solutions"
               onClick={() => setMobileMenuOpen(false)}
               className="py-1 text-muted-foreground hover:text-foreground transition-colors"
             >
-              {t('Features')}
-            </a>
-            <a
-              href="/#modules"
+              Oplossingen
+            </Link>
+            <Link
+              to="/compare"
               onClick={() => setMobileMenuOpen(false)}
               className="py-1 text-muted-foreground hover:text-foreground transition-colors"
             >
-              {t('Modules')}
-            </a>
+              Vergelijk
+            </Link>
             <Link
               to="/pricing"
               onClick={() => setMobileMenuOpen(false)}
@@ -151,6 +161,13 @@ export function Navbar() {
             >
               {t('Pricing')}
             </Link>
+            <a
+              href="/#features"
+              onClick={() => setMobileMenuOpen(false)}
+              className="py-1 text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Pijlers
+            </a>
             <a
               href="/#faq"
               onClick={() => setMobileMenuOpen(false)}
