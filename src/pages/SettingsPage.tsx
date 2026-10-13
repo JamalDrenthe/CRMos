@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,14 +29,27 @@ import {
   Mail,
   Phone,
   Clock,
+  LogOut,
 } from 'lucide-react';
 import { seedDemoDataToFirestore } from '@/services/firestoreService';
 
 export function SettingsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { user } = useAuthStore();
+  const navigate = useNavigate();
+  const { user, logout } = useAuthStore();
   const { theme, setTheme } = useThemeStore();
   const { language, setLanguage, t } = useLanguageStore();
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      toast.success(t('Log out') + ' succesvol');
+      navigate('/login');
+    } catch (e) {
+      console.error(e);
+      navigate('/login');
+    }
+  };
 
   const tabFromUrl = searchParams.get('tab') || 'profile';
   const [activeTab, setActiveTab] = useState(tabFromUrl);
@@ -130,6 +143,15 @@ export function SettingsPage() {
             >
               <Database className="h-3.5 w-3.5" />
               <span>Firestore Status</span>
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleLogout}
+              className="rounded-full text-xs gap-1.5 h-8 text-red-500 hover:text-red-600 hover:bg-red-500/10 border-red-500/30 flex-1 sm:flex-none font-medium transition-colors"
+            >
+              <LogOut className="h-3.5 w-3.5 text-red-500" />
+              <span>{t('Log out')}</span>
             </Button>
           </div>
         </div>
@@ -260,6 +282,35 @@ export function SettingsPage() {
                   Wijzigingen Opslaan
                 </Button>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Sessie & Toegang Card in Profile Tab */}
+          <Card className="rounded-3xl border-red-500/20 bg-card/70 backdrop-blur-xl">
+            <CardHeader className="p-5 sm:p-6 pb-2">
+              <CardTitle className="text-lg font-bold text-foreground flex items-center gap-2">
+                <LogOut className="h-5 w-5 text-red-500" />
+                <span>Sessie &amp; Toegang</span>
+              </CardTitle>
+              <CardDescription className="text-xs text-muted-foreground">
+                Beheer je actieve aanmelding op dit apparaat of meld je direct af.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-5 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold text-foreground">Huidige Sessie</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Ingelogd als <strong className="text-foreground">{user?.email || 'info@jamaldrenthe.com'}</strong>
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                onClick={handleLogout}
+                className="rounded-full px-5 text-xs h-9 text-red-500 hover:text-red-600 hover:bg-red-500/10 border-red-500/30 font-semibold gap-2"
+              >
+                <LogOut className="h-3.5 w-3.5 text-red-500" />
+                <span>{t('Log out')}</span>
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>
@@ -530,6 +581,33 @@ export function SettingsPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Apple-style Session & Logout Section */}
+      <div className="pt-8 pb-12 flex justify-center">
+        <Card className="w-full max-w-xl rounded-3xl border-red-500/20 bg-red-500/[0.03] backdrop-blur-xl shadow-xs">
+          <CardContent className="p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3 text-center sm:text-left">
+              <div className="p-2.5 rounded-2xl bg-red-500/10 text-red-500 shrink-0">
+                <LogOut className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="font-semibold text-sm text-foreground">Sessie beëindigen</p>
+                <p className="text-xs text-muted-foreground">
+                  Veilig uitloggen uit CRMos op dit apparaat
+                </p>
+              </div>
+            </div>
+            <Button
+              variant="destructive"
+              onClick={handleLogout}
+              className="rounded-full px-6 text-xs h-9 w-full sm:w-auto font-semibold shadow-xs gap-2 shrink-0"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              <span>{t('Log out')}</span>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

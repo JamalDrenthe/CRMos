@@ -1,8 +1,10 @@
 import { useState } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
 import {
   Tooltip,
   TooltipContent,
@@ -36,9 +38,12 @@ import {
   Shield,
   Blocks,
   X,
+  LogOut,
 } from 'lucide-react';
 import { useTranslation } from '@/stores/languageStore';
+import { useAuthStore } from '@/stores/authStore';
 import { CRMosLogo } from '@/components/common/CRMosLogo';
+import { toast } from 'sonner';
 
 interface SidebarProps {
   isCollapsed: boolean;
@@ -223,6 +228,20 @@ function NavItemComponent({
 
 export function Sidebar({ isCollapsed, onToggle, isMobileOpen = false, onCloseMobile }: SidebarProps) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { user, logout } = useAuthStore();
+
+  const handleLogout = async () => {
+    if (onCloseMobile) onCloseMobile();
+    try {
+      await logout();
+      toast.success(t('Log out') + ' succesvol');
+      navigate('/login');
+    } catch (e) {
+      console.error(e);
+      navigate('/login');
+    }
+  };
 
   const sidebarContent = (
     <div className="flex h-full flex-col">
@@ -297,23 +316,86 @@ export function Sidebar({ isCollapsed, onToggle, isMobileOpen = false, onCloseMo
         </div>
       </ScrollArea>
 
-      {/* Desktop Collapse Button */}
-      <div className="hidden md:block border-t p-3">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onToggle}
-          className={cn('w-full rounded-xl', isCollapsed && 'h-10 w-10 p-0')}
-        >
-          {isCollapsed ? (
-            <ChevronRight className="h-5 w-5" />
-          ) : (
-            <>
-              <ChevronDown className="mr-2 h-4 w-4 rotate-90" />
+      {/* Bottom User Profile & Prominent Logout Section */}
+      <div className="border-t border-border/60 bg-muted/20 p-3 space-y-2">
+        {!isCollapsed ? (
+          <>
+            {/* User Info Card */}
+            <div className="flex items-center gap-3 p-1 rounded-xl">
+              <Avatar className="h-9 w-9 border border-border/60 shrink-0">
+                <AvatarImage src={user?.avatar} />
+                <AvatarFallback className="bg-primary/10 text-primary font-bold text-xs">
+                  {user?.name?.charAt(0) || 'J'}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 overflow-hidden min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <p className="font-semibold text-xs text-foreground truncate">
+                    {user?.name || 'Jamal Drenthe'}
+                  </p>
+                  <Badge variant="outline" className="text-[9px] px-1 py-0 uppercase font-bold text-primary bg-primary/10 border-primary/20 shrink-0">
+                    {user?.role || 'admin'}
+                  </Badge>
+                </div>
+                <p className="text-[11px] text-muted-foreground truncate">
+                  {user?.email || 'info@jamaldrenthe.com'}
+                </p>
+              </div>
+            </div>
+
+            {/* Logout Button (Prominent Red) */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleLogout}
+              className="w-full justify-center text-xs font-semibold text-red-500 hover:text-red-600 hover:bg-red-500/10 border-red-500/20 rounded-xl gap-2 h-9 transition-colors"
+            >
+              <LogOut className="h-4 w-4" />
+              <span>{t('Log out')}</span>
+            </Button>
+
+            {/* Desktop Collapse Toggle */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onToggle}
+              className="hidden md:flex w-full justify-center text-xs text-muted-foreground hover:text-foreground rounded-xl h-8"
+            >
+              <ChevronDown className="mr-1.5 h-3.5 w-3.5 rotate-90" />
               <span>{t('Collapse')}</span>
-            </>
-          )}
-        </Button>
+            </Button>
+          </>
+        ) : (
+          <div className="flex flex-col items-center gap-2">
+            <TooltipProvider delayDuration={0}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleLogout}
+                    className="h-10 w-10 text-red-500 hover:text-red-600 hover:bg-red-500/10 rounded-xl"
+                  >
+                    <LogOut className="h-5 w-5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="right">
+                  <span>{t('Log out')}</span>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            {/* Desktop Expand Toggle */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onToggle}
+              className="hidden md:flex h-10 w-10 rounded-xl text-muted-foreground hover:text-foreground"
+            >
+              <ChevronRight className="h-5 w-5" />
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

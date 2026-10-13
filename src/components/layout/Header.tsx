@@ -43,6 +43,7 @@ import { isFirebaseConfigured } from '@/lib/firebase';
 import { ThemeToggle } from '@/components/common/ThemeToggle';
 import { LanguageToggle } from '@/components/common/LanguageToggle';
 import { useTranslation } from '@/stores/languageStore';
+import { toast } from 'sonner';
 
 interface HeaderProps {
   onOpenSearch?: () => void;
@@ -84,8 +85,14 @@ export function Header({ onOpenSearch, onToggleMobileMenu }: HeaderProps = {}) {
   };
 
   const handleLogout = async () => {
-    await logout();
-    navigate('/login');
+    try {
+      await logout();
+      toast.success(t('Log out') + ' succesvol');
+      navigate('/login');
+    } catch (e) {
+      console.error(e);
+      navigate('/login');
+    }
   };
 
   const unreadCount = notifications.filter((n) => !n.read).length;
@@ -291,6 +298,17 @@ export function Header({ onOpenSearch, onToggleMobileMenu }: HeaderProps = {}) {
               </Avatar>
             </Button>
           </DropdownMenuTrigger>
+
+          {/* Quick Direct Logout Button in Header Bar */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleLogout}
+            className="h-9 w-9 rounded-full text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors"
+            title={t('Log out')}
+          >
+            <LogOut className="h-4 w-4" />
+          </Button>
 
           <DropdownMenuContent
             className="w-72 sm:w-80 p-2.5 rounded-3xl border border-border/60 bg-card/95 backdrop-blur-2xl shadow-2xl"
