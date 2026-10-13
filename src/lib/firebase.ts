@@ -22,12 +22,12 @@ import type { User, Organization } from '@/types';
 
 // Environment configuration for Firebase
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '',
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || '',
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || '',
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || '',
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyCsBPKp7i7Cd959bF8hZzTDtV_V_7cI9Xo',
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'crmosone-dev.firebaseapp.com',
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'crmosone-dev',
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'crmosone-dev.firebasestorage.app',
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '560657459503',
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:560657459503:web:cafda0014c240cdc7099da',
 };
 
 export const isFirebaseConfigured = (): boolean => {
@@ -44,12 +44,12 @@ export const app = !getApps().length
       isFirebaseConfigured() 
         ? firebaseConfig 
         : {
-            apiKey: 'mock-api-key',
-            authDomain: 'crmos-demo.firebaseapp.com',
-            projectId: 'crmos-demo',
-            storageBucket: 'crmos-demo.appspot.com',
-            messagingSenderId: '123456789',
-            appId: '1:123456789:web:abcdef',
+            apiKey: 'AIzaSyCsBPKp7i7Cd959bF8hZzTDtV_V_7cI9Xo',
+            authDomain: 'crmosone-dev.firebaseapp.com',
+            projectId: 'crmosone-dev',
+            storageBucket: 'crmosone-dev.firebasestorage.app',
+            messagingSenderId: '560657459503',
+            appId: '1:560657459503:web:cafda0014c240cdc7099da',
           }
     )
   : getApp();
