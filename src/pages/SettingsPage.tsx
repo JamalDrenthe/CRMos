@@ -30,7 +30,14 @@ import {
   Clock,
   LogOut,
   Trash2,
+  ShieldCheck,
+  Layers,
+  Globe,
+  Users2,
+  Key,
 } from 'lucide-react';
+import { isCoreEcosystemCompany } from '@/types';
+import { CORE_PARTNER_OPTIONS } from '@/lib/companyAccess';
 import { seedDemoDataToFirestore, purgeDemoAndMockDataFromFirestore } from '@/services/firestoreService';
 import { useCRMStore } from '@/stores/crmStore';
 import { useRecruitmentStore } from '@/stores/recruitmentStore';
@@ -39,9 +46,44 @@ import { useContactCenterStore } from '@/stores/contactCenterStore';
 export function SettingsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { user, logout } = useAuthStore();
+  const { user, logout, updateUser } = useAuthStore();
   const { theme, setTheme } = useThemeStore();
   const { language, setLanguage, t } = useLanguageStore();
+
+  const [companyName, setCompanyName] = useState(user?.company_name || 'CRMos');
+  const [kvkNumber, setKvkNumber] = useState('84920114');
+  const [btwNumber, setBtwNumber] = useState('NL84920114B01');
+  const [orgType, setOrgType] = useState('hybrid');
+  const [allowedCompaniesInput, setAllowedCompaniesInput] = useState((user?.allowed_companies || []).join(', '));
+
+  useEffect(() => {
+    if (user?.company_name) {
+      setCompanyName(user.company_name);
+    }
+    if (user?.allowed_companies) {
+      setAllowedCompaniesInput(user.allowed_companies.join(', '));
+    }
+  }, [user]);
+
+  const isCorePartner = isCoreEcosystemCompany(user?.company_name);
+  const isSuperAdmin =
+    user?.email?.toLowerCase() === 'info@jamaldrenthe.com' ||
+    user?.is_super_admin === true ||
+    user?.role === 'admin';
+
+  const handleSaveOrganization = () => {
+    const trimmedCompany = companyName.trim() || 'CRMos';
+    const parsedAllowed = allowedCompaniesInput
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    updateUser({
+      company_name: trimmedCompany,
+      allowed_companies: parsedAllowed.length > 0 ? parsedAllowed : undefined,
+    });
+    toast.success(`Bedrijfsprofiel voor ${trimmedCompany} succesvol opgeslagen`);
+  };
 
   const handleLogout = async () => {
     try {
@@ -131,7 +173,17 @@ export function SettingsPage() {
                 {user?.email || 'info@jamaldrenthe.com'}
               </p>
               <div className="flex flex-wrap items-center gap-2 pt-0.5 text-[11px] text-muted-foreground font-mono">
-                <span>Organisatie: <strong className="text-foreground">{user?.org_id || 'crmosone-dev'}</strong></span>
+                <span>Bedrijf: <strong className="text-foreground">{user?.company_name || 'CRMos'}</strong></span>
+                <span>•</span>
+                {isCorePartner ? (
+                  <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 font-medium py-0">
+                    Core Ecosysteem
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-[10px] bg-indigo-500/10 text-indigo-500 border-indigo-500/30 font-medium py-0">
+                    Geïsoleerde Omgeving
+                  </Badge>
+                )}
                 <span>•</span>
                 <span className="text-emerald-500 font-medium flex items-center gap-1">
                   <CheckCircle2 className="h-3 w-3" />
@@ -341,23 +393,189 @@ export function SettingsPage() {
         {/* ===================================================================== */}
         {/* TAB 3: ORGANIZATION */}
         {/* ===================================================================== */}
-        <TabsContent value="organization" className="space-y-5 animate-in fade-in duration-200">
+        {/* ===================================================================== */}
+        {/* TAB 3: ORGANIZATION & MULTI-TENANT ISOLATION */}
+        {/* ===================================================================== */}
+        <TabsContent value="organization" className="space-y-6 animate-in fade-in duration-200">
+          {/* Card 1: Multi-Tenant Bedrijfscategorisatie & Data-Toegangsstatus */}
+          <Card className={`rounded-3xl border ${
+            isCorePartner
+              ? 'border-emerald-500/30 bg-emerald-500/[0.04]'
+              : 'border-indigo-500/30 bg-indigo-500/[0.04]'
+          } backdrop-blur-xl shadow-xs overflow-hidden`}>
+            <CardHeader className="p-5 sm:p-6 pb-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className={`p-2.5 rounded-2xl ${
+                    isCorePartner
+                      ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                      : 'bg-indigo-500/10 text-indigo-500'
+                  }`}>
+                    {isCorePartner ? <Layers className="h-5 w-5" /> : <ShieldCheck className="h-5 w-5" />}
+                  </div>
+                  <div>
+                    <CardTitle className="text-base sm:text-lg font-bold flex items-center gap-2">
+                      <span>Bedrijfscategorisatie &amp; Toegangsstatus</span>
+                      {isCorePartner ? (
+                        <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-xs">
+                          CRMos Core Ecosysteem
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="bg-indigo-500/10 text-indigo-500 border-indigo-500/30 text-xs">
+                          Geïsoleerde Bedrijfsomgeving
+                        </Badge>
+                      )}
+                    </CardTitle>
+                    <CardDescription className="text-xs text-muted-foreground mt-0.5">
+                      Multi-tenant isolatieregels en datatoegang binnen het CRMos platform.
+                    </CardDescription>
+                  </div>
+                </div>
+
+                {isSuperAdmin && (
+                  <Badge className="bg-gradient-to-r from-amber-500 to-orange-500 text-white font-medium text-xs px-2.5 py-1">
+                    Master Admin Toezicht
+                  </Badge>
+                )}
+              </div>
+            </CardHeader>
+
+            <CardContent className="p-5 sm:p-6 pt-0 space-y-4">
+              {isCorePartner ? (
+                <div className="rounded-2xl border border-emerald-500/20 bg-background/60 p-4 space-y-3">
+                  <div className="flex items-start gap-2.5">
+                    <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                      <p className="text-xs sm:text-sm font-semibold text-foreground">
+                        Gedeelde Toegang tot Centrale CRMos Dataset
+                      </p>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        Jouw account is geregistreerd onder <strong className="text-foreground">{user?.company_name || 'CRMos'}</strong>. Je hebt directe toegang tot de centrale CRMos dataset (waaronder 1.274 contacten, bedrijven en gesprekken uit HubSpot). Deze gegevens worden uitsluitend gedeeld tussen de 6 officiële CRMos kernpartners:
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* 6 Core Ecosystem Partners Pills */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
+                    {CORE_PARTNER_OPTIONS.map((partner) => {
+                      const isCurrent = (user?.company_name || '').toLowerCase() === partner.toLowerCase();
+                      return (
+                        <div
+                          key={partner}
+                          className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs font-medium transition-all ${
+                            isCurrent
+                              ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-700 dark:text-emerald-300 font-bold shadow-xs'
+                              : 'bg-muted/40 border-border/50 text-foreground'
+                          }`}
+                        >
+                          <span className={`h-2 w-2 rounded-full ${isCurrent ? 'bg-emerald-500 animate-pulse' : 'bg-muted-foreground/50'}`} />
+                          <span className="truncate">{partner}</span>
+                          {isCurrent && (
+                            <span className="ml-auto text-[10px] text-emerald-600 dark:text-emerald-400 font-normal">
+                              (Jouw Bedrijf)
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <p className="text-[11px] text-muted-foreground italic pt-1">
+                    * Externe bedrijven die zich via de registratie aanmelden hebben géén toegang tot deze kerngegevens en opereren in een strikt geïsoleerde tenant.
+                  </p>
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-indigo-500/20 bg-background/60 p-4 space-y-3">
+                  <div className="flex items-start gap-2.5">
+                    <ShieldCheck className="h-5 w-5 text-indigo-500 shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                      <p className="text-xs sm:text-sm font-semibold text-foreground">
+                        Strikte Privacy &amp; Data-Isolatie Actief
+                      </p>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        Jouw account is geregistreerd onder <strong className="text-foreground">{user?.company_name || 'Je Bedrijf'}</strong>. Alle data (klanten, deals, kandidaten, rayonbezoeken en belcampagnes) die door jouw team worden ingevoerd zijn strikt privé.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                    <div className="p-3 rounded-xl bg-muted/40 border border-border/40 text-xs space-y-1">
+                      <div className="flex items-center gap-1.5 font-semibold text-foreground">
+                        <Lock className="h-3.5 w-3.5 text-indigo-500" />
+                        <span>Tenant Afscherming</span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">
+                        Andere bedrijven kunnen jouw gegevens onder geen beding zien of opvragen.
+                      </p>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-muted/40 border border-border/40 text-xs space-y-1">
+                      <div className="flex items-center gap-1.5 font-semibold text-foreground">
+                        <Users2 className="h-3.5 w-3.5 text-indigo-500" />
+                        <span>Team Autonomie</span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">
+                        Collega's binnen {user?.company_name || 'jouw bedrijf'} delen gezamenlijk de werkruimte.
+                      </p>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-muted/40 border border-border/40 text-xs space-y-1">
+                      <div className="flex items-center gap-1.5 font-semibold text-foreground">
+                        <Shield className="h-3.5 w-3.5 text-indigo-500" />
+                        <span>Platform Toezicht</span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">
+                        Platformbeheerders (Admin) bieden technische ondersteuning en audits.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {isSuperAdmin && (
+                <div className="rounded-2xl border border-amber-500/20 bg-amber-500/[0.05] p-3.5 flex items-start gap-3">
+                  <Key className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                  <div className="space-y-0.5 text-xs">
+                    <p className="font-semibold text-foreground">Platform Master Administrator</p>
+                    <p className="text-muted-foreground leading-relaxed">
+                      Als beheerder kun je alle bedrijfsdata inzien en via de bedrijfsfilter in de bovenbalk schakelen tussen Masterview, het CRMos Core ecosysteem of specifieke bedrijfstenants.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Card 2: Bedrijfsprofiel & Administratieve Instellingen */}
           <Card className="rounded-3xl border-border/60 bg-card/70 backdrop-blur-xl">
             <CardHeader className="p-5 sm:p-6 pb-2">
-              <CardTitle className="text-lg font-bold">Organisatie Instellingen</CardTitle>
+              <CardTitle className="text-base sm:text-lg font-bold">Bedrijfsprofiel &amp; Instellingen</CardTitle>
               <CardDescription className="text-xs text-muted-foreground">
-                Bedrijfsprofiel, rayonstructuur en administratieve instellingen.
+                Beheer je bedrijfsnaam, branche en samenwerkingsrechten.
               </CardDescription>
             </CardHeader>
             <CardContent className="p-5 sm:p-6 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <Label className="text-xs">Bedrijfsnaam</Label>
-                  <Input defaultValue="CRMos Commercial Operations" className="h-9 text-xs" />
+                  <Input
+                    value={companyName}
+                    onChange={(e) => setCompanyName(e.target.value)}
+                    placeholder="bijv. CRMos, VVC, of Bedrijfsnaam B.V."
+                    className="h-9 text-xs"
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    Bepaalt onder welke bedrijfsentiteit jouw data en teamleden worden gegroepeerd.
+                  </p>
                 </div>
+
                 <div className="space-y-1.5">
                   <Label className="text-xs">Type Organisatie</Label>
-                  <select className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs">
+                  <select
+                    value={orgType}
+                    onChange={(e) => setOrgType(e.target.value)}
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs h-9"
+                  >
                     <option value="sales_agency">Field Sales &amp; Deur-tot-deur Organisatie</option>
                     <option value="callcenter">Callcenter &amp; Telemarketing Bureau</option>
                     <option value="recruitment">Recruitment &amp; Uitzendbureau</option>
@@ -366,21 +584,60 @@ export function SettingsPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs flex items-center gap-1.5">
+                    <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span>Gekoppeld Zakelijk E-mail</span>
+                  </Label>
+                  <Input
+                    value={user?.email || 'info@jamaldrenthe.com'}
+                    disabled
+                    className="h-9 text-xs bg-muted/40 font-mono"
+                  />
+                </div>
+
                 <div className="space-y-1.5">
                   <Label className="text-xs">KVK Nummer</Label>
-                  <Input placeholder="12345678" defaultValue="84920114" className="h-9 text-xs" />
+                  <Input
+                    value={kvkNumber}
+                    onChange={(e) => setKvkNumber(e.target.value)}
+                    placeholder="12345678"
+                    className="h-9 text-xs"
+                  />
                 </div>
+
                 <div className="space-y-1.5">
                   <Label className="text-xs">BTW Nummer</Label>
-                  <Input placeholder="NL84920114B01" defaultValue="NL84920114B01" className="h-9 text-xs" />
+                  <Input
+                    value={btwNumber}
+                    onChange={(e) => setBtwNumber(e.target.value)}
+                    placeholder="NL84920114B01"
+                    className="h-9 text-xs"
+                  />
                 </div>
               </div>
 
+              <div className="space-y-1.5 pt-1">
+                <Label className="text-xs flex items-center gap-1.5">
+                  <Globe className="h-3.5 w-3.5 text-primary" />
+                  <span>Gedeelde Toegang (Multi-Company Sharing)</span>
+                </Label>
+                <Input
+                  value={allowedCompaniesInput}
+                  onChange={(e) => setAllowedCompaniesInput(e.target.value)}
+                  placeholder="bijv. VVC, Quantum Initium, Trusting Work (kommagescheiden)"
+                  className="h-9 text-xs"
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  Specificeer partnerbedrijven die geselecteerde leads, kandidaten of campagnes met jouw organisatie mogen uitwisselen.
+                </p>
+              </div>
+
               <div className="pt-2">
-                <Button onClick={() => toast.success('Organisatiegegevens opgeslagen')} className="rounded-full px-6 h-9 text-xs">
+                <Button onClick={handleSaveOrganization} className="rounded-full px-6 h-9 text-xs">
                   <Save className="mr-2 h-3.5 w-3.5" />
-                  Organisatie Opslaan
+                  Bedrijfsgegevens Opslaan
                 </Button>
               </div>
             </CardContent>

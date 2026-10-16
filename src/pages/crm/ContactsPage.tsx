@@ -8,7 +8,9 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { DataTable } from '@/components/common/DataTable';
 import { Contact360View } from '@/components/360-view/Contact360View';
 import { useCRMStore } from '@/stores/crmStore';
+import { useAuthStore } from '@/stores/authStore';
 import { useEnhancedStore } from '@/stores/enhancedStore';
+import { filterRecordsForUser, isCoreEcosystemCompany } from '@/lib/companyAccess';
 import { formatDistanceToNow } from 'date-fns';
 import {
   Plus,
@@ -18,6 +20,8 @@ import {
   Mail,
   Building2,
   Star,
+  ShieldCheck,
+  Lock,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -39,8 +43,17 @@ export function ContactsPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { contacts, addContact, deleteContact } = useCRMStore();
+  const { user, organization, adminCompanyFilter } = useAuthStore();
   const { addAuditLog } = useEnhancedStore();
-  
+
+  const isSuperAdmin =
+    user?.email?.toLowerCase() === 'info@jamaldrenthe.com' ||
+    user?.is_super_admin === true ||
+    user?.role === 'admin';
+
+  const userCompanyName = user?.company_name || organization?.name || 'CRMos';
+  const isCorePartner = isCoreEcosystemCompany(userCompanyName);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedContactId, setSelectedContactId] = useState<string | null>(
     searchParams.get('id')
@@ -55,11 +68,17 @@ export function ContactsPage() {
     title: '',
     status: 'lead' as const,
     source: 'Manual',
-    tags: [],
+    tags: [] as string[],
     custom_fields: {},
+    allowed_companies: isCorePartner
+      ? ['CRMos', 'VVC', 'Quantum Initium', 'Logs Rent', 'Djobba', 'Trusting Work']
+      : [userCompanyName],
   });
 
-  const filteredContacts = contacts.filter(
+  // Strict company isolation / ecosystem filtering
+  const accessibleContacts = filterRecordsForUser(user, contacts, adminCompanyFilter);
+
+  const filteredContacts = accessibleContacts.filter(
     (contact) =>
       contact.first_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       contact.last_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -68,13 +87,17 @@ export function ContactsPage() {
   );
 
   const handleAddContact = () => {
-    const contact = addContact(newContact);
+    const contact = addContact({
+      ...newContact,
+      org_id: organization?.id || 'default_org',
+      company_name: userCompanyName,
+    });
     addAuditLog({
       action: 'contact_created',
       entity_type: 'contact',
       entity_id: contact.id,
-      user_id: 'user1',
-      user_name: 'Alex Johnson',
+      user_id: user?.id || 'user1',
+      user_name: user?.name || 'CRMos Gebruiker',
       new_values: newContact,
     });
     setIsAddDialogOpen(false);
@@ -89,13 +112,16 @@ export function ContactsPage() {
       source: 'Manual',
       tags: [],
       custom_fields: {},
+      allowed_companies: isCorePartner
+        ? ['CRMos', 'VVC', 'Quantum Initium', 'Logs Rent', 'Djobba', 'Trusting Work']
+        : [userCompanyName],
     });
-    toast.success('Contact created successfully');
+    toast.success('Contact succesvol opgeslagen');
   };
 
   const handleDeleteContact = (id: string) => {
     deleteContact(id);
-    toast.success('Contact deleted');
+    toast.success('Contact verwijderd');
   };
 
   const columns = [
@@ -217,35 +243,46 @@ export function ContactsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Contacts</h1>
-          <p className="text-muted-foreground">Manage your contacts and relationships</p>
+          <p className="text-muted-foreground">Beheer je zakelijke contacten en relaties</p>
         </div>
         <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
           <DialogTrigger asChild>
-            <Button>
+            <Button className="rounded-full shadow-sm">
               <Plus className="mr-2 h-4 w-4" />
-              Add Contact
+              Nieuw Contact
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-lg">
             <DialogHeader>
-              <DialogTitle>Add New Contact</DialogTitle>
+              <DialogTitle>Contactpersoon toevoegen</DialogTitle>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>First Name</Label>
+                  <Label>Voornaam</Label>
                   <Input
                     value={newContact.first_name}
                     onChange={(e) => setNewContact({ ...newContact, first_name: e.target.value })}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Last Name</Label>
+                  <Label>Achternaam</Label>
                   <Input
                     value={newContact.last_name}
                     onChange={(e) => setNewContact({ ...newContact, last_name: e.target.value })}
                   />
                 </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Bedrijfstoewijzing</Label>
+                <Input
+                  value={newContact.company || userCompanyName}
+                  disabled
+                  className="bg-muted/40 text-xs font-mono"
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  Gekoppeld aan {userCompanyName} {isCorePartner ? '(gedeeld met CRMos kernpartners)' : '(strikt geïsoleerd)'}
+                </p>
               </div>
               <div className="space-y-2">
                 <Label>Email</Label>
@@ -284,35 +321,77 @@ export function ContactsPage() {
         </Dialog>
       </div>
 
+      {/* Company Isolation / Ecosystem Badge Banner */}
+      <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-2xl bg-card/60 backdrop-blur-xl border border-border/60 shadow-xs">
+        <div className="flex items-center gap-2.5">
+          {isSuperAdmin ? (
+            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
+              <Building2 className="h-4 w-4" />
+            </div>
+          ) : isCorePartner ? (
+            <div className="h-8 w-8 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500 shrink-0">
+              <ShieldCheck className="h-4 w-4" />
+            </div>
+          ) : (
+            <div className="h-8 w-8 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-500 shrink-0">
+              <Lock className="h-4 w-4" />
+            </div>
+          )}
+          <div>
+            <div className="flex items-center gap-2">
+              <p className="text-xs font-bold text-foreground">
+                {isSuperAdmin
+                  ? `Admin Masterview (${accessibleContacts.length} contacten zichtbaar)`
+                  : isCorePartner
+                  ? `CRMos Core Dataset (${accessibleContacts.length} contacten)`
+                  : `${userCompanyName} Workspace (${accessibleContacts.length} contacten)`}
+              </p>
+              <Badge variant="outline" className="text-[10px] px-2 py-0">
+                {isSuperAdmin
+                  ? (adminCompanyFilter === 'all' ? 'Alle Bedrijven' : adminCompanyFilter)
+                  : userCompanyName}
+              </Badge>
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              {isSuperAdmin
+                ? 'Als administrator heb je overkoepelend toezicht en kun je data van alle organisaties inzien.'
+                : isCorePartner
+                ? 'Deze CRMos bedrijfsdata is gedeeld en exclusief zichtbaar voor CRMos, VVC, Quantum Initium, Logs Rent, Djobba en Trusting Work.'
+                : `Strikte data-isolatie actief: Deze contacten zijn uitsluitend zichtbaar voor medewerkers van ${userCompanyName}.`}
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-4">
-        <Card>
+        <Card className="rounded-2xl border-border/60">
           <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">Total Contacts</p>
-            <p className="text-2xl font-bold">{contacts.length}</p>
+            <p className="text-xs text-muted-foreground">Totaal Contacten</p>
+            <p className="text-2xl font-bold">{accessibleContacts.length}</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="rounded-2xl border-border/60">
           <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">Leads</p>
+            <p className="text-xs text-muted-foreground">Leads</p>
             <p className="text-2xl font-bold">
-              {contacts.filter((c) => c.status === 'lead').length}
+              {accessibleContacts.filter((c) => c.status === 'lead').length}
             </p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="rounded-2xl border-border/60">
           <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">Prospects</p>
+            <p className="text-xs text-muted-foreground">Prospects</p>
             <p className="text-2xl font-bold">
-              {contacts.filter((c) => c.status === 'prospect').length}
+              {accessibleContacts.filter((c) => c.status === 'prospect').length}
             </p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="rounded-2xl border-border/60">
           <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">Customers</p>
+            <p className="text-xs text-muted-foreground">Klanten</p>
             <p className="text-2xl font-bold">
-              {contacts.filter((c) => c.status === 'customer').length}
+              {accessibleContacts.filter((c) => c.status === 'customer').length}
             </p>
           </CardContent>
         </Card>

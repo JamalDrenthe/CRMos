@@ -43,6 +43,8 @@ import { isFirebaseConfigured } from '@/lib/firebase';
 import { ThemeToggle } from '@/components/common/ThemeToggle';
 import { LanguageToggle } from '@/components/common/LanguageToggle';
 import { useTranslation } from '@/stores/languageStore';
+import { isCoreEcosystemCompany } from '@/types';
+import { CORE_PARTNER_OPTIONS } from '@/lib/companyAccess';
 import { toast } from 'sonner';
 
 interface HeaderProps {
@@ -52,10 +54,18 @@ interface HeaderProps {
 
 export function Header({ onOpenSearch, onToggleMobileMenu }: HeaderProps = {}) {
   const navigate = useNavigate();
-  const { user, logout } = useAuthStore();
-  const { searchContacts, searchCompanies, searchDeals } = useCRMStore();
+  const { user, organization, logout, adminCompanyFilter, setAdminCompanyFilter } = useAuthStore();
+  const { searchContacts, searchCompanies, searchDeals, companies } = useCRMStore();
   const { activeCall } = useContactCenterStore();
   const { t } = useTranslation();
+
+  const isSuperAdmin =
+    user?.email?.toLowerCase() === 'info@jamaldrenthe.com' ||
+    user?.is_super_admin === true ||
+    user?.role === 'admin';
+
+  const userCompanyName = user?.company_name || organization?.name || 'CRMos';
+  const isCorePartner = isCoreEcosystemCompany(userCompanyName);
   
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<{
@@ -203,6 +213,42 @@ export function Header({ onOpenSearch, onToggleMobileMenu }: HeaderProps = {}) {
 
       {/* Right side - Actions & Account Centrum */}
       <div className="flex items-center gap-1.5 sm:gap-2.5">
+        {/* Company Switcher for Admin OR Company Badge for Users */}
+        {isSuperAdmin ? (
+          <div className="hidden sm:flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 bg-muted/60 border border-border/80 rounded-full px-2.5 py-1 text-xs">
+              <Building2 className="h-3.5 w-3.5 text-primary shrink-0" />
+              <select
+                value={adminCompanyFilter}
+                onChange={(e) => setAdminCompanyFilter(e.target.value)}
+                className="bg-transparent border-none text-[11px] font-semibold text-foreground focus:outline-none cursor-pointer pr-1"
+                title="Admin Bedrijfsfilter: Wissel weergave tussen bedrijven of bekijk alle data"
+              >
+                <option value="all">🏢 Alle Bedrijven (Admin Masterview)</option>
+                <option value="crmos_core">✨ CRMos Core Ecosysteem</option>
+                {CORE_PARTNER_OPTIONS.map((p) => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+                {companies
+                  .filter((c) => !CORE_PARTNER_OPTIONS.includes(c.name as (typeof CORE_PARTNER_OPTIONS)[number]))
+                  .map((c) => (
+                    <option key={c.id} value={c.name}>{c.name}</option>
+                  ))}
+              </select>
+            </div>
+          </div>
+        ) : (
+          <div className="hidden sm:flex items-center gap-1.5 rounded-full bg-primary/10 border border-primary/20 px-2.5 py-1 text-xs font-medium text-primary">
+            <Building2 className="h-3.5 w-3.5" />
+            <span className="font-semibold text-[11px] max-w-[120px] truncate">{userCompanyName}</span>
+            {isCorePartner && (
+              <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-600 border-emerald-500/30">
+                Core
+              </Badge>
+            )}
+          </div>
+        )}
+
         {/* Firestore Status Badge (Hidden on smallest mobile screens to save space) */}
         {isFirebaseConfigured() ? (
           <div 
@@ -334,9 +380,21 @@ export function Header({ onOpenSearch, onToggleMobileMenu }: HeaderProps = {}) {
                     </Badge>
                   </div>
                   <p className="text-xs text-muted-foreground truncate">{user?.email || 'info@jamaldrenthe.com'}</p>
-                  <p className="text-[10px] text-muted-foreground/80 font-mono mt-0.5">
-                    Org: {user?.org_id || 'crmosone-dev'}
-                  </p>
+                  <div className="flex items-center gap-1 mt-1">
+                    <Building2 className="h-3 w-3 text-muted-foreground shrink-0" />
+                    <span className="text-[11px] font-medium text-foreground truncate">
+                      {userCompanyName}
+                    </span>
+                    {isCorePartner ? (
+                      <span className="text-[9px] px-1 rounded bg-emerald-500/10 text-emerald-600 font-semibold border border-emerald-500/20 shrink-0">
+                        Ecosysteem
+                      </span>
+                    ) : (
+                      <span className="text-[9px] px-1 rounded bg-blue-500/10 text-blue-600 font-semibold border border-blue-500/20 shrink-0">
+                        Geïsoleerd
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
             </DropdownMenuLabel>

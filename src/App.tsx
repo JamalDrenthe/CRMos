@@ -205,7 +205,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function App() {
-  const { initAuthListener, organization, isAuthenticated } = useAuthStore();
+  const { initAuthListener, organization, user, isAuthenticated } = useAuthStore();
   const { syncWithFirestore } = useCRMStore();
   const { syncWithFirestore: syncRecruitment } = useRecruitmentStore();
   const { syncWithFirestore: syncContactCenter } = useContactCenterStore();
@@ -234,17 +234,25 @@ function App() {
 
   // Sync CRM, Recruitment, and Contact Center data with Firestore for active organization
   useEffect(() => {
-    if (organization?.id) {
-      const unsubCRM = syncWithFirestore(organization.id);
-      const unsubRec = syncRecruitment(organization.id);
-      const unsubCC = syncContactCenter(organization.id);
+    if (organization?.id || user) {
+      const isSuperAdmin =
+        user?.email?.toLowerCase() === 'info@jamaldrenthe.com' ||
+        user?.is_super_admin === true ||
+        user?.role === 'admin';
+
+      // Admin has master view to see all data, other organizations are strictly isolated
+      const effectiveOrgId = isSuperAdmin ? 'all' : (organization?.id || 'default_org');
+
+      const unsubCRM = syncWithFirestore(effectiveOrgId);
+      const unsubRec = syncRecruitment(effectiveOrgId);
+      const unsubCC = syncContactCenter(effectiveOrgId);
       return () => {
         if (typeof unsubCRM === 'function') unsubCRM();
         if (typeof unsubRec === 'function') unsubRec();
         if (typeof unsubCC === 'function') unsubCC();
       };
     }
-  }, [organization?.id, syncWithFirestore, syncRecruitment, syncContactCenter]);
+  }, [organization?.id, user, syncWithFirestore, syncRecruitment, syncContactCenter]);
 
   return (
     <TooltipProvider>

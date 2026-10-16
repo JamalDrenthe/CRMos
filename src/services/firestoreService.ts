@@ -91,10 +91,11 @@ export function subscribeToContacts(
   if (!isFirebaseConfigured()) {
     return () => {};
   }
-  const q = query(
-    collection(db, COLLECTIONS.CONTACTS), 
-    where('org_id', '==', orgId)
-  );
+  const isMasterView = orgId === 'all' || orgId === '*';
+  const q = isMasterView
+    ? query(collection(db, COLLECTIONS.CONTACTS))
+    : query(collection(db, COLLECTIONS.CONTACTS), where('org_id', '==', orgId));
+
   return onSnapshot(q, (snapshot) => {
     const contacts = snapshot.docs.map((docSnap) => ({
       id: docSnap.id,
@@ -113,10 +114,10 @@ export function subscribeToContacts(
 export async function fetchCompaniesFromFirestore(orgId: string): Promise<Company[]> {
   if (!isFirebaseConfigured()) return [];
   try {
-    const q = query(
-      collection(db, COLLECTIONS.COMPANIES), 
-      where('org_id', '==', orgId)
-    );
+    const isMasterView = orgId === 'all' || orgId === '*';
+    const q = isMasterView
+      ? query(collection(db, COLLECTIONS.COMPANIES))
+      : query(collection(db, COLLECTIONS.COMPANIES), where('org_id', '==', orgId));
     const snap = await getDocs(q);
     return snap.docs.map((docSnap) => ({
       id: docSnap.id,
@@ -159,10 +160,11 @@ export function subscribeToCompanies(
   if (!isFirebaseConfigured()) {
     return () => {};
   }
-  const q = query(
-    collection(db, COLLECTIONS.COMPANIES), 
-    where('org_id', '==', orgId)
-  );
+  const isMasterView = orgId === 'all' || orgId === '*';
+  const q = isMasterView
+    ? query(collection(db, COLLECTIONS.COMPANIES))
+    : query(collection(db, COLLECTIONS.COMPANIES), where('org_id', '==', orgId));
+
   return onSnapshot(q, (snapshot) => {
     const companies = snapshot.docs.map((docSnap) => ({
       id: docSnap.id,
@@ -227,10 +229,11 @@ export function subscribeToDeals(
   if (!isFirebaseConfigured()) {
     return () => {};
   }
-  const q = query(
-    collection(db, COLLECTIONS.DEALS), 
-    where('org_id', '==', orgId)
-  );
+  const isMasterView = orgId === 'all' || orgId === '*';
+  const q = isMasterView
+    ? query(collection(db, COLLECTIONS.DEALS))
+    : query(collection(db, COLLECTIONS.DEALS), where('org_id', '==', orgId));
+
   return onSnapshot(q, (snapshot) => {
     const deals = snapshot.docs.map((docSnap) => ({
       id: docSnap.id,
@@ -249,10 +252,10 @@ export function subscribeToDeals(
 export async function fetchActivitiesFromFirestore(orgId: string): Promise<Activity[]> {
   if (!isFirebaseConfigured()) return [];
   try {
-    const q = query(
-      collection(db, COLLECTIONS.ACTIVITIES), 
-      where('org_id', '==', orgId)
-    );
+    const isMasterView = orgId === 'all' || orgId === '*';
+    const q = isMasterView
+      ? query(collection(db, COLLECTIONS.ACTIVITIES))
+      : query(collection(db, COLLECTIONS.ACTIVITIES), where('org_id', '==', orgId));
     const snap = await getDocs(q);
     return snap.docs.map((docSnap) => ({
       id: docSnap.id,
@@ -295,10 +298,11 @@ export function subscribeToActivities(
   if (!isFirebaseConfigured()) {
     return () => {};
   }
-  const q = query(
-    collection(db, COLLECTIONS.ACTIVITIES), 
-    where('org_id', '==', orgId)
-  );
+  const isMasterView = orgId === 'all' || orgId === '*';
+  const q = isMasterView
+    ? query(collection(db, COLLECTIONS.ACTIVITIES))
+    : query(collection(db, COLLECTIONS.ACTIVITIES), where('org_id', '==', orgId));
+
   return onSnapshot(q, (snapshot) => {
     const activities = snapshot.docs.map((docSnap) => ({
       id: docSnap.id,
@@ -343,7 +347,11 @@ export function subscribeToCandidates(
   callback: (candidates: Candidate[]) => void
 ): Unsubscribe {
   if (!isFirebaseConfigured()) return () => {};
-  const q = query(collection(db, COLLECTIONS.CANDIDATES), where('org_id', '==', orgId));
+  const isMasterView = orgId === 'all' || orgId === '*';
+  const q = isMasterView
+    ? query(collection(db, COLLECTIONS.CANDIDATES))
+    : query(collection(db, COLLECTIONS.CANDIDATES), where('org_id', '==', orgId));
+
   return onSnapshot(q, (snap) => {
     const items = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Candidate));
     callback(items);
@@ -383,7 +391,11 @@ export function subscribeToJobs(
   callback: (jobs: Job[]) => void
 ): Unsubscribe {
   if (!isFirebaseConfigured()) return () => {};
-  const q = query(collection(db, COLLECTIONS.JOBS), where('org_id', '==', orgId));
+  const isMasterView = orgId === 'all' || orgId === '*';
+  const q = isMasterView
+    ? query(collection(db, COLLECTIONS.JOBS))
+    : query(collection(db, COLLECTIONS.JOBS), where('org_id', '==', orgId));
+
   return onSnapshot(q, (snap) => {
     const items = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Job));
     callback(items);
@@ -414,7 +426,11 @@ export function subscribeToCampaigns(
   callback: (campaigns: Campaign[]) => void
 ): Unsubscribe {
   if (!isFirebaseConfigured()) return () => {};
-  const q = query(collection(db, COLLECTIONS.CAMPAIGNS), where('org_id', '==', orgId));
+  const isMasterView = orgId === 'all' || orgId === '*';
+  const q = isMasterView
+    ? query(collection(db, COLLECTIONS.CAMPAIGNS))
+    : query(collection(db, COLLECTIONS.CAMPAIGNS), where('org_id', '==', orgId));
+
   return onSnapshot(q, (snap) => {
     const items = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Campaign));
     callback(items);
@@ -444,7 +460,11 @@ export function subscribeToCalls(
   callback: (calls: Call[]) => void
 ): Unsubscribe {
   if (!isFirebaseConfigured()) return () => {};
-  const q = query(collection(db, COLLECTIONS.CALLS), where('org_id', '==', orgId));
+  const isMasterView = orgId === 'all' || orgId === '*';
+  const q = isMasterView
+    ? query(collection(db, COLLECTIONS.CALLS))
+    : query(collection(db, COLLECTIONS.CALLS), where('org_id', '==', orgId));
+
   return onSnapshot(q, (snap) => {
     const items = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Call));
     callback(items);
@@ -498,7 +518,11 @@ export function subscribeToProducts(
   callback: (products: Product[]) => void
 ): Unsubscribe {
   if (!isFirebaseConfigured()) return () => {};
-  const q = query(collection(db, COLLECTIONS.PRODUCTS), where('org_id', '==', orgId));
+  const isMasterView = orgId === 'all' || orgId === '*';
+  const q = isMasterView
+    ? query(collection(db, COLLECTIONS.PRODUCTS))
+    : query(collection(db, COLLECTIONS.PRODUCTS), where('org_id', '==', orgId));
+
   return onSnapshot(q, (snap) => {
     const items = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Product));
     callback(items);

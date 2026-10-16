@@ -10,8 +10,9 @@ import { isFirebaseConfigured } from '@/lib/firebase';
 import { ThemeToggle } from '@/components/common/ThemeToggle';
 import { LanguageToggle } from '@/components/common/LanguageToggle';
 import { useTranslation } from '@/stores/languageStore';
-import { Eye, EyeOff, Loader2, AlertCircle, ArrowLeft } from 'lucide-react';
+import { Eye, EyeOff, Loader2, AlertCircle, ArrowLeft, Building2, ShieldCheck, Lock } from 'lucide-react';
 import { CRMosLogo } from '@/components/common/CRMosLogo';
+import { validateBusinessEmail, CORE_PARTNER_OPTIONS, isCoreEcosystemCompany } from '@/lib/companyAccess';
 import type { User } from '@/types';
 
 export function RegisterPage() {
@@ -32,8 +33,24 @@ export function RegisterPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [error, setError] = useState('');
+  const [emailWarning, setEmailWarning] = useState('');
 
   const hasFirebase = isFirebaseConfigured();
+  const isEcosystemPartner = isCoreEcosystemCompany(companyName);
+
+  const handleEmailChange = (val: string) => {
+    setEmail(val);
+    if (val.includes('@') && val.includes('.')) {
+      const check = validateBusinessEmail(val);
+      if (!check.isValid) {
+        setEmailWarning(check.error || 'Voer een zakelijk e-mailadres in.');
+      } else {
+        setEmailWarning('');
+      }
+    } else {
+      setEmailWarning('');
+    }
+  };
 
   const handleGoogleSignUp = async () => {
     setIsGoogleLoading(true);
@@ -60,6 +77,19 @@ export function RegisterPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
+
+    if (!companyName.trim()) {
+      setError('Om toegang te krijgen tot CRMos moet je werkzaam zijn bij een bedrijf. Vul een geldige bedrijfsnaam in.');
+      return;
+    }
+
+    const emailCheck = validateBusinessEmail(email);
+    if (!emailCheck.isValid) {
+      setError(emailCheck.error || 'Gebruik een zakelijk e-mailadres.');
+      return;
+    }
+
     if (!agreedToTerms) {
       setError('Ga akkoord met de algemene voorwaarden om verder te gaan.');
       return;
@@ -70,10 +100,9 @@ export function RegisterPage() {
     }
 
     setIsLoading(true);
-    setError('');
 
     try {
-      await registerWithEmailAction(name, email, password, companyName, role);
+      await registerWithEmailAction(name, email, password, companyName.trim(), role);
       navigate('/dashboard');
     } catch (error: unknown) {
       const err = error as { code?: string; message?: string };
@@ -192,49 +221,138 @@ export function RegisterPage() {
             </div>
 
             {/* Email Registration Form */}
-            <form onSubmit={handleSubmit} className="space-y-3.5">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label htmlFor="name" className="text-xs font-medium text-foreground">{t('Full Name')}</Label>
-                  <Input
-                    id="name"
-                    type="text"
-                    placeholder="bijv. Jan Jansen"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    required
-                    className="h-10 rounded-xl bg-background/60 border-border/70 text-xs sm:text-sm focus-visible:ring-1"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="companyName" className="text-xs font-medium text-foreground">{t('Company Name')}</Label>
-                  <Input
-                    id="companyName"
-                    type="text"
-                    placeholder="bijv. Jansen BV"
-                    value={companyName}
-                    onChange={(e) => setCompanyName(e.target.value)}
-                    required
-                    className="h-10 rounded-xl bg-background/60 border-border/70 text-xs sm:text-sm focus-visible:ring-1"
-                  />
-                </div>
-              </div>
-
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Full Name */}
               <div className="space-y-1">
-                <Label htmlFor="email" className="text-xs font-medium text-foreground">{t('Business Email')}</Label>
+                <Label htmlFor="name" className="text-xs font-medium text-foreground">
+                  {t('Full Name')} <span className="text-destructive">*</span>
+                </Label>
                 <Input
-                  id="email"
-                  type="email"
-                  placeholder="naam@bedrijf.nl"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  id="name"
+                  type="text"
+                  placeholder="bijv. Jan Jansen"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
                   required
                   className="h-10 rounded-xl bg-background/60 border-border/70 text-xs sm:text-sm focus-visible:ring-1"
                 />
               </div>
 
+              {/* Company Name & Ecosystem Selection */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="companyName" className="text-xs font-medium text-foreground flex items-center gap-1.5">
+                    <Building2 className="h-3.5 w-3.5 text-primary" />
+                    <span>Bedrijfsnaam <span className="text-destructive">*</span></span>
+                  </Label>
+                  <span className="text-[10px] text-muted-foreground">Werkzaam bij een bedrijf vereist</span>
+                </div>
+                <Input
+                  id="companyName"
+                  type="text"
+                  placeholder="bijv. Jansen BV of selecteer partner"
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  required
+                  className="h-10 rounded-xl bg-background/60 border-border/70 text-xs sm:text-sm focus-visible:ring-1"
+                />
+
+                {/* Quick Partner Pills */}
+                <div className="pt-1">
+                  <p className="text-[10px] text-muted-foreground mb-1.5">
+                    Snelkoppeling partnermerken:
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {CORE_PARTNER_OPTIONS.map((partner) => {
+                      const isSelected = companyName.toLowerCase() === partner.toLowerCase();
+                      return (
+                        <button
+                          key={partner}
+                          type="button"
+                          onClick={() => setCompanyName(partner)}
+                          className={`text-[10px] px-2.5 py-1 rounded-full border transition-all ${
+                            isSelected
+                              ? 'bg-primary text-primary-foreground border-primary font-semibold shadow-xs'
+                              : 'bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground border-border/60'
+                          }`}
+                        >
+                          {partner}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Company Categorisation & Data Isolation Notice */}
+                {companyName.trim() && (
+                  <div
+                    className={`mt-2 p-2.5 rounded-xl border text-[11px] flex items-start gap-2 transition-all ${
+                      isEcosystemPartner
+                        ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-400'
+                        : 'bg-blue-500/10 border-blue-500/20 text-blue-700 dark:text-blue-400'
+                    }`}
+                  >
+                    {isEcosystemPartner ? (
+                      <>
+                        <ShieldCheck className="h-4 w-4 shrink-0 mt-0.5 text-emerald-500" />
+                        <div>
+                          <p className="font-semibold">CRMos Core Ecosysteem Partner</p>
+                          <p className="text-[10px] opacity-90 mt-0.5">
+                            Gedeelde toegang tot CRMos data (zichtbaar voor CRMos, VVC, Quantum Initium, Logs Rent, Djobba en Trusting Work).
+                          </p>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <Lock className="h-4 w-4 shrink-0 mt-0.5 text-blue-500" />
+                        <div>
+                          <p className="font-semibold">Geïsoleerde Bedrijfsomgeving</p>
+                          <p className="text-[10px] opacity-90 mt-0.5">
+                            Strikte datascheiding actief. Medewerkers van andere bedrijven hebben geen toegang tot jouw gegevens. Alleen de platform-admin behoudt overkoepelend toezicht.
+                          </p>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Business Email */}
               <div className="space-y-1">
-                <Label htmlFor="password" className="text-xs font-medium text-foreground">{t('Password')}</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="email" className="text-xs font-medium text-foreground">
+                    Zakelijk e-mailadres <span className="text-destructive">*</span>
+                  </Label>
+                  <span className="text-[10px] text-muted-foreground">Geen privé mail</span>
+                </div>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="naam@jouwbedrijf.nl"
+                  value={email}
+                  onChange={(e) => handleEmailChange(e.target.value)}
+                  required
+                  className={`h-10 rounded-xl bg-background/60 border-border/70 text-xs sm:text-sm focus-visible:ring-1 ${
+                    emailWarning ? 'border-destructive/60 focus-visible:ring-destructive' : ''
+                  }`}
+                />
+                {emailWarning ? (
+                  <p className="text-[11px] text-destructive flex items-center gap-1.5 mt-1 font-medium bg-destructive/10 p-2 rounded-lg border border-destructive/20">
+                    <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                    <span>{emailWarning}</span>
+                  </p>
+                ) : (
+                  <p className="text-[10px] text-muted-foreground">
+                    Gebruik je bedrijfs-e-mailadres om je account te koppelen aan je organisatie.
+                  </p>
+                )}
+              </div>
+
+              {/* Password */}
+              <div className="space-y-1">
+                <Label htmlFor="password" className="text-xs font-medium text-foreground">
+                  {t('Password')} <span className="text-destructive">*</span>
+                </Label>
                 <div className="relative">
                   <Input
                     id="password"
@@ -256,18 +374,21 @@ export function RegisterPage() {
                 </div>
               </div>
 
+              {/* Role in Company */}
               <div className="space-y-1">
-                <Label htmlFor="role" className="text-xs font-medium text-foreground">{t('Your Role')}</Label>
+                <Label htmlFor="role" className="text-xs font-medium text-foreground">
+                  Functie binnen het bedrijf
+                </Label>
                 <select
                   id="role"
                   value={role}
                   onChange={(e) => setRole(e.target.value as User['role'])}
                   className="flex h-10 w-full rounded-xl border border-border/70 bg-background/60 px-3 py-1.5 text-xs sm:text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  <option value="admin">{t('Sales Director / Managing Director')}</option>
-                  <option value="manager">{t('Sales / Recruitment Manager')}</option>
-                  <option value="recruiter">{t('Recruiter / ATS Consultant')}</option>
-                  <option value="agent">{t('Contact Center Agent / Telemarketer')}</option>
+                  <option value="admin">Directie / Bedrijfsbeheerder (Company Admin)</option>
+                  <option value="manager">Sales / Recruitment Manager</option>
+                  <option value="recruiter">ATS Recruiter / Talent Consultant</option>
+                  <option value="agent">Contact Center Agent / Buitendienst Sales</option>
                 </select>
               </div>
 
@@ -281,7 +402,7 @@ export function RegisterPage() {
                   className="h-3.5 w-3.5 mt-0.5 rounded border-muted accent-primary cursor-pointer"
                 />
                 <label htmlFor="terms" className="text-[11px] text-muted-foreground cursor-pointer">
-                  Ik ga akkoord met de <span className="underline text-foreground">Algemene Voorwaarden</span> en het <span className="underline text-foreground">Privacybeleid</span>.
+                  Ik bevestig werkzaam te zijn bij dit bedrijf en ga akkoord met de <span className="underline text-foreground">Algemene Voorwaarden</span> en het <span className="underline text-foreground">Privacybeleid</span>.
                 </label>
               </div>
 

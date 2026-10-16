@@ -1,10 +1,13 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { DataTable } from '@/components/common/DataTable';
 import { useCRMStore } from '@/stores/crmStore';
+import { useAuthStore } from '@/stores/authStore';
+import { filterRecordsForUser } from '@/lib/companyAccess';
+import { isCoreEcosystemCompany, type Activity } from '@/types';
 import { format } from 'date-fns';
 import {
   Plus,
@@ -17,6 +20,8 @@ import {
   MoreHorizontal,
   FileText,
   Target,
+  Layers,
+  ShieldCheck,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -33,10 +38,10 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import type { Activity } from '@/types';
 
 export function ActivitiesPage() {
   const { activities, contacts, deals, addActivity, completeActivity, deleteActivity } = useCRMStore();
+  const { user, adminCompanyFilter } = useAuthStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState<'all' | 'pending' | 'completed'>('all');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -48,7 +53,22 @@ export function ActivitiesPage() {
     related_to: { type: 'contact' as const, id: '' },
   });
 
-  const filteredActivities = activities.filter((activity) => {
+  const isCore = isCoreEcosystemCompany(user?.company_name);
+
+  const accessibleActivities = useMemo(
+    () => filterRecordsForUser(user, activities, adminCompanyFilter),
+    [user, activities, adminCompanyFilter]
+  );
+  const accessibleContacts = useMemo(
+    () => filterRecordsForUser(user, contacts, adminCompanyFilter),
+    [user, contacts, adminCompanyFilter]
+  );
+  const accessibleDeals = useMemo(
+    () => filterRecordsForUser(user, deals, adminCompanyFilter),
+    [user, deals, adminCompanyFilter]
+  );
+
+  const filteredActivities = accessibleActivities.filter((activity) => {
     const matchesSearch = activity.title.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesFilter = filter === 'all' || activity.status === filter;
     return matchesSearch && matchesFilter;
@@ -56,11 +76,11 @@ export function ActivitiesPage() {
 
   const getRelatedName = (activity: typeof activities[0]) => {
     if (activity.related_to.type === 'contact') {
-      const contact = contacts.find((c) => c.id === activity.related_to.id);
+      const contact = accessibleContacts.find((c) => c.id === activity.related_to.id);
       return contact ? `${contact.first_name} ${contact.last_name}` : 'Unknown';
     }
     if (activity.related_to.type === 'deal') {
-      const deal = deals.find((d) => d.id === activity.related_to.id);
+      const deal = accessibleDeals.find((d) => d.id === activity.related_to.id);
       return deal?.name || 'Unknown';
     }
     return 'Unknown';
@@ -81,7 +101,10 @@ export function ActivitiesPage() {
     addActivity({
       ...newActivity,
       status: 'pending',
-      assigned_to: 'user1',
+      assigned_to: user?.id || 'user1',
+      company_name: user?.company_name || 'CRMos',
+      org_id: user?.org_id || 'default_org',
+      is_crmos_core: isCore,
     });
     setIsAddDialogOpen(false);
     setNewActivity({
@@ -193,60 +216,77 @@ export function ActivitiesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Activities</h1>
-          <p className="text-muted-foreground">Track your tasks, calls, meetings, and more</p>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Activiteiten</h1>
+            {isCore ? (
+              <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-xs gap-1">
+                <Layers className="h-3 w-3" />
+                Core Ecosysteem
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="bg-indigo-500/10 text-indigo-500 border-indigo-500/30 text-xs gap-1">
+                <ShieldCheck className="h-3 w-3" />
+                {user?.company_name || 'Geïsoleerd'}
+              </Badge>
+            )}
+          </div>
+          <p className="text-muted-foreground text-xs sm:text-sm mt-0.5">
+            Beheer taken, terugbelverzoeken, afspraken en notities binnen jouw bedrijf.
+          </p>
         </div>
         <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="mr-2 h-4 w-4" />
-              Add Activity
+              Nieuwe Activiteit
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-lg">
             <DialogHeader>
-              <DialogTitle>Add New Activity</DialogTitle>
+              <DialogTitle>Nieuwe Activiteit Plannen</DialogTitle>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="space-y-2">
                 <Label>Type</Label>
                 <select
-                  className="w-full rounded-md border border-input bg-background px-3 py-2"
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                   value={newActivity.type}
                   onChange={(e) => setNewActivity({ ...newActivity, type: e.target.value as Activity['type'] })}
                 >
-                  <option value="task">Task</option>
-                  <option value="call">Call</option>
-                  <option value="email">Email</option>
-                  <option value="meeting">Meeting</option>
-                  <option value="note">Note</option>
+                  <option value="task">Taak (Follow-up)</option>
+                  <option value="call">Telefoongesprek</option>
+                  <option value="email">E-mail</option>
+                  <option value="meeting">Afspraak / Meeting</option>
+                  <option value="note">Notitie</option>
                 </select>
               </div>
               <div className="space-y-2">
-                <Label>Title</Label>
+                <Label>Titel</Label>
                 <Input
                   value={newActivity.title}
+                  placeholder="bijv. Terugbellen offerte bespreking"
                   onChange={(e) => setNewActivity({ ...newActivity, title: e.target.value })}
                 />
               </div>
               <div className="space-y-2">
-                <Label>Description</Label>
+                <Label>Beschrijving</Label>
                 <Input
                   value={newActivity.description}
+                  placeholder="Korte toelichting of actiepunten"
                   onChange={(e) => setNewActivity({ ...newActivity, description: e.target.value })}
                 />
               </div>
               <div className="space-y-2">
-                <Label>Due Date</Label>
+                <Label>Vervaldatum &amp; Tijd</Label>
                 <Input
                   type="datetime-local"
                   value={newActivity.due_date}
                   onChange={(e) => setNewActivity({ ...newActivity, due_date: e.target.value })}
                 />
               </div>
-              <Button onClick={handleAddActivity}>Create Activity</Button>
+              <Button onClick={handleAddActivity}>Activiteit Aanmaken</Button>
             </div>
           </DialogContent>
         </Dialog>
@@ -255,23 +295,23 @@ export function ActivitiesPage() {
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">Total Activities</p>
-            <p className="text-2xl font-bold">{activities.length}</p>
+            <p className="text-sm text-muted-foreground">Totaal Activiteiten</p>
+            <p className="text-2xl font-bold">{accessibleActivities.length}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">Pending</p>
+            <p className="text-sm text-muted-foreground">In Behandeling</p>
             <p className="text-2xl font-bold text-orange-500">
-              {activities.filter((a) => a.status === 'pending').length}
+              {accessibleActivities.filter((a) => a.status === 'pending').length}
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">Completed Today</p>
+            <p className="text-sm text-muted-foreground">Vandaag Afgerond</p>
             <p className="text-2xl font-bold text-green-500">
-              {activities.filter((a) => 
+              {accessibleActivities.filter((a) => 
                 a.status === 'completed' && 
                 a.completed_at && 
                 new Date(a.completed_at).toDateString() === new Date().toDateString()
@@ -281,9 +321,9 @@ export function ActivitiesPage() {
         </Card>
         <Card>
           <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">Overdue</p>
+            <p className="text-sm text-muted-foreground">Verlopen</p>
             <p className="text-2xl font-bold text-red-500">
-              {activities.filter((a) => 
+              {accessibleActivities.filter((a) => 
                 a.status === 'pending' && 
                 a.due_date && 
                 new Date(a.due_date) < new Date()

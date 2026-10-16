@@ -6,6 +6,8 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { DataTable } from '@/components/common/DataTable';
 import { useRecruitmentStore } from '@/stores/recruitmentStore';
+import { useAuthStore } from '@/stores/authStore';
+import { filterRecordsForUser, isCoreEcosystemCompany } from '@/lib/companyAccess';
 import {
   Plus,
   Search,
@@ -13,6 +15,9 @@ import {
   MoreHorizontal,
   ChevronRight,
   ChevronLeft,
+  Building2,
+  ShieldCheck,
+  Lock,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -41,6 +46,16 @@ const stages = [
 
 export function CandidatesPage() {
   const { candidates, moveCandidate, addCandidate } = useRecruitmentStore();
+  const { user, organization, adminCompanyFilter } = useAuthStore();
+
+  const isSuperAdmin =
+    user?.email?.toLowerCase() === 'info@jamaldrenthe.com' ||
+    user?.is_super_admin === true ||
+    user?.role === 'admin';
+
+  const userCompanyName = user?.company_name || organization?.name || 'CRMos';
+  const isCorePartner = isCoreEcosystemCompany(userCompanyName);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('kanban');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -56,7 +71,9 @@ export function CandidatesPage() {
     source: 'Manual',
   });
 
-  const filteredCandidates = candidates.filter(
+  const accessibleCandidates = filterRecordsForUser(user, candidates, adminCompanyFilter);
+
+  const filteredCandidates = accessibleCandidates.filter(
     (candidate) =>
       candidate.first_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       candidate.last_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -81,6 +98,11 @@ export function CandidatesPage() {
   const handleAddCandidate = () => {
     addCandidate({
       ...newCandidate,
+      org_id: organization?.id || 'default_org',
+      company_name: userCompanyName,
+      allowed_companies: isCorePartner
+        ? ['CRMos', 'VVC', 'Quantum Initium', 'Logs Rent', 'Djobba', 'Trusting Work']
+        : [userCompanyName],
       status: 'new',
     });
     setIsAddDialogOpen(false);
@@ -95,7 +117,7 @@ export function CandidatesPage() {
       location: '',
       source: 'Manual',
     });
-    toast.success('Candidate added successfully');
+    toast.success('Kandidaat succesvol toegevoegd');
   };
 
   const columns = [
@@ -300,21 +322,63 @@ export function CandidatesPage() {
                 </div>
                 <Button onClick={handleAddCandidate}>Add Candidate</Button>
               </div>
-            </DialogContent>
-          </Dialog>
+          </DialogContent>
+        </Dialog>
+        </div>
+      </div>
+
+      {/* Company Isolation / Ecosystem Badge Banner */}
+      <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-2xl bg-card/60 backdrop-blur-xl border border-border/60 shadow-xs">
+        <div className="flex items-center gap-2.5">
+          {isSuperAdmin ? (
+            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
+              <Building2 className="h-4 w-4" />
+            </div>
+          ) : isCorePartner ? (
+            <div className="h-8 w-8 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500 shrink-0">
+              <ShieldCheck className="h-4 w-4" />
+            </div>
+          ) : (
+            <div className="h-8 w-8 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-500 shrink-0">
+              <Lock className="h-4 w-4" />
+            </div>
+          )}
+          <div>
+            <div className="flex items-center gap-2">
+              <p className="text-xs font-bold text-foreground">
+                {isSuperAdmin
+                  ? `Admin Masterview (${accessibleCandidates.length} kandidaten)`
+                  : isCorePartner
+                  ? `CRMos Core Dataset (${accessibleCandidates.length} kandidaten)`
+                  : `${userCompanyName} Workspace (${accessibleCandidates.length} kandidaten)`}
+              </p>
+              <Badge variant="outline" className="text-[10px] px-2 py-0">
+                {isSuperAdmin
+                  ? (adminCompanyFilter === 'all' ? 'Alle Bedrijven' : adminCompanyFilter)
+                  : userCompanyName}
+              </Badge>
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              {isSuperAdmin
+                ? 'Als administrator heb je overkoepelend toezicht en beheer over recruitment funnels van alle aangesloten organisaties.'
+                : isCorePartner
+                ? 'Deze kandidaatprofielen zijn gedeeld en exclusief toegankelijk voor CRMos, VVC, Quantum Initium, Logs Rent, Djobba en Trusting Work.'
+                : `Strikte data-isolatie actief: Deze kandidaten zijn uitsluitend zichtbaar voor recruiters en medewerkers van ${userCompanyName}.`}
+            </p>
+          </div>
         </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-6">
         {stages.map((stage) => (
-          <Card key={stage.id}>
+          <Card key={stage.id} className="rounded-2xl border-border/60">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
                 <div className={`h-3 w-3 rounded-full ${stage.color}`} />
-                <p className="text-sm text-muted-foreground">{stage.name}</p>
+                <p className="text-xs text-muted-foreground">{stage.name}</p>
               </div>
               <p className="text-2xl font-bold">
-                {candidates.filter((c) => c.status === stage.id).length}
+                {accessibleCandidates.filter((c) => c.status === stage.id).length}
               </p>
             </CardContent>
           </Card>

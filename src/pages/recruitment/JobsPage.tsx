@@ -1,10 +1,13 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { DataTable } from '@/components/common/DataTable';
 import { useRecruitmentStore } from '@/stores/recruitmentStore';
+import { useAuthStore } from '@/stores/authStore';
+import { filterRecordsForUser } from '@/lib/companyAccess';
+import { isCoreEcosystemCompany, type Job } from '@/types';
 import {
   Plus,
   Search,
@@ -15,6 +18,8 @@ import {
   DollarSign,
   Play,
   X,
+  Layers,
+  ShieldCheck,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -31,10 +36,10 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import type { Job } from '@/types';
 
 export function JobsPage() {
   const { jobs, addJob, publishJob, closeJob } = useRecruitmentStore();
+  const { user, adminCompanyFilter } = useAuthStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [newJob, setNewJob] = useState({
@@ -48,7 +53,14 @@ export function JobsPage() {
     salary_max: 0,
   });
 
-  const filteredJobs = jobs.filter(
+  const isCore = isCoreEcosystemCompany(user?.company_name);
+
+  const accessibleJobs = useMemo(
+    () => filterRecordsForUser(user, jobs, adminCompanyFilter),
+    [user, jobs, adminCompanyFilter]
+  );
+
+  const filteredJobs = accessibleJobs.filter(
     (job) =>
       job.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       job.department.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -58,11 +70,14 @@ export function JobsPage() {
   const handleAddJob = () => {
     addJob({
       ...newJob,
-      currency: 'USD',
+      currency: 'EUR',
       status: 'draft',
-      hiring_manager: 'user1',
-      assigned_recruiters: ['user1'],
+      hiring_manager: user?.id || 'user1',
+      assigned_recruiters: [user?.id || 'user1'],
       candidates_count: 0,
+      company_name: user?.company_name || 'CRMos',
+      org_id: user?.org_id || 'default_org',
+      is_crmos_core: isCore,
     });
     setIsAddDialogOpen(false);
     setNewJob({
@@ -75,7 +90,7 @@ export function JobsPage() {
       salary_min: 0,
       salary_max: 0,
     });
-    toast.success('Job created successfully');
+    toast.success('Vacature succesvol aangemaakt');
   };
 
   const columns = [
@@ -181,62 +196,80 @@ export function JobsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Jobs</h1>
-          <p className="text-muted-foreground">Manage open positions</p>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Vacatures</h1>
+            {isCore ? (
+              <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-xs gap-1">
+                <Layers className="h-3 w-3" />
+                Core Ecosysteem
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="bg-indigo-500/10 text-indigo-500 border-indigo-500/30 text-xs gap-1">
+                <ShieldCheck className="h-3 w-3" />
+                {user?.company_name || 'Geïsoleerd'}
+              </Badge>
+            )}
+          </div>
+          <p className="text-muted-foreground text-xs sm:text-sm mt-0.5">
+            Beheer openstaande functies en recruitmentpijplijnen voor jouw organisatie.
+          </p>
         </div>
         <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="mr-2 h-4 w-4" />
-              Post Job
+              Vacature Plaatsen
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-lg">
             <DialogHeader>
-              <DialogTitle>Create New Job</DialogTitle>
+              <DialogTitle>Nieuwe Vacature Aanmaken</DialogTitle>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="space-y-2">
-                <Label>Job Title</Label>
+                <Label>Functietitel</Label>
                 <Input
                   value={newJob.title}
+                  placeholder="bijv. Commercieel Medewerker Buitendienst"
                   onChange={(e) => setNewJob({ ...newJob, title: e.target.value })}
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Department</Label>
+                  <Label>Afdeling</Label>
                   <Input
                     value={newJob.department}
+                    placeholder="bijv. Field Sales"
                     onChange={(e) => setNewJob({ ...newJob, department: e.target.value })}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Location</Label>
+                  <Label>Locatie</Label>
                   <Input
                     value={newJob.location}
+                    placeholder="bijv. Amsterdam / Randstad"
                     onChange={(e) => setNewJob({ ...newJob, location: e.target.value })}
                   />
                 </div>
               </div>
               <div className="space-y-2">
-                <Label>Job Type</Label>
+                <Label>Dienstverband</Label>
                 <select
-                  className="w-full rounded-md border border-input bg-background px-3 py-2"
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                   value={newJob.type}
                   onChange={(e) => setNewJob({ ...newJob, type: e.target.value as Job['type'] })}
                 >
-                  <option value="full-time">Full-time</option>
-                  <option value="part-time">Part-time</option>
-                  <option value="contract">Contract</option>
-                  <option value="internship">Internship</option>
+                  <option value="full-time">Fulltime</option>
+                  <option value="part-time">Parttime</option>
+                  <option value="contract">Tijdelijk Contract</option>
+                  <option value="internship">Stage / Werkstudent</option>
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Min Salary</Label>
+                  <Label>Min. Salaris / Provisie (€)</Label>
                   <Input
                     type="number"
                     value={newJob.salary_min}
@@ -244,7 +277,7 @@ export function JobsPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Max Salary</Label>
+                  <Label>Max. Salaris / OTE (€)</Label>
                   <Input
                     type="number"
                     value={newJob.salary_max}
@@ -252,7 +285,7 @@ export function JobsPage() {
                   />
                 </div>
               </div>
-              <Button onClick={handleAddJob}>Create Job</Button>
+              <Button onClick={handleAddJob}>Vacature Opslaan</Button>
             </div>
           </DialogContent>
         </Dialog>
@@ -261,31 +294,31 @@ export function JobsPage() {
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">Total Jobs</p>
-            <p className="text-2xl font-bold">{jobs.length}</p>
+            <p className="text-sm text-muted-foreground">Totaal Vacatures</p>
+            <p className="text-2xl font-bold">{accessibleJobs.length}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">Published</p>
+            <p className="text-sm text-muted-foreground">Gepubliceerd</p>
             <p className="text-2xl font-bold text-green-500">
-              {jobs.filter((j) => j.status === 'published').length}
+              {accessibleJobs.filter((j) => j.status === 'published').length}
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">Drafts</p>
+            <p className="text-sm text-muted-foreground">Concepten</p>
             <p className="text-2xl font-bold">
-              {jobs.filter((j) => j.status === 'draft').length}
+              {accessibleJobs.filter((j) => j.status === 'draft').length}
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">Total Candidates</p>
+            <p className="text-sm text-muted-foreground">Totaal Sollicitanten</p>
             <p className="text-2xl font-bold">
-              {jobs.reduce((sum, j) => sum + j.candidates_count, 0)}
+              {accessibleJobs.reduce((sum, j) => sum + j.candidates_count, 0)}
             </p>
           </CardContent>
         </Card>

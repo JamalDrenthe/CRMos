@@ -6,6 +6,8 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useCRMStore } from '@/stores/crmStore';
+import { useAuthStore } from '@/stores/authStore';
+import { filterRecordsForUser, isCoreEcosystemCompany } from '@/lib/companyAccess';
 import {
   DndContext,
   DragOverlay,
@@ -32,6 +34,8 @@ import {
   Calendar,
   Building2,
   DollarSign,
+  ShieldCheck,
+  Lock,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -183,6 +187,16 @@ function StageColumn({ stage, deals }: StageColumnProps) {
 
 export function DealsPage() {
   const { pipelines, deals, moveDeal, addDeal } = useCRMStore();
+  const { user, organization, adminCompanyFilter } = useAuthStore();
+
+  const isSuperAdmin =
+    user?.email?.toLowerCase() === 'info@jamaldrenthe.com' ||
+    user?.is_super_admin === true ||
+    user?.role === 'admin';
+
+  const userCompanyName = user?.company_name || organization?.name || 'CRMos';
+  const isCorePartner = isCoreEcosystemCompany(userCompanyName);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [activeDeal, setActiveDeal] = useState<typeof deals[0] | null>(null);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -230,59 +244,78 @@ export function DealsPage() {
     }
   };
 
-  const filteredDeals = deals.filter(
+  const accessibleDeals = filterRecordsForUser(user, deals, adminCompanyFilter);
+
+  const filteredDeals = accessibleDeals.filter(
     (deal) =>
       deal.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       deal.company_name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const totalPipelineValue = deals.reduce((sum, d) => sum + d.value, 0);
-  const wonValue = deals.filter((d) => d.stage === 'closed-won').reduce((sum, d) => sum + d.value, 0);
+  const totalPipelineValue = accessibleDeals.reduce((sum, d) => sum + d.value, 0);
+  const wonValue = accessibleDeals.filter((d) => d.stage === 'closed-won' || d.stage === 'won').reduce((sum, d) => sum + d.value, 0);
 
   const handleAddDeal = () => {
     addDeal({
       ...newDeal,
-      currency: 'USD',
+      org_id: organization?.id || 'default_org',
+      company_name: userCompanyName,
+      allowed_companies: isCorePartner
+        ? ['CRMos', 'VVC', 'Quantum Initium', 'Logs Rent', 'Djobba', 'Trusting Work']
+        : [userCompanyName],
+      currency: 'EUR',
       pipeline_id: defaultPipeline?.id || '1',
       probability: defaultPipeline?.stages.find((s) => s.id === newDeal.stage)?.probability || 10,
       source: 'Manual',
-      assigned_to: 'user1',
+      assigned_to: user?.id || 'user1',
       tags: [],
       activities: [],
     });
     setIsAddDialogOpen(false);
     setNewDeal({ name: '', company_id: '', value: 0, stage: 'lead', expected_close_date: '' });
-    toast.success('Deal created successfully');
+    toast.success('Deal succesvol aangemaakt');
   };
 
   return (
-    <div className="space-y-6 h-[calc(100vh-140px)] flex flex-col">
+    <div className="space-y-6 flex flex-col">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Deals</h1>
-          <p className="text-muted-foreground">Manage your sales pipeline</p>
+          <p className="text-muted-foreground">Beheer je verkoopkansen en pipeline per fase</p>
         </div>
         <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
           <DialogTrigger asChild>
-            <Button>
+            <Button className="rounded-full shadow-sm">
               <Plus className="mr-2 h-4 w-4" />
-              Add Deal
+              Nieuwe Deal
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-lg">
             <DialogHeader>
-              <DialogTitle>Add New Deal</DialogTitle>
+              <DialogTitle>Nieuwe verkoopkans aanmaken</DialogTitle>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="space-y-2">
-                <Label>Deal Name</Label>
+                <Label>Naam van de deal</Label>
                 <Input
                   value={newDeal.name}
                   onChange={(e) => setNewDeal({ ...newDeal, name: e.target.value })}
+                  placeholder="bijv. Licentieovereenkomst Q4"
                 />
               </div>
               <div className="space-y-2">
-                <Label>Value</Label>
+                <Label>Bedrijfstoewijzing</Label>
+                <Input
+                  value={userCompanyName}
+                  disabled
+                  className="bg-muted/40 text-xs font-mono"
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  Gekoppeld aan {userCompanyName} {isCorePartner ? '(gedeeld met CRMos kernpartners)' : '(strikt geïsoleerd)'}
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label>Waarde (€)</Label>
                 <Input
                   type="number"
                   value={newDeal.value}
@@ -290,9 +323,9 @@ export function DealsPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Stage</Label>
+                <Label>Fase</Label>
                 <select
-                  className="w-full rounded-md border border-input bg-background px-3 py-2"
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs"
                   value={newDeal.stage}
                   onChange={(e) => setNewDeal({ ...newDeal, stage: e.target.value })}
                 >
@@ -302,48 +335,90 @@ export function DealsPage() {
                 </select>
               </div>
               <div className="space-y-2">
-                <Label>Expected Close Date</Label>
+                <Label>Verwachte sluitdatum</Label>
                 <Input
                   type="date"
                   value={newDeal.expected_close_date}
                   onChange={(e) => setNewDeal({ ...newDeal, expected_close_date: e.target.value })}
                 />
               </div>
-              <Button onClick={handleAddDeal}>Create Deal</Button>
+              <Button onClick={handleAddDeal}>Deal opslaan</Button>
             </div>
           </DialogContent>
         </Dialog>
       </div>
 
+      {/* Company Isolation / Ecosystem Badge Banner */}
+      <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-2xl bg-card/60 backdrop-blur-xl border border-border/60 shadow-xs">
+        <div className="flex items-center gap-2.5">
+          {isSuperAdmin ? (
+            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
+              <Building2 className="h-4 w-4" />
+            </div>
+          ) : isCorePartner ? (
+            <div className="h-8 w-8 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500 shrink-0">
+              <ShieldCheck className="h-4 w-4" />
+            </div>
+          ) : (
+            <div className="h-8 w-8 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-500 shrink-0">
+              <Lock className="h-4 w-4" />
+            </div>
+          )}
+          <div>
+            <div className="flex items-center gap-2">
+              <p className="text-xs font-bold text-foreground">
+                {isSuperAdmin
+                  ? `Admin Masterview (${accessibleDeals.length} deals zichtbaar)`
+                  : isCorePartner
+                  ? `CRMos Core Dataset (${accessibleDeals.length} deals)`
+                  : `${userCompanyName} Workspace (${accessibleDeals.length} deals)`}
+              </p>
+              <Badge variant="outline" className="text-[10px] px-2 py-0">
+                {isSuperAdmin
+                  ? (adminCompanyFilter === 'all' ? 'Alle Bedrijven' : adminCompanyFilter)
+                  : userCompanyName}
+              </Badge>
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              {isSuperAdmin
+                ? 'Als administrator heb je overkoepelend toezicht en kun je verkoopresultaten van alle organisaties inzien.'
+                : isCorePartner
+                ? 'Deze deals zijn onderdeel van de CRMos bedrijfsketen en gedeeld met CRMos, VVC, Quantum Initium, Logs Rent, Djobba en Trusting Work.'
+                : `Strikte data-isolatie actief: Deze deals zijn uitsluitend zichtbaar voor medewerkers van ${userCompanyName}.`}
+            </p>
+          </div>
+        </div>
+      </div>
+
       <div className="grid gap-4 md:grid-cols-4">
-        <Card>
+        <Card className="rounded-2xl border-border/60">
           <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">Pipeline Value</p>
+            <p className="text-xs text-muted-foreground">Pipeline Waarde</p>
             <p className="text-2xl font-bold">{formatCurrency(totalPipelineValue)}</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="rounded-2xl border-border/60">
           <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">Won Revenue</p>
-            <p className="text-2xl font-bold text-green-500">{formatCurrency(wonValue)}</p>
+            <p className="text-xs text-muted-foreground">Gewonnen Omzet</p>
+            <p className="text-2xl font-bold text-emerald-500">{formatCurrency(wonValue)}</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="rounded-2xl border-border/60">
           <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">Active Deals</p>
+            <p className="text-xs text-muted-foreground">Actieve Deals</p>
             <p className="text-2xl font-bold">
-              {deals.filter((d) => d.stage !== 'closed-won' && d.stage !== 'closed-lost').length}
+              {accessibleDeals.filter((d) => d.stage !== 'closed-won' && d.stage !== 'closed-lost').length}
             </p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="rounded-2xl border-border/60">
           <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">Win Rate</p>
+            <p className="text-xs text-muted-foreground">Win Rate</p>
             <p className="text-2xl font-bold">
-              {deals.filter((d) => d.stage === 'closed-won' || d.stage === 'closed-lost').length > 0
+              {accessibleDeals.filter((d) => d.stage === 'closed-won' || d.stage === 'closed-lost').length > 0
                 ? Math.round(
-                    (deals.filter((d) => d.stage === 'closed-won').length /
-                      deals.filter((d) => d.stage === 'closed-won' || d.stage === 'closed-lost').length) *
+                    (accessibleDeals.filter((d) => d.stage === 'closed-won').length /
+                      accessibleDeals.filter((d) => d.stage === 'closed-won' || d.stage === 'closed-lost').length) *
                       100
                   )
                 : 0}
@@ -357,8 +432,8 @@ export function DealsPage() {
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search deals..."
-            className="pl-10"
+            placeholder="Zoek deals..."
+            className="pl-10 rounded-full text-xs"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -376,7 +451,7 @@ export function DealsPage() {
             <StageColumn
               key={stage.id}
               stage={stage}
-              deals={searchQuery ? filteredDeals : deals}
+              deals={searchQuery ? filteredDeals : accessibleDeals}
             />
           ))}
         </div>

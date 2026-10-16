@@ -131,16 +131,58 @@ export async function logoutFirebase(): Promise<void> {
 /**
  * Synchronize Firebase User profile into Firestore users and organizations collections
  */
-export async function syncFirebaseUserWithFirestore(fbUser: FirebaseUser, companyName?: string): Promise<{ user: User; org: Organization }> {
-  const orgId = `org_${fbUser.uid.substring(0, 8)}`;
+export async function syncFirebaseUserWithFirestore(
+  fbUser: FirebaseUser,
+  companyName?: string
+): Promise<{ user: User; org: Organization }> {
   const userRef = doc(db, 'users', fbUser.uid);
+  let existingUserData: Record<string, unknown> = {};
+
+  try {
+    const userSnap = await getDoc(userRef);
+    if (userSnap.exists()) {
+      existingUserData = userSnap.data() || {};
+    }
+  } catch (error) {
+    console.warn('Kon bestaand gebruikersprofiel niet controleren in Firestore:', error);
+  }
+
+  // Determine effective company name
+  const effectiveCompanyName =
+    companyName ||
+    (existingUserData.company_name as string) ||
+    'CRMos Bedrijf';
+
+  const isCoreEcosystem = [
+    'crmos',
+    'crmos.one',
+    'vvc',
+    'verdienende vrienden club',
+    'quantum initium',
+    'logs rent',
+    'djobba',
+    'trusting work',
+  ].some((c) => {
+    const norm = effectiveCompanyName.trim().toLowerCase();
+    return norm === c || norm.includes(c) || c.includes(norm);
+  });
+
+  // Determine organization ID:
+  // Core ecosystem partners share the CRMos core pool ('default_org')
+  // Independent third-party companies get an isolated organization ID
+  const orgId = isCoreEcosystem
+    ? 'default_org'
+    : (existingUserData.org_id as string) ||
+      `org_${effectiveCompanyName.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 16)}_${fbUser.uid.substring(0, 4)}`;
+
   const orgRef = doc(db, 'organizations', orgId);
 
   // Default Organization
   const defaultOrg: Organization = {
     id: orgId,
-    name: companyName || `${fbUser.displayName || 'Mijn Organisatie'}'s CRM`,
-    org_type: 'supplier',
+    name: effectiveCompanyName,
+    org_type: isCoreEcosystem ? 'partner' : 'client',
+    is_crmos_core: isCoreEcosystem,
     settings: {
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Amsterdam',
       currency: 'EUR',
@@ -178,18 +220,11 @@ export async function syncFirebaseUserWithFirestore(fbUser: FirebaseUser, compan
   }
 
   // Determine role: info@jamaldrenthe.com is always Super Admin
-  const isSuperAdmin = fbUser.email?.toLowerCase() === 'info@jamaldrenthe.com';
-  let userRole: User['role'] = isSuperAdmin ? 'admin' : 'admin';
+  const isSuperAdmin =
+    fbUser.email?.toLowerCase() === 'info@jamaldrenthe.com' ||
+    existingUserData.is_super_admin === true;
 
-  try {
-    const userSnap = await getDoc(userRef);
-    if (userSnap.exists()) {
-      const data = userSnap.data();
-      userRole = isSuperAdmin ? 'admin' : (data.role || 'admin');
-    }
-  } catch (error) {
-    console.warn('Kon bestaand gebruikersprofiel niet controleren in Firestore:', error);
-  }
+  const userRole: User['role'] = isSuperAdmin ? 'admin' : ((existingUserData.role as User['role']) || 'admin');
 
   // App User object
   const appUser: User = {
@@ -199,6 +234,11 @@ export async function syncFirebaseUserWithFirestore(fbUser: FirebaseUser, compan
     avatar: fbUser.photoURL || undefined,
     role: userRole,
     org_id: org.id,
+    company_name: effectiveCompanyName,
+    is_super_admin: isSuperAdmin,
+    allowed_companies: isCoreEcosystem
+      ? ['CRMos', 'VVC', 'Quantum Initium', 'Logs Rent', 'Djobba', 'Trusting Work']
+      : [effectiveCompanyName],
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Amsterdam',
     created_at: new Date().toISOString(),
   };

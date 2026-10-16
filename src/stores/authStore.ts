@@ -18,10 +18,12 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
+  adminCompanyFilter: string; // 'all' | 'crmos_core' | company_name
   
   // Actions
   setUser: (user: User | null) => void;
   setOrganization: (org: Organization | null) => void;
+  setAdminCompanyFilter: (filter: string) => void;
   login: (user: User, org: Organization) => void;
   loginWithGoogleAction: () => Promise<{ user: User; org: Organization }>;
   registerWithEmailAction: (name: string, email: string, password: string, companyName?: string, role?: User['role']) => Promise<{ user: User; org: Organization }>;
@@ -39,11 +41,14 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       isLoading: false,
       error: null,
+      adminCompanyFilter: 'all',
 
       setUser: (user) => set({ user, isAuthenticated: !!user }),
       
       setOrganization: (org) => set({ organization: org }),
       
+      setAdminCompanyFilter: (adminCompanyFilter) => set({ adminCompanyFilter }),
+
       login: (user, org) => set({
         user,
         organization: org,
@@ -113,6 +118,8 @@ export const useAuthStore = create<AuthState>()(
               name,
               role,
               org_id: orgId,
+              company_name: companyName || `${name}'s Bedrijf`,
+              allowed_companies: [companyName || `${name}'s Bedrijf`],
               timezone: 'Europe/Amsterdam',
               created_at: new Date().toISOString(),
             };

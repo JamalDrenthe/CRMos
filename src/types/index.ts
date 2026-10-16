@@ -3,6 +3,25 @@
 // ============================================
 
 // ===== User & Organization =====
+export const CRMOS_CORE_COMPANIES = [
+  'crmos',
+  'crmos.one',
+  'vvc',
+  'verdienende vrienden club',
+  'quantum initium',
+  'logs rent',
+  'djobba',
+  'trusting work',
+] as const;
+
+export type CoreEcosystemCompany = typeof CRMOS_CORE_COMPANIES[number];
+
+export function isCoreEcosystemCompany(name?: string): boolean {
+  if (!name) return false;
+  const n = name.trim().toLowerCase();
+  return CRMOS_CORE_COMPANIES.some(c => n === c || n.includes(c) || c.includes(n));
+}
+
 export interface User {
   id: string;
   email: string;
@@ -10,6 +29,9 @@ export interface User {
   avatar?: string;
   role: 'admin' | 'manager' | 'agent' | 'recruiter';
   org_id: string;
+  company_name?: string;
+  is_super_admin?: boolean;
+  allowed_companies?: string[];
   phone?: string;
   timezone: string;
   created_at: string;
@@ -19,8 +41,9 @@ export interface Organization {
   id: string;
   name: string;
   logo_url?: string;
-  org_type: 'supplier' | 'partner' | 'agent';
+  org_type: 'supplier' | 'partner' | 'agent' | 'client';
   parent_org_id?: string;
+  is_crmos_core?: boolean;
   settings: OrganizationSettings;
   created_at: string;
 }
@@ -46,6 +69,10 @@ export interface OrganizationSettings {
 // ===== Recruitment (ATS) =====
 export interface Candidate {
   id: string;
+  org_id?: string;
+  company_name?: string;
+  allowed_companies?: string[];
+  is_crmos_core?: boolean;
   first_name: string;
   last_name: string;
   email: string;
@@ -67,6 +94,10 @@ export interface Candidate {
 
 export interface Job {
   id: string;
+  org_id?: string;
+  company_name?: string;
+  allowed_companies?: string[];
+  is_crmos_core?: boolean;
   title: string;
   department: string;
   location: string;
@@ -96,6 +127,9 @@ export interface JobApplication {
 // ===== CRM =====
 export interface Contact {
   id: string;
+  org_id?: string;
+  company_name?: string;
+  allowed_companies?: string[];
   first_name: string;
   last_name: string;
   email: string;
@@ -146,6 +180,9 @@ export interface SocialProfiles {
 
 export interface Company {
   id: string;
+  org_id?: string;
+  company_name?: string;
+  allowed_companies?: string[];
   name: string;
   domain?: string;
   industry?: string;
@@ -165,9 +202,12 @@ export interface Company {
 // ===== Deals & Pipeline =====
 export interface Deal {
   id: string;
+  org_id?: string;
+  company_name?: string;
+  allowed_companies?: string[];
+  is_crmos_core?: boolean;
   name: string;
   company_id: string;
-  company_name?: string;
   contact_id?: string;
   contact_name?: string;
   value: number;
@@ -205,6 +245,10 @@ export interface Stage {
 // ===== Activities =====
 export interface Activity {
   id: string;
+  org_id?: string;
+  company_name?: string;
+  allowed_companies?: string[];
+  is_crmos_core?: boolean;
   type: 'call' | 'email' | 'meeting' | 'task' | 'note' | 'whatsapp' | 'sms';
   title: string;
   description?: string;
@@ -280,6 +324,10 @@ export interface Product {
 // ===== Contact Center =====
 export interface Call {
   id: string;
+  org_id?: string;
+  company_name?: string;
+  allowed_companies?: string[];
+  is_crmos_core?: boolean;
   call_sid?: string;
   direction: 'inbound' | 'outbound';
   from_number: string;
@@ -301,6 +349,10 @@ export interface Call {
 
 export interface Campaign {
   id: string;
+  org_id?: string;
+  company_name?: string;
+  allowed_companies?: string[];
+  is_crmos_core?: boolean;
   name: string;
   type: 'outbound' | 'inbound';
   status: 'draft' | 'active' | 'paused' | 'completed';

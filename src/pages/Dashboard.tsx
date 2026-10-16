@@ -1,4 +1,5 @@
 // Dashboard page
+import { useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
@@ -10,6 +11,8 @@ import { useRecruitmentStore } from '@/stores/recruitmentStore';
 import { useContactCenterStore } from '@/stores/contactCenterStore';
 import { useEnhancedStore } from '@/stores/enhancedStore';
 import { useAuthStore } from '@/stores/authStore';
+import { filterRecordsForUser } from '@/lib/companyAccess';
+import { isCoreEcosystemCompany, type Candidate, type Deal, type Contact, type Activity as ActivityType, type Job } from '@/types';
 import { formatDistanceToNow } from 'date-fns';
 import {
   TrendingUp,
@@ -24,8 +27,9 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Clock,
+  ShieldCheck,
+  Layers,
 } from 'lucide-react';
-import type { Candidate } from '@/types';
 
 interface StatCardProps {
   title: string;
@@ -64,8 +68,8 @@ function StatCard({ title, value, description, trend, trendValue, icon: Icon, ic
   );
 }
 
-function PipelineOverview() {
-  const { pipelines, deals } = useCRMStore();
+function PipelineOverview({ deals }: { deals: Deal[] }) {
+  const { pipelines } = useCRMStore();
   const defaultPipeline = pipelines[0];
 
   const getStageStats = (stageId: string) => {
@@ -110,11 +114,18 @@ function PipelineOverview() {
   );
 }
 
-function RecentActivity() {
-  const { activities, contacts, deals } = useCRMStore();
+function RecentActivity({
+  activities,
+  contacts,
+  deals,
+}: {
+  activities: ActivityType[];
+  contacts: Contact[];
+  deals: Deal[];
+}) {
   const recentActivities = activities.slice(0, 10);
 
-  const getRelatedName = (activity: typeof activities[0]) => {
+  const getRelatedName = (activity: ActivityType) => {
     if (activity.related_to.type === 'contact') {
       const contact = contacts.find((c) => c.id === activity.related_to.id);
       return contact ? `${contact.first_name} ${contact.last_name}` : 'Unknown';
@@ -170,8 +181,7 @@ function RecentActivity() {
   );
 }
 
-function TopDeals() {
-  const { deals } = useCRMStore();
+function TopDeals({ deals }: { deals: Deal[] }) {
   const topDeals = [...deals]
     .filter((d) => d.stage !== 'closed-won' && d.stage !== 'closed-lost')
     .sort((a, b) => b.value - a.value)
@@ -246,9 +256,13 @@ function LeaderboardWidget() {
   );
 }
 
-function RecruitmentStats() {
-  const { candidates, jobs } = useRecruitmentStore();
-  
+function RecruitmentStats({
+  candidates,
+  jobs,
+}: {
+  candidates: Candidate[];
+  jobs: Job[];
+}) {
   const newCandidates = candidates.filter((c) => c.status === 'new').length;
   const activeJobs = jobs.filter((j) => j.status === 'published').length;
   const hiredThisMonth = candidates.filter((c) => 
@@ -323,28 +337,93 @@ function ContactCenterStats() {
 }
 
 export function Dashboard() {
-  const { deals, contacts } = useCRMStore();
-  const { user } = useAuthStore();
+  const { deals, contacts, activities } = useCRMStore();
+  const { candidates, jobs } = useRecruitmentStore();
+  const { campaigns, calls } = useContactCenterStore();
+  const { user, adminCompanyFilter } = useAuthStore();
 
-  // Calculate stats
-  const totalPipelineValue = deals.reduce((sum, d) => sum + d.value, 0);
-  const wonDeals = deals.filter((d) => d.stage === 'closed-won');
+  const isCore = isCoreEcosystemCompany(user?.company_name);
+  const isSuperAdmin =
+    user?.email?.toLowerCase() === 'info@jamaldrenthe.com' ||
+    user?.is_super_admin === true ||
+    user?.role === 'admin';
+
+  // Multi-Company Accessible Datasets
+  const accessibleDeals = useMemo(
+    () => filterRecordsForUser(user, deals, adminCompanyFilter),
+    [user, deals, adminCompanyFilter]
+  );
+  const accessibleContacts = useMemo(
+    () => filterRecordsForUser(user, contacts, adminCompanyFilter),
+    [user, contacts, adminCompanyFilter]
+  );
+  const accessibleActivities = useMemo(
+    () => filterRecordsForUser(user, activities, adminCompanyFilter),
+    [user, activities, adminCompanyFilter]
+  );
+  const accessibleCandidates = useMemo(
+    () => filterRecordsForUser(user, candidates, adminCompanyFilter),
+    [user, candidates, adminCompanyFilter]
+  );
+  const accessibleJobs = useMemo(
+    () => filterRecordsForUser(user, jobs, adminCompanyFilter),
+    [user, jobs, adminCompanyFilter]
+  );
+  const accessibleCampaigns = useMemo(
+    () => filterRecordsForUser(user, campaigns, adminCompanyFilter),
+    [user, campaigns, adminCompanyFilter]
+  );
+  const accessibleCalls = useMemo(
+    () => filterRecordsForUser(user, calls, adminCompanyFilter),
+    [user, calls, adminCompanyFilter]
+  );
+
+  // Calculate stats from accessible records
+  const totalPipelineValue = accessibleDeals.reduce((sum, d) => sum + d.value, 0);
+  const wonDeals = accessibleDeals.filter((d) => d.stage === 'closed-won');
   const wonRevenue = wonDeals.reduce((sum, d) => sum + d.value, 0);
-  const activeDeals = deals.filter((d) => d.stage !== 'closed-won' && d.stage !== 'closed-lost').length;
+  const activeDeals = accessibleDeals.filter((d) => d.stage !== 'closed-won' && d.stage !== 'closed-lost').length;
 
   return (
     <div className="space-y-6">
-      {/* Welcome */}
-      <div>
-        <h1 className="text-3xl font-bold">Welcome back, {user?.name?.split(' ')[0] || 'User'}!</h1>
-        <p className="text-muted-foreground">Here's what's happening with your business today.</p>
+      {/* Header & Multi-Tenant Company Badge */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+            Welkom terug, {user?.name?.split(' ')[0] || 'Gebruiker'}!
+          </h1>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
+            Overzicht van jouw commerciële operatie, deals en personeelspijplijn.
+          </p>
+        </div>
+
+        {/* Company Isolation Status Pill */}
+        <div className="flex items-center gap-2">
+          {isCore ? (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 text-xs text-emerald-600 dark:text-emerald-400 font-medium shadow-xs">
+              <Layers className="h-4 w-4" />
+              <span>Core Ecosysteem ({user?.company_name || 'CRMos'})</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-2xl border border-indigo-500/30 bg-indigo-500/10 text-xs text-indigo-500 font-medium shadow-xs">
+              <ShieldCheck className="h-4 w-4" />
+              <span>Geïsoleerd Bedrijf: {user?.company_name || 'Eigen Workspace'}</span>
+            </div>
+          )}
+
+          {isSuperAdmin && adminCompanyFilter && adminCompanyFilter !== 'all' && (
+            <Badge variant="outline" className="border-amber-500/40 text-amber-500 text-xs">
+              Filter: {adminCompanyFilter === 'crmos_core' ? 'CRMos Core' : adminCompanyFilter}
+            </Badge>
+          )}
+        </div>
       </div>
 
       {/* Main Stats */}
       <div className="grid gap-4 md:grid-cols-4">
         <StatCard
           title="Pipeline Value"
-          value={`$${totalPipelineValue.toLocaleString()}`}
+          value={`€${totalPipelineValue.toLocaleString()}`}
           trend="up"
           trendValue="+12%"
           icon={DollarSign}
@@ -352,7 +431,7 @@ export function Dashboard() {
         />
         <StatCard
           title="Won Revenue"
-          value={`$${wonRevenue.toLocaleString()}`}
+          value={`€${wonRevenue.toLocaleString()}`}
           trend="up"
           trendValue="+8%"
           icon={TrendingUp}
@@ -366,8 +445,8 @@ export function Dashboard() {
           iconColor="text-purple-500"
         />
         <StatCard
-          title="Total Contacts"
-          value={contacts.length}
+          title="Toegankelijke Contacten"
+          value={accessibleContacts.length}
           trend="up"
           trendValue="+24"
           icon={Users}
@@ -378,18 +457,22 @@ export function Dashboard() {
       {/* Tabs for different views */}
       <Tabs defaultValue="sales" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="sales">Sales</TabsTrigger>
+          <TabsTrigger value="sales">Sales &amp; Deals</TabsTrigger>
           <TabsTrigger value="recruitment">Recruitment</TabsTrigger>
           <TabsTrigger value="contact-center">Contact Center</TabsTrigger>
         </TabsList>
 
         <TabsContent value="sales" className="space-y-4">
           <div className="grid gap-4 lg:grid-cols-3">
-            <PipelineOverview />
-            <RecentActivity />
+            <PipelineOverview deals={accessibleDeals} />
+            <RecentActivity
+              activities={accessibleActivities}
+              contacts={accessibleContacts}
+              deals={accessibleDeals}
+            />
           </div>
           <div className="grid gap-4 lg:grid-cols-3">
-            <TopDeals />
+            <TopDeals deals={accessibleDeals} />
             <LeaderboardWidget />
             <Card>
               <CardHeader>
@@ -399,19 +482,19 @@ export function Dashboard() {
                 <div className="grid grid-cols-2 gap-3">
                   <button className="rounded-lg border p-4 text-left transition-colors hover:bg-accent">
                     <Phone className="mb-2 h-5 w-5 text-blue-500" />
-                    <p className="font-medium">Log Call</p>
+                    <p className="font-medium text-xs">Log Call</p>
                   </button>
                   <button className="rounded-lg border p-4 text-left transition-colors hover:bg-accent">
                     <Activity className="mb-2 h-5 w-5 text-green-500" />
-                    <p className="font-medium">Add Note</p>
+                    <p className="font-medium text-xs">Add Note</p>
                   </button>
                   <button className="rounded-lg border p-4 text-left transition-colors hover:bg-accent">
                     <Target className="mb-2 h-5 w-5 text-purple-500" />
-                    <p className="font-medium">Create Task</p>
+                    <p className="font-medium text-xs">Create Task</p>
                   </button>
                   <button className="rounded-lg border p-4 text-left transition-colors hover:bg-accent">
                     <Briefcase className="mb-2 h-5 w-5 text-orange-500" />
-                    <p className="font-medium">New Deal</p>
+                    <p className="font-medium text-xs">New Deal</p>
                   </button>
                 </div>
               </CardContent>
@@ -420,7 +503,10 @@ export function Dashboard() {
         </TabsContent>
 
         <TabsContent value="recruitment" className="space-y-4">
-          <RecruitmentStats />
+          <RecruitmentStats
+            candidates={accessibleCandidates}
+            jobs={accessibleJobs}
+          />
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>
               <CardHeader>
@@ -429,13 +515,13 @@ export function Dashboard() {
               <CardContent>
                 <div className="space-y-4">
                   {['new', 'screening', 'interview', 'offer', 'hired'].map((stage) => {
-                    const count = useRecruitmentStore.getState().getCandidatesByStage(stage as Candidate['status']).length;
+                    const count = accessibleCandidates.filter((c) => c.status === stage).length;
                     return (
                       <div key={stage} className="flex items-center justify-between">
-                        <span className="capitalize">{stage}</span>
+                        <span className="capitalize text-xs font-medium">{stage}</span>
                         <div className="flex items-center gap-3">
                           <Progress value={count * 10} className="w-24" />
-                          <Badge>{count}</Badge>
+                          <Badge variant="secondary">{count}</Badge>
                         </div>
                       </div>
                     );
@@ -449,17 +535,22 @@ export function Dashboard() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {useRecruitmentStore.getState().jobs
+                  {accessibleJobs
                     .filter((j) => j.status === 'published')
                     .map((job) => (
                       <div key={job.id} className="flex items-center justify-between">
                         <div>
-                          <p className="font-medium">{job.title}</p>
+                          <p className="font-medium text-sm">{job.title}</p>
                           <p className="text-xs text-muted-foreground">{job.department} • {job.location}</p>
                         </div>
                         <Badge variant="secondary">{job.candidates_count} candidates</Badge>
                       </div>
                     ))}
+                  {accessibleJobs.filter((j) => j.status === 'published').length === 0 && (
+                    <p className="text-xs text-muted-foreground py-4 text-center">
+                      Geen openstaande vacatures gevonden voor jouw bedrijf.
+                    </p>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -475,16 +566,16 @@ export function Dashboard() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {useContactCenterStore.getState().campaigns
+                  {accessibleCampaigns
                     .filter((c) => c.status === 'active')
                     .map((campaign) => (
                       <div key={campaign.id} className="space-y-2">
                         <div className="flex items-center justify-between">
-                          <p className="font-medium">{campaign.name}</p>
+                          <p className="font-medium text-sm">{campaign.name}</p>
                           <Badge>{campaign.type}</Badge>
                         </div>
                         <Progress 
-                          value={(campaign.completed_contacts / campaign.target_contacts) * 100} 
+                          value={campaign.target_contacts > 0 ? (campaign.completed_contacts / campaign.target_contacts) * 100 : 0} 
                           className="h-2" 
                         />
                         <div className="flex justify-between text-xs text-muted-foreground">
@@ -493,6 +584,11 @@ export function Dashboard() {
                         </div>
                       </div>
                     ))}
+                  {accessibleCampaigns.filter((c) => c.status === 'active').length === 0 && (
+                    <p className="text-xs text-muted-foreground py-4 text-center">
+                      Geen actieve belcampagnes gevonden voor jouw bedrijf.
+                    </p>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -502,7 +598,7 @@ export function Dashboard() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {useContactCenterStore.getState().calls
+                  {accessibleCalls
                     .slice(0, 5)
                     .map((call) => (
                       <div key={call.id} className="flex items-center justify-between">
@@ -511,7 +607,7 @@ export function Dashboard() {
                             <Phone className="h-4 w-4" />
                           </div>
                           <div>
-                            <p className="font-medium">{call.contact_name || call.to_number}</p>
+                            <p className="font-medium text-sm">{call.contact_name || call.to_number}</p>
                             <p className="text-xs text-muted-foreground">
                               {call.duration ? `${Math.floor(call.duration / 60)}:${String(call.duration % 60).padStart(2, '0')}` : 'Missed'}
                             </p>
@@ -522,6 +618,11 @@ export function Dashboard() {
                         </Badge>
                       </div>
                     ))}
+                  {accessibleCalls.length === 0 && (
+                    <p className="text-xs text-muted-foreground py-4 text-center">
+                      Geen recente gesprekken gevonden voor jouw bedrijf.
+                    </p>
+                  )}
                 </div>
               </CardContent>
             </Card>
