@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import sharp from 'sharp';
 
-// Clean, high-contrast vector SVG with 100% solid white background
+// Clean, high-contrast vector SVG with 100% transparent background
 const faviconSvg = `<svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="ring-grad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -15,27 +15,16 @@ const faviconSvg = `<svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.
       <stop offset="60%" stop-color="#9333ea"/>
       <stop offset="100%" stop-color="#3b82f6"/>
     </linearGradient>
-    <radialGradient id="core-glow" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.25"/>
-      <stop offset="60%" stop-color="#60a5fa" stop-opacity="0.10"/>
-      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
-    </radialGradient>
     <radialGradient id="nucleus-grad" cx="40%" cy="40%" r="60%">
       <stop offset="0%" stop-color="#60a5fa"/>
       <stop offset="50%" stop-color="#2563eb"/>
       <stop offset="100%" stop-color="#1e3a8a"/>
     </radialGradient>
     <linearGradient id="diamond-fill" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#eff6ff" stop-opacity="0.95"/>
-      <stop offset="100%" stop-color="#dbeafe" stop-opacity="0.75"/>
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#dbeafe" stop-opacity="0.85"/>
     </linearGradient>
   </defs>
-
-  <!-- 100% Solid Pure White Background across entire canvas -->
-  <rect width="100" height="100" fill="#ffffff"/>
-
-  <!-- Soft Blue Ambient Aura -->
-  <circle cx="50" cy="50" r="38" fill="url(#core-glow)"/>
 
   <!-- Orbital Track -->
   <circle cx="50" cy="50" r="41" stroke="url(#ring-grad)" stroke-width="2" stroke-dasharray="4 2 10 3 20 4" opacity="0.45"/>
@@ -56,7 +45,7 @@ async function buildFavicons() {
   const publicDir = path.resolve('public');
   const distDir = path.resolve('dist');
 
-  console.log('Generating solid white-background favicons...');
+  console.log('Generating transparent-background favicons...');
 
   // 1. Save SVG
   fs.writeFileSync(path.join(publicDir, 'favicon.svg'), faviconSvg.trim());
@@ -66,7 +55,7 @@ async function buildFavicons() {
 
   const svgBuffer = Buffer.from(faviconSvg);
 
-  // 2. Generate PNGs at multiple sizes
+  // 2. Generate PNGs at multiple sizes with 100% transparent background
   const sizes = [
     { name: 'favicon-16.png', size: 16 },
     { name: 'favicon-32.png', size: 32 },
@@ -81,8 +70,7 @@ async function buildFavicons() {
 
   for (const { name, size } of sizes) {
     const pngBuf = await sharp(svgBuffer)
-      .resize(size, size, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 1 } })
-      .flatten({ background: { r: 255, g: 255, b: 255 } })
+      .resize(size, size, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
       .png()
       .toBuffer();
 
@@ -134,7 +122,7 @@ async function buildFavicons() {
   }
   console.log('✓ Wrote multi-resolution favicon.ico (16, 32, 48px)');
 
-  console.log('All white-background favicons generated successfully!');
+  console.log('All transparent-background favicons generated successfully!');
 }
 
 buildFavicons().catch((err) => {
