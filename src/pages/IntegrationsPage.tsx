@@ -35,6 +35,15 @@ import {
   Database,
   DownloadCloud,
   Trash2,
+  PhoneCall,
+  Phone,
+  Terminal,
+  Copy,
+  ChevronDown,
+  ChevronUp,
+  Sparkles,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import {
   syncAllDataFromHubSpot,
@@ -42,6 +51,14 @@ import {
   type HubSpotSyncProgress,
   type HubSpotConfig,
 } from '@/services/hubspotService';
+import {
+  loadTwilioConfigFromFirestore,
+  saveTwilioConfigToFirestore,
+  DEFAULT_TWILIO_CONFIG,
+  TWILIO_MCP_INFO,
+  type TwilioConfig,
+  makeCall,
+} from '@/services/twilioService';
 import { purgeDemoAndMockDataFromFirestore } from '@/services/firestoreService';
 import { useAuthStore } from '@/stores/authStore';
 import { useCRMStore } from '@/stores/crmStore';
@@ -64,6 +81,21 @@ export interface Integration {
 }
 
 export const INITIAL_INTEGRATIONS: Integration[] = [
+  {
+    id: 'twilio-voice',
+    name: 'Twilio Voice & AI MCP',
+    tagline: 'Cloud Telefonie, Web Dialer & Model Context Protocol',
+    category: 'AI & FinTech',
+    description:
+      'Echt bellen direct vanuit CRMos. Koppel Twilio Programmable Voice voor in-browser outbound en inbound bellen, opnames, en verbind AI coding agents met de Twilio MCP server (mcp.twilio.com/docs).',
+    icon: PhoneCall,
+    gradient: 'from-red-600 to-rose-600',
+    badgeColor: 'bg-red-500/10 text-red-600 border-red-500/20',
+    website: 'https://www.twilio.com/docs/ai/mcp',
+    status: 'connected',
+    features: ['In-browser Web Dialer', 'Twilio AI MCP Server (1.800+ APIs)', 'Gespreksopnames & Tijdlijn Sync', 'Direct bellen via GSM (`tel:`)'],
+    apiKeyPlaceholder: 'ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+  },
   {
     id: 'quantum-initium',
     name: 'Quantum Initium',
@@ -223,11 +255,25 @@ export function IntegrationsPage() {
   const [isHubspotSyncing, setIsHubspotSyncing] = useState(false);
   const [hubspotProgress, setHubspotProgress] = useState<HubSpotSyncProgress | null>(null);
 
+  // Twilio Telephony & AI MCP State
+  const [twilioConfig, setTwilioConfig] = useState<TwilioConfig>(DEFAULT_TWILIO_CONFIG);
+  const [isTwilioSaving, setIsTwilioSaving] = useState(false);
+  const [showAuthToken, setShowAuthToken] = useState(false);
+  const [showMcpGuide, setShowMcpGuide] = useState(false);
+  const [testPhoneNumber, setTestPhoneNumber] = useState('');
+  const [isTestingTwilioCall, setIsTestingTwilioCall] = useState(false);
+
   useEffect(() => {
     loadHubSpotConfigFromFirestore(orgId).then((cfg) => {
       if (cfg) {
         setHubspotConfig(cfg);
         setHubspotToken(cfg.accessToken || '');
+      }
+    });
+
+    loadTwilioConfigFromFirestore(orgId).then((twCfg) => {
+      if (twCfg) {
+        setTwilioConfig(twCfg);
       }
     });
   }, [orgId]);
@@ -271,8 +317,53 @@ export function IntegrationsPage() {
     toast.success(`Alle mock & demo data is gewist (${deleted} records uit Cloud verwijderd).`);
   };
 
+  const handleSaveTwilioConfig = async () => {
+    setIsTwilioSaving(true);
+    try {
+      await saveTwilioConfigToFirestore(twilioConfig, orgId);
+      toast.success('Twilio telefonie instellingen succesvol opgeslagen & gesynchroniseerd!');
+    } catch (err) {
+      console.error(err);
+      toast.error('Fout bij opslaan van Twilio configuratie.');
+    } finally {
+      setIsTwilioSaving(false);
+    }
+  };
+
+  const handleTestTwilioOutbound = async () => {
+    if (!testPhoneNumber.trim()) {
+      toast.error('Vul een test telefoonnummer in (bijv. +31612345678)');
+      return;
+    }
+
+    setIsTestingTwilioCall(true);
+    try {
+      const res = await makeCall({
+        to: testPhoneNumber.trim(),
+        from: twilioConfig.phoneNumber,
+        contactName: 'Test Oproep Bestemming',
+        agentName: user?.name || 'CRMos Beheerder',
+        orgId,
+        companyName: user?.company_name || organization?.name || 'CRMos',
+        notes: 'Testoproep uitgevoerd vanuit Integraties Pagina',
+      }, twilioConfig);
+
+      toast.success(res.message);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Fout bij starten testoproep';
+      toast.error(msg);
+    } finally {
+      setIsTestingTwilioCall(false);
+    }
+  };
+
+  const handleCopyText = (text: string, label: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success(`${label} gekopieerd naar klembord!`);
+  };
+
   const categories = [
-    { id: 'all', label: 'Alle (9)' },
+    { id: 'all', label: `Alle (${integrations.length})` },
     { id: 'AI & FinTech', label: 'AI & FinTech' },
     { id: 'Community & Rewards', label: 'Community & Rewards' },
     { id: 'Werving & Juridisch', label: 'Werving & Juridisch' },
@@ -325,7 +416,256 @@ export function IntegrationsPage() {
   return (
     <div className="space-y-6">
       {/* ===================================================================== */}
-      {/* HUBSPOT LIVE CRM MIGRATION & SYNC BANNER                              */}
+      {/* 1. TWILIO TELEPHONY & AI MCP HUB                                      */}
+      {/* ===================================================================== */}
+      <Card className="relative overflow-hidden rounded-3xl border-2 border-red-500/30 bg-gradient-to-br from-red-500/10 via-card/90 to-card p-5 sm:p-7 shadow-md">
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-3.5">
+              <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-red-600 to-rose-600 flex items-center justify-center text-white shadow-md shrink-0">
+                <PhoneCall className="h-6 w-6" />
+              </div>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-lg sm:text-xl font-bold text-foreground">
+                    Twilio Voice Telephony &amp; Twilio AI MCP Server
+                  </h2>
+                  <Badge className={`text-[10px] ${
+                    twilioConfig.enabled
+                      ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+                      : 'bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30'
+                  }`}>
+                    {twilioConfig.enabled ? 'Twilio Voice Actief' : 'Klaar voor Inrichting'}
+                  </Badge>
+                  <Badge variant="outline" className="text-[10px] bg-primary/5 text-primary border-primary/20 gap-1">
+                    <Sparkles className="h-3 w-3" />
+                    <span>MCP 1.800+ Endpoints</span>
+                  </Badge>
+                </div>
+                <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+                  Activeer echt in-app bellen en koppel coding agents direct aan Twilio&apos;s Model Context Protocol server (<code>https://mcp.twilio.com/docs</code>).
+                </p>
+              </div>
+            </div>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowMcpGuide(!showMcpGuide)}
+              className="rounded-full text-xs gap-1.5 border-border/80 text-foreground hover:bg-muted shrink-0"
+            >
+              <Terminal className="h-3.5 w-3.5 text-primary" />
+              <span>{showMcpGuide ? 'Verberg MCP Guide' : 'Twilio MCP Setup Guide'}</span>
+              {showMcpGuide ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            </Button>
+          </div>
+
+          {/* Twilio Credentials Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold flex items-center gap-1.5">
+                <KeyRound className="h-3.5 w-3.5 text-red-500" />
+                <span>Twilio Account SID</span>
+              </Label>
+              <Input
+                value={twilioConfig.accountSid}
+                onChange={(e) => setTwilioConfig({ ...twilioConfig, accountSid: e.target.value.trim() })}
+                placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                className="font-mono text-xs h-10 bg-background/80"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <KeyRound className="h-3.5 w-3.5 text-red-500" />
+                  <span>Twilio Auth Token / API Secret</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowAuthToken(!showAuthToken)}
+                  className="text-[10px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+                >
+                  {showAuthToken ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                  <span>{showAuthToken ? 'Verberg' : 'Toon'}</span>
+                </button>
+              </Label>
+              <Input
+                type={showAuthToken ? 'text' : 'password'}
+                value={twilioConfig.authToken}
+                onChange={(e) => setTwilioConfig({ ...twilioConfig, authToken: e.target.value.trim() })}
+                placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                className="font-mono text-xs h-10 bg-background/80"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold flex items-center gap-1.5">
+                <Phone className="h-3.5 w-3.5 text-emerald-500" />
+                <span>Twilio Caller ID Telefoonnummer</span>
+              </Label>
+              <Input
+                value={twilioConfig.phoneNumber}
+                onChange={(e) => setTwilioConfig({ ...twilioConfig, phoneNumber: e.target.value.trim() })}
+                placeholder="+31850000000 of +15550001111"
+                className="font-mono text-xs h-10 bg-background/80"
+              />
+            </div>
+          </div>
+
+          {/* Additional Settings & Toggles */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 rounded-2xl bg-background/70 border border-border/60">
+            <div className="flex items-center justify-between gap-2 p-2 rounded-xl">
+              <div>
+                <p className="text-xs font-semibold">Twilio Voice Bellen</p>
+                <p className="text-[10px] text-muted-foreground">In-browser web dialer activeren</p>
+              </div>
+              <Switch
+                checked={twilioConfig.enabled}
+                onCheckedChange={(checked) => setTwilioConfig({ ...twilioConfig, enabled: checked })}
+              />
+            </div>
+
+            <div className="flex items-center justify-between gap-2 p-2 rounded-xl">
+              <div>
+                <p className="text-xs font-semibold">Gespreksopnames</p>
+                <p className="text-[10px] text-muted-foreground">Oproepen automatisch opnemen</p>
+              </div>
+              <Switch
+                checked={twilioConfig.recordingEnabled}
+                onCheckedChange={(checked) => setTwilioConfig({ ...twilioConfig, recordingEnabled: checked })}
+              />
+            </div>
+
+            <div className="flex items-center justify-between gap-2 p-2 rounded-xl">
+              <div>
+                <p className="text-xs font-semibold">Twilio AI MCP Ready</p>
+                <p className="text-[10px] text-muted-foreground">Agents toegang geven tot MCP docs</p>
+              </div>
+              <Switch
+                checked={true}
+                disabled
+              />
+            </div>
+          </div>
+
+          {/* Test Calling Tool & Save */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
+            <div className="flex items-center gap-2 flex-1 max-w-md">
+              <Input
+                placeholder="Testnummer (bijv. +31612345678)"
+                value={testPhoneNumber}
+                onChange={(e) => setTestPhoneNumber(e.target.value)}
+                className="text-xs h-9"
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleTestTwilioOutbound}
+                disabled={isTestingTwilioCall}
+                className="h-9 rounded-xl text-xs gap-1.5 shrink-0 border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10"
+              >
+                <PhoneCall className="h-3.5 w-3.5" />
+                <span>{isTestingTwilioCall ? 'Bezig...' : 'Test Oproep'}</span>
+              </Button>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={handleSaveTwilioConfig}
+                disabled={isTwilioSaving}
+                className="h-9 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white font-semibold text-xs gap-1.5 shadow-sm"
+              >
+                {isTwilioSaving ? (
+                  <>
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                    <span>Opslaan...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    <span>Twilio Configuratie Opslaan</span>
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+
+          {/* Collapsible Twilio AI MCP Server Documentation & Setup */}
+          {showMcpGuide && (
+            <div className="rounded-2xl bg-background/90 border border-primary/20 p-4 space-y-3 text-xs mt-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Terminal className="h-4 w-4 text-primary" />
+                  <span className="font-bold text-sm text-foreground">
+                    Twilio Model Context Protocol (MCP) Server Setup
+                  </span>
+                </div>
+                <a
+                  href="https://www.twilio.com/docs/ai/mcp"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline inline-flex items-center gap-1 text-[11px]"
+                >
+                  <span>Officiële Twilio Docs</span>
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              </div>
+
+              <p className="text-muted-foreground leading-relaxed text-[11px]">
+                De Twilio MCP server (<code>https://mcp.twilio.com/docs</code>) geeft AI coding agents direct toegang tot alle Twilio API documentatie en schema&apos;s voor <strong>Voice, Conversations, Studio, TaskRouter, Flex en Agent Connect</strong>.
+              </p>
+
+              <div className="space-y-2">
+                <p className="font-semibold text-foreground text-[11px]">1. Claude Code CLI Toevoegen:</p>
+                <div className="flex items-center justify-between p-2.5 rounded-xl bg-muted/60 font-mono text-[11px] border border-border/40">
+                  <span className="truncate">{TWILIO_MCP_INFO.claudeCliCommand}</span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => handleCopyText(TWILIO_MCP_INFO.claudeCliCommand, 'Claude Code CLI')}
+                    className="h-6 px-2 text-[10px] gap-1 shrink-0 ml-2"
+                  >
+                    <Copy className="h-3 w-3" /> Kopieer
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="font-semibold text-foreground text-[11px]">2. Cursor Marketplace Command:</p>
+                <div className="flex items-center justify-between p-2.5 rounded-xl bg-muted/60 font-mono text-[11px] border border-border/40">
+                  <span>{TWILIO_MCP_INFO.cursorCommand}</span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => handleCopyText(TWILIO_MCP_INFO.cursorCommand, 'Cursor Command')}
+                    className="h-6 px-2 text-[10px] gap-1 shrink-0 ml-2"
+                  >
+                    <Copy className="h-3 w-3" /> Kopieer
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-1.5 pt-1">
+                <p className="font-semibold text-foreground text-[11px]">3. Beschikbare MCP Tools:</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                  <div className="p-2.5 rounded-xl bg-muted/40 border border-border/40 space-y-1">
+                    <span className="font-mono font-bold text-primary">twilio__search</span>
+                    <p className="text-muted-foreground text-[10px]">Zoekt met natuurlijke taal door meer dan 1.800 Twilio endpoints en handleidingen.</p>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-muted/40 border border-border/40 space-y-1">
+                    <span className="font-mono font-bold text-primary">twilio__retrieve</span>
+                    <p className="text-muted-foreground text-[10px]">Haalt de exacte parameters, data types en response schema&apos;s op van geselecteerde API IDs.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </Card>
+
+      {/* ===================================================================== */}
+      {/* 2. HUBSPOT LIVE CRM MIGRATION & SYNC BANNER                           */}
       {/* ===================================================================== */}
       <Card className="relative overflow-hidden rounded-3xl border-2 border-orange-500/30 bg-gradient-to-br from-orange-500/10 via-card/90 to-card p-5 sm:p-7 shadow-md">
         <div className="space-y-4">
@@ -448,53 +788,59 @@ export function IntegrationsPage() {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="space-y-1.5">
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary border border-primary/20">
-                <Zap className="h-3.5 w-3.5" />
-                <span>Ecosysteem Hub</span>
-              </span>
-              <span className="text-xs text-muted-foreground">
-                • {connectedCount} van {integrations.length} Gekoppeld
-              </span>
+              <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+              <Badge variant="outline" className="text-[11px] font-semibold tracking-wide uppercase px-2.5 py-0.5">
+                Ecosysteem Koppelingen
+              </Badge>
             </div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-              Officiële Integraties
+              Integraties &amp; Netwerk Partners
             </h1>
             <p className="text-xs sm:text-sm text-muted-foreground max-w-2xl leading-relaxed">
-              Verbind CRMos naadloos met gespecialiseerde tools voor werving, AI, kapitaal, logistiek en beloningen.
-              Alle data wordt realtime gesynchroniseerd binnen je centrale workflow.
+              Verbind CRMos met je favoriete platforms, netwerken en telecom providers. Van AI lead scoring en affiliate tracking tot Twilio telefonie en logistiek.
             </p>
           </div>
+
+          <div className="flex items-center gap-2.5 self-stretch sm:self-auto justify-between sm:justify-end bg-card/60 p-2 sm:p-3 rounded-2xl border border-border/60">
+            <div className="text-right">
+              <p className="text-[11px] text-muted-foreground font-medium">Actief Verbonden</p>
+              <p className="text-xl font-bold text-foreground">{connectedCount} / {integrations.length}</p>
+            </div>
+            <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+              <Zap className="h-5 w-5" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Filter and Search Bar */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        {/* Category Tabs */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 no-scrollbar">
+          {categories.map((cat) => (
+            <button
+              key={cat.id}
+              onClick={() => setSelectedCategory(cat.id)}
+              className={`rounded-full px-3.5 py-1.5 text-xs font-semibold whitespace-nowrap transition-all ${
+                selectedCategory === cat.id
+                  ? 'bg-primary text-primary-foreground shadow-xs'
+                  : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground'
+              }`}
+            >
+              {cat.label}
+            </button>
+          ))}
         </div>
 
-        {/* Search & Filter Bar */}
-        <div className="mt-6 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Zoek integraties (bijv. Quantum, VVC, Immigratie)..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 h-9 rounded-full text-xs bg-background/60 border-border/70"
-            />
-          </div>
-
-          {/* Horizontally scrollable category pills on mobile */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
-            {categories.map((cat) => (
-              <button
-                key={cat.id}
-                type="button"
-                onClick={() => setSelectedCategory(cat.id)}
-                className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-                  selectedCategory === cat.id
-                    ? 'bg-foreground text-background font-semibold shadow-xs'
-                    : 'bg-muted/60 text-muted-foreground hover:text-foreground hover:bg-muted'
-                }`}
-              >
-                {cat.label}
-              </button>
-            ))}
-          </div>
+        {/* Search */}
+        <div className="relative min-w-[240px] sm:w-72">
+          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Zoek integratie of feature..."
+            className="pl-8 text-xs h-9 rounded-full bg-card/60"
+          />
         </div>
       </div>
 
@@ -601,7 +947,7 @@ export function IntegrationsPage() {
         })}
       </div>
 
-      {/* Configuration Dialog */}
+      {/* Configuration Dialog for Partner Integrations */}
       {configIntegration && (
         <Dialog open={!!configIntegration} onOpenChange={() => setConfigIntegration(null)}>
           <DialogContent className="sm:max-w-md max-w-[95vw] rounded-2xl">

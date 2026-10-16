@@ -137,9 +137,11 @@ export interface Contact {
   mobile?: string;
   avatar?: string;
   company?: string;
+  company_id?: string;
   title?: string;
   industry?: string;
   status: 'lead' | 'prospect' | 'customer' | 'churned';
+  score?: number;
   source: string;
   assigned_to?: string;
   tags: string[];
