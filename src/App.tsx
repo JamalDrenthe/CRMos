@@ -43,6 +43,8 @@ import { RegisterPage } from '@/pages/RegisterPage';
 import { GlobalSearch } from '@/components/search/GlobalSearch';
 import { useAuthStore } from '@/stores/authStore';
 import { useCRMStore } from '@/stores/crmStore';
+import { useRecruitmentStore } from '@/stores/recruitmentStore';
+import { useContactCenterStore } from '@/stores/contactCenterStore';
 import { useThemeStore } from '@/stores/themeStore';
 import { cn } from '@/lib/utils';
 
@@ -205,6 +207,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 function App() {
   const { initAuthListener, organization, isAuthenticated } = useAuthStore();
   const { syncWithFirestore } = useCRMStore();
+  const { syncWithFirestore: syncRecruitment } = useRecruitmentStore();
+  const { syncWithFirestore: syncContactCenter } = useContactCenterStore();
   const { theme } = useThemeStore();
 
   // Sync theme class on document element
@@ -228,17 +232,19 @@ function App() {
     };
   }, [initAuthListener]);
 
-  // Sync CRM data with Firestore for active organization
+  // Sync CRM, Recruitment, and Contact Center data with Firestore for active organization
   useEffect(() => {
     if (organization?.id) {
-      const unsubFirestore = syncWithFirestore(organization.id);
+      const unsubCRM = syncWithFirestore(organization.id);
+      const unsubRec = syncRecruitment(organization.id);
+      const unsubCC = syncContactCenter(organization.id);
       return () => {
-        if (typeof unsubFirestore === 'function') {
-          unsubFirestore();
-        }
+        if (typeof unsubCRM === 'function') unsubCRM();
+        if (typeof unsubRec === 'function') unsubRec();
+        if (typeof unsubCC === 'function') unsubCC();
       };
     }
-  }, [organization?.id, syncWithFirestore]);
+  }, [organization?.id, syncWithFirestore, syncRecruitment, syncContactCenter]);
 
   return (
     <TooltipProvider>

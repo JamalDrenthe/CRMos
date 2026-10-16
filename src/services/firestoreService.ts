@@ -378,6 +378,18 @@ export async function deleteJobFromFirestore(jobId: string): Promise<void> {
   }
 }
 
+export function subscribeToJobs(
+  orgId: string,
+  callback: (jobs: Job[]) => void
+): Unsubscribe {
+  if (!isFirebaseConfigured()) return () => {};
+  const q = query(collection(db, COLLECTIONS.JOBS), where('org_id', '==', orgId));
+  return onSnapshot(q, (snap) => {
+    const items = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Job));
+    callback(items);
+  }, (err) => console.warn('Real-time jobs subscription fout:', err));
+}
+
 // ====================================================
 // CAMPAIGNS (CONTACT CENTER)
 // ====================================================
@@ -397,6 +409,18 @@ export async function saveCampaignToFirestore(campaign: Campaign, orgId: string)
   }
 }
 
+export function subscribeToCampaigns(
+  orgId: string,
+  callback: (campaigns: Campaign[]) => void
+): Unsubscribe {
+  if (!isFirebaseConfigured()) return () => {};
+  const q = query(collection(db, COLLECTIONS.CAMPAIGNS), where('org_id', '==', orgId));
+  return onSnapshot(q, (snap) => {
+    const items = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Campaign));
+    callback(items);
+  }, (err) => console.warn('Real-time campaigns subscription fout:', err));
+}
+
 // ====================================================
 // CALLS (CONTACT CENTER)
 // ====================================================
@@ -413,6 +437,18 @@ export async function saveCallToFirestore(call: Call, orgId: string): Promise<vo
   } catch (err) {
     console.error('Fout bij opslaan van oproep:', err);
   }
+}
+
+export function subscribeToCalls(
+  orgId: string,
+  callback: (calls: Call[]) => void
+): Unsubscribe {
+  if (!isFirebaseConfigured()) return () => {};
+  const q = query(collection(db, COLLECTIONS.CALLS), where('org_id', '==', orgId));
+  return onSnapshot(q, (snap) => {
+    const items = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Call));
+    callback(items);
+  }, (err) => console.warn('Real-time calls subscription fout:', err));
 }
 
 // ====================================================
@@ -446,6 +482,64 @@ export async function saveProductToFirestore(product: Product, orgId: string): P
   } catch (err) {
     console.error('Fout bij opslaan van product:', err);
   }
+}
+
+export async function deleteProductFromFirestore(productId: string): Promise<void> {
+  if (!isFirebaseConfigured()) return;
+  try {
+    await deleteDoc(doc(db, COLLECTIONS.PRODUCTS, productId));
+  } catch (err) {
+    console.error('Fout bij verwijderen van product:', err);
+  }
+}
+
+export function subscribeToProducts(
+  orgId: string,
+  callback: (products: Product[]) => void
+): Unsubscribe {
+  if (!isFirebaseConfigured()) return () => {};
+  const q = query(collection(db, COLLECTIONS.PRODUCTS), where('org_id', '==', orgId));
+  return onSnapshot(q, (snap) => {
+    const items = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Product));
+    callback(items);
+  }, (err) => console.warn('Real-time products subscription fout:', err));
+}
+
+// ====================================================
+// PURGE MOCK & DEMO DATA
+// ====================================================
+
+export async function purgeDemoAndMockDataFromFirestore(orgId: string): Promise<number> {
+  // Always clear legacy localStorage mock keys
+  if (typeof window !== 'undefined') {
+    window.localStorage.removeItem('crmos-crm-storage');
+    window.localStorage.removeItem('crmos-recruitment-storage');
+    window.localStorage.removeItem('crmos-contact-center-storage');
+    window.localStorage.removeItem('crmos-enhanced-storage');
+  }
+
+  if (!isFirebaseConfigured()) return 0;
+
+  let deletedCount = 0;
+  const mockIds = new Set(['1', '2', '3', '4', '5']);
+
+  try {
+    for (const colName of Object.values(COLLECTIONS)) {
+      const q = query(collection(db, colName), where('org_id', '==', orgId));
+      const snap = await getDocs(q);
+      for (const docSnap of snap.docs) {
+        const id = docSnap.id;
+        if (mockIds.has(id) || id.startsWith('demo_')) {
+          await deleteDoc(doc(db, colName, id));
+          deletedCount++;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Fout bij opschonen van mock data uit Firestore:', err);
+  }
+
+  return deletedCount;
 }
 
 // ====================================================

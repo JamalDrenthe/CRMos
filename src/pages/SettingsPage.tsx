@@ -22,7 +22,6 @@ import {
   Save,
   Lock,
   Database,
-  Sparkles,
   CheckCircle2,
   RefreshCw,
   Blocks,
@@ -30,8 +29,12 @@ import {
   Phone,
   Clock,
   LogOut,
+  Trash2,
 } from 'lucide-react';
-import { seedDemoDataToFirestore } from '@/services/firestoreService';
+import { seedDemoDataToFirestore, purgeDemoAndMockDataFromFirestore } from '@/services/firestoreService';
+import { useCRMStore } from '@/stores/crmStore';
+import { useRecruitmentStore } from '@/stores/recruitmentStore';
+import { useContactCenterStore } from '@/stores/contactCenterStore';
 
 export function SettingsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -67,6 +70,10 @@ export function SettingsPage() {
     setSearchParams({ tab: val });
   };
 
+  const { clearLocalStore: clearCRM } = useCRMStore();
+  const { clearLocalStore: clearRec } = useRecruitmentStore();
+  const { clearLocalStore: clearCC } = useContactCenterStore();
+
   const handleSeedDemoData = async () => {
     setIsSeeding(true);
     const orgId = user?.org_id || 'default_org';
@@ -82,6 +89,15 @@ export function SettingsPage() {
     } finally {
       setIsSeeding(false);
     }
+  };
+
+  const handlePurgeMockData = async () => {
+    const orgId = user?.org_id || 'default_org';
+    clearCRM();
+    clearRec();
+    clearCC();
+    const deleted = await purgeDemoAndMockDataFromFirestore(orgId);
+    toast.success(`Alle mock & demo data is gewist (${deleted} records uit Cloud verwijderd).`);
   };
 
   return (
@@ -399,22 +415,42 @@ export function SettingsPage() {
               <div className="space-y-3 pt-2 border-t border-border/40">
                 <div>
                   <h4 className="font-semibold text-sm text-foreground flex items-center gap-1.5">
-                    <Sparkles className="h-4 w-4 text-amber-500" />
-                    <span>Voorbeelddata Inladen (3 Disciplines Demo)</span>
+                    <Blocks className="h-4 w-4 text-orange-500" />
+                    <span>HubSpot CRM Live Synchronisatie &amp; Opschonen</span>
                   </h4>
                   <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                    Laad met één klik realistische Nederlandse demorecords in voor <strong>Field Sales</strong> (Singel 240, D2D orders), <strong>Callcenter</strong> (Q4 Glasvezel campagne, belscripts), en <strong>Recruitment</strong> (kandidaten voor werving-tot-omzet keten).
+                    Koppel je HubSpot Private App Access Token in het tabblad <strong>Integraties</strong> om al je echte Contacten, Bedrijven, Deals, Gesprekken en Taken direct in CRMos te laden, of wis alle oude mock/voorbeelddata met één klik.
                   </p>
                 </div>
 
-                <Button
-                  onClick={handleSeedDemoData}
-                  disabled={isSeeding}
-                  className="rounded-full gap-2 px-6 h-9 text-xs"
-                >
-                  <RefreshCw className={`h-4 w-4 ${isSeeding ? 'animate-spin' : ''}`} />
-                  <span>{isSeeding ? 'Bezig met inladen...' : 'Laad 3 Disciplines Demodata In'}</span>
-                </Button>
+                <div className="flex flex-wrap gap-3">
+                  <Button
+                    onClick={() => handleTabChange('integrations')}
+                    className="rounded-full gap-2 px-6 h-9 text-xs bg-gradient-to-r from-orange-500 to-red-600 text-white"
+                  >
+                    <Blocks className="h-4 w-4" />
+                    <span>Open HubSpot Importer</span>
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    onClick={handlePurgeMockData}
+                    className="rounded-full gap-2 px-6 h-9 text-xs border-red-500/30 text-red-500 hover:bg-red-500/10"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    <span>Wis Alle Mock &amp; Demo Data</span>
+                  </Button>
+
+                  <Button
+                    variant="ghost"
+                    onClick={handleSeedDemoData}
+                    disabled={isSeeding}
+                    className="rounded-full gap-2 px-5 h-9 text-xs text-muted-foreground"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${isSeeding ? 'animate-spin' : ''}`} />
+                    <span>{isSeeding ? 'Bezig...' : 'Optioneel: Laad NL Voorbeelddata'}</span>
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>

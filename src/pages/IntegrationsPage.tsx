@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,7 +32,21 @@ import {
   RefreshCw,
   KeyRound,
   Link2,
+  Database,
+  DownloadCloud,
+  Trash2,
 } from 'lucide-react';
+import {
+  syncAllDataFromHubSpot,
+  loadHubSpotConfigFromFirestore,
+  type HubSpotSyncProgress,
+  type HubSpotConfig,
+} from '@/services/hubspotService';
+import { purgeDemoAndMockDataFromFirestore } from '@/services/firestoreService';
+import { useAuthStore } from '@/stores/authStore';
+import { useCRMStore } from '@/stores/crmStore';
+import { useRecruitmentStore } from '@/stores/recruitmentStore';
+import { useContactCenterStore } from '@/stores/contactCenterStore';
 
 export interface Integration {
   id: string;
@@ -188,6 +202,12 @@ export const INITIAL_INTEGRATIONS: Integration[] = [
 ];
 
 export function IntegrationsPage() {
+  const { organization, user } = useAuthStore();
+  const orgId = organization?.id || user?.org_id || 'default_org';
+  const { setContacts, setCompanies, setDeals, setActivities, clearLocalStore: clearCRM } = useCRMStore();
+  const { clearLocalStore: clearRec } = useRecruitmentStore();
+  const { setCalls, clearLocalStore: clearCC } = useContactCenterStore();
+
   const [integrations, setIntegrations] = useState<Integration[]>(INITIAL_INTEGRATIONS);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -196,6 +216,60 @@ export function IntegrationsPage() {
   const [webhookUrlInput, setWebhookUrlInput] = useState('');
   const [syncEnabled, setSyncEnabled] = useState(true);
   const [isTesting, setIsTesting] = useState(false);
+
+  // HubSpot Live Sync State
+  const [hubspotToken, setHubspotToken] = useState('');
+  const [hubspotConfig, setHubspotConfig] = useState<HubSpotConfig | null>(null);
+  const [isHubspotSyncing, setIsHubspotSyncing] = useState(false);
+  const [hubspotProgress, setHubspotProgress] = useState<HubSpotSyncProgress | null>(null);
+
+  useEffect(() => {
+    loadHubSpotConfigFromFirestore(orgId).then((cfg) => {
+      if (cfg) {
+        setHubspotConfig(cfg);
+        setHubspotToken(cfg.accessToken || '');
+      }
+    });
+  }, [orgId]);
+
+  const handleHubSpotSync = async () => {
+    if (!hubspotToken.trim()) {
+      toast.error('Vul je HubSpot Private App Access Token in (bijv. pat-eu1-...)');
+      return;
+    }
+    setIsHubspotSyncing(true);
+    try {
+      const result = await syncAllDataFromHubSpot(hubspotToken.trim(), orgId, (p) => {
+        setHubspotProgress(p);
+      });
+      setContacts(result.contacts);
+      setCompanies(result.companies);
+      setDeals(result.deals);
+      setActivities(result.activities);
+      setCalls(result.calls);
+
+      const updatedCfg = await loadHubSpotConfigFromFirestore(orgId);
+      setHubspotConfig(updatedCfg);
+
+      toast.success(
+        `HubSpot import voltooid! ${result.contacts.length} contacten, ${result.companies.length} bedrijven en ${result.deals.length} deals geladen.`
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Onbekende fout bij HubSpot synchronisatie';
+      toast.error(msg);
+      setHubspotProgress((prev) => (prev ? { ...prev, error: msg } : null));
+    } finally {
+      setIsHubspotSyncing(false);
+    }
+  };
+
+  const handlePurgeMockData = async () => {
+    clearCRM();
+    clearRec();
+    clearCC();
+    const deleted = await purgeDemoAndMockDataFromFirestore(orgId);
+    toast.success(`Alle mock & demo data is gewist (${deleted} records uit Cloud verwijderd).`);
+  };
 
   const categories = [
     { id: 'all', label: 'Alle (9)' },
@@ -250,6 +324,125 @@ export function IntegrationsPage() {
 
   return (
     <div className="space-y-6">
+      {/* ===================================================================== */}
+      {/* HUBSPOT LIVE CRM MIGRATION & SYNC BANNER                              */}
+      {/* ===================================================================== */}
+      <Card className="relative overflow-hidden rounded-3xl border-2 border-orange-500/30 bg-gradient-to-br from-orange-500/10 via-card/90 to-card p-5 sm:p-7 shadow-md">
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-3.5">
+              <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-white shadow-md shrink-0">
+                <Database className="h-6 w-6" />
+              </div>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-lg sm:text-xl font-bold text-foreground">
+                    HubSpot CRM Live Data Migratie &amp; Synchronisatie
+                  </h2>
+                  <Badge className="bg-orange-500/15 text-orange-600 dark:text-orange-400 border-orange-500/30 text-[10px]">
+                    {hubspotConfig?.lastSyncAt ? 'HubSpot Verbonden' : 'Klaar voor koppeling'}
+                  </Badge>
+                </div>
+                <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+                  Importeer direct al je echte <strong>Contacten, Bedrijven, Deals, Gesprekken, Taken, Notities en Producten</strong> vanuit HubSpot naar CRMos &amp; Google Cloud Firestore.
+                </p>
+              </div>
+            </div>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handlePurgeMockData}
+              className="rounded-full text-xs gap-1.5 border-red-500/30 text-red-500 hover:bg-red-500/10 shrink-0"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              <span>Wis Alle Mock Data</span>
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
+            <div className="md:col-span-2 space-y-1.5">
+              <Label className="text-xs font-semibold flex items-center gap-1.5">
+                <KeyRound className="h-3.5 w-3.5 text-orange-500" />
+                <span>HubSpot Private App Access Token (pat-eu1-... of pat-na1-...)</span>
+              </Label>
+              <Input
+                type="password"
+                value={hubspotToken}
+                onChange={(e) => setHubspotToken(e.target.value)}
+                placeholder="pat-eu1-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                className="font-mono text-xs h-10 bg-background/80"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Ga in HubSpot naar <strong>Settings (Tandwiel) → Integrations → Private Apps → Create a private app</strong> (Scopes: <code>crm.objects.contacts.read</code>, <code>crm.objects.companies.read</code>, <code>crm.objects.deals.read</code>) en plak je token hier.
+              </p>
+            </div>
+
+            <div className="flex flex-col justify-end">
+              <Button
+                onClick={handleHubSpotSync}
+                disabled={isHubspotSyncing}
+                className="h-10 rounded-xl bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white font-semibold text-xs gap-2 shadow-md"
+              >
+                {isHubspotSyncing ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                    <span>Bezig met importeren...</span>
+                  </>
+                ) : (
+                  <>
+                    <DownloadCloud className="h-4 w-4" />
+                    <span>Importeer Alles uit HubSpot</span>
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+
+          {hubspotProgress && (
+            <div className="rounded-2xl bg-background/80 border border-border/60 p-4 space-y-2 text-xs">
+              <div className="flex items-center justify-between font-semibold">
+                <span className="text-foreground">{hubspotProgress.step}</span>
+                {hubspotProgress.isComplete && (
+                  <span className="text-emerald-500 flex items-center gap-1">
+                    <CheckCircle2 className="h-4 w-4" /> Voltooid
+                  </span>
+                )}
+              </div>
+              {hubspotProgress.error && (
+                <p className="text-red-500 font-medium">{hubspotProgress.error}</p>
+              )}
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 pt-1">
+                <div className="p-2 rounded-xl bg-muted/50 text-center">
+                  <p className="text-[10px] text-muted-foreground">Contacten</p>
+                  <p className="font-bold text-sm">{hubspotProgress.contactsCount}</p>
+                </div>
+                <div className="p-2 rounded-xl bg-muted/50 text-center">
+                  <p className="text-[10px] text-muted-foreground">Bedrijven</p>
+                  <p className="font-bold text-sm">{hubspotProgress.companiesCount}</p>
+                </div>
+                <div className="p-2 rounded-xl bg-muted/50 text-center">
+                  <p className="text-[10px] text-muted-foreground">Deals</p>
+                  <p className="font-bold text-sm">{hubspotProgress.dealsCount}</p>
+                </div>
+                <div className="p-2 rounded-xl bg-muted/50 text-center">
+                  <p className="text-[10px] text-muted-foreground">Activiteiten</p>
+                  <p className="font-bold text-sm">{hubspotProgress.activitiesCount}</p>
+                </div>
+                <div className="p-2 rounded-xl bg-muted/50 text-center">
+                  <p className="text-[10px] text-muted-foreground">Gesprekken</p>
+                  <p className="font-bold text-sm">{hubspotProgress.callsCount}</p>
+                </div>
+                <div className="p-2 rounded-xl bg-muted/50 text-center">
+                  <p className="text-[10px] text-muted-foreground">Producten</p>
+                  <p className="font-bold text-sm">{hubspotProgress.productsCount}</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </Card>
+
       {/* Apple-style Header Banner */}
       <div className="relative overflow-hidden rounded-3xl border border-border/60 bg-gradient-to-r from-card/80 via-card/50 to-muted/20 p-5 sm:p-7 backdrop-blur-xl shadow-xs">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
