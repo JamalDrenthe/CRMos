@@ -125,6 +125,32 @@ export interface TwilioCallResult {
   callRecord: Omit<Call, 'id'>;
 }
 
+export async function verifyTwilioAccount(credentials: {
+  accountSid: string;
+  authToken: string;
+}): Promise<{
+  valid: boolean;
+  friendlyName?: string;
+  status?: string;
+  type?: string;
+  phoneNumbers?: Array<{ phoneNumber: string; friendlyName: string }>;
+  message: string;
+}> {
+  try {
+    const res = await fetch('/api/twilio/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(credentials),
+    });
+    return await res.json();
+  } catch (err: unknown) {
+    return {
+      valid: false,
+      message: (err as Error)?.message || 'Kon Twilio service niet bereiken.',
+    };
+  }
+}
+
 /**
  * Initiates a phone call via Twilio Voice API or prepares Web Dialer / Native tel
  */
@@ -148,63 +174,49 @@ export async function makeCall(options: TwilioCallOptions, config?: TwilioConfig
     started_at: new Date().toISOString(),
   };
 
-  // If Twilio API credentials are configured, try Twilio Voice REST API
+  // If Twilio API credentials are configured, call via backend proxy
   if (cfg.enabled && cfg.accountSid && cfg.authToken && callerId) {
     try {
-      const url = `https://api.twilio.com/2010-04-01/Accounts/${cfg.accountSid}/Calls.json`;
-      const formData = new URLSearchParams();
-      formData.append('To', targetNumber);
-      formData.append('From', callerId);
-
-      if (cfg.twimlAppSid) {
-        formData.append('ApplicationSid', cfg.twimlAppSid);
-      } else {
-        formData.append('Url', cfg.webhookUrl || 'https://demo.twilio.com/welcome/voice/');
-      }
-
-      if (cfg.recordingEnabled) {
-        formData.append('Record', 'true');
-      }
-
-      const response = await fetch(url, {
+      const response = await fetch('/api/twilio/call', {
         method: 'POST',
-        headers: {
-          'Authorization': 'Basic ' + btoa(`${cfg.accountSid}:${cfg.authToken}`),
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: formData.toString(),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accountSid: cfg.accountSid,
+          authToken: cfg.authToken,
+          to: targetNumber,
+          from: callerId,
+          webhookUrl: cfg.webhookUrl,
+          recording: cfg.recordingEnabled,
+        }),
       });
 
-      if (response.ok) {
-        const data = await response.json();
+      const data = await response.json();
+
+      if (response.ok && data.success) {
         return {
           success: true,
-          callSid: data.sid,
+          callSid: data.callSid,
           mode: 'twilio_rest',
-          message: `Twilio oproep geïnitieerd (SID: ${data.sid}) naar ${targetNumber}`,
+          message: data.message || `Twilio oproep gestart naar ${targetNumber} (SID: ${data.callSid})`,
           callRecord: {
             ...baseCallRecord,
-            call_sid: data.sid,
+            call_sid: data.callSid,
           },
         };
       } else {
-        const errText = await response.text();
-        console.warn('Twilio REST API rejected call:', errText);
-        // Fall back to Web Dialer with notification
         return {
-          success: true,
-          mode: 'web_dialer',
-          message: `Twilio API gaf foutmelding (${response.status}). Web dialer sessie gestart voor ${targetNumber}.`,
+          success: false,
+          mode: 'twilio_rest',
+          message: data.message || `Twilio weigerde de oproep (${response.status})`,
           callRecord: baseCallRecord,
         };
       }
-    } catch (err) {
-      console.warn('Twilio direct browser call hit CORS or network limit:', err);
-      // Fallback gracefully to CRMos in-browser dialer
+    } catch (err: unknown) {
+      console.warn('Twilio proxy call error, falling back to Web Dialer:', err);
       return {
         success: true,
         mode: 'web_dialer',
-        message: `Twilio Web Dialer actief voor ${targetNumber}.`,
+        message: `Web dialer sessie gestart voor ${targetNumber}.`,
         callRecord: baseCallRecord,
       };
     }

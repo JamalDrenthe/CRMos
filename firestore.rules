@@ -10,6 +10,7 @@ service cloud.firestore {
     function isAdmin() {
       return isAuthenticated() && (
         request.auth.token.email == 'info@jamaldrenthe.com' ||
+        request.auth.token.email == 'info@crmos.one' ||
         request.auth.token.get('admin', false) == true
       );
     }
@@ -20,9 +21,17 @@ service cloud.firestore {
       allow write: if isAdmin() || (isAuthenticated() && request.auth.uid == userId);
     }
 
-    // Organisaties
+    // Organisaties en integraties / subcollecties
     match /organizations/{orgId} {
       allow read, write: if isAuthenticated();
+
+      match /integrations/{integrationId} {
+        allow read, write: if isAuthenticated();
+      }
+
+      match /{allSubcollections=**} {
+        allow read, write: if isAuthenticated();
+      }
     }
 
     // Contacten
@@ -72,6 +81,11 @@ service cloud.firestore {
 
     // Sales: Productencatalogus
     match /crm_products/{productId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Integraties (HubSpot / Standalone)
+    match /crm_integrations/{integrationId} {
       allow read, write: if isAuthenticated();
     }
   }

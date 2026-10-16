@@ -219,9 +219,10 @@ export async function syncFirebaseUserWithFirestore(
     console.warn('Kon organisatie niet ophalen uit Firestore, standaardwaarde gebruikt:', error);
   }
 
-  // Determine role: info@jamaldrenthe.com is always Super Admin
+  // Determine role: info@jamaldrenthe.com and info@crmos.one are always Super Admin
   const isSuperAdmin =
     fbUser.email?.toLowerCase() === 'info@jamaldrenthe.com' ||
+    fbUser.email?.toLowerCase() === 'info@crmos.one' ||
     existingUserData.is_super_admin === true;
 
   const userRole: User['role'] = isSuperAdmin ? 'admin' : ((existingUserData.role as User['role']) || 'admin');

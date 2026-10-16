@@ -58,6 +58,7 @@ import {
   TWILIO_MCP_INFO,
   type TwilioConfig,
   makeCall,
+  verifyTwilioAccount,
 } from '@/services/twilioService';
 import { purgeDemoAndMockDataFromFirestore } from '@/services/firestoreService';
 import { useAuthStore } from '@/stores/authStore';
@@ -262,6 +263,13 @@ export function IntegrationsPage() {
   const [showMcpGuide, setShowMcpGuide] = useState(false);
   const [testPhoneNumber, setTestPhoneNumber] = useState('');
   const [isTestingTwilioCall, setIsTestingTwilioCall] = useState(false);
+  const [isVerifyingTwilio, setIsVerifyingTwilio] = useState(false);
+  const [twilioAccountInfo, setTwilioAccountInfo] = useState<{
+    friendlyName?: string;
+    type?: string;
+    status?: string;
+    phoneNumbers?: Array<{ phoneNumber: string; friendlyName: string }>;
+  } | null>(null);
 
   useEffect(() => {
     loadHubSpotConfigFromFirestore(orgId).then((cfg) => {
@@ -330,9 +338,49 @@ export function IntegrationsPage() {
     }
   };
 
+  const handleVerifyTwilio = async () => {
+    if (!twilioConfig.accountSid.trim() || !twilioConfig.authToken.trim()) {
+      toast.error('Vul eerst je Twilio Account SID en Auth Token in.');
+      return;
+    }
+
+    setIsVerifyingTwilio(true);
+    try {
+      const res = await verifyTwilioAccount({
+        accountSid: twilioConfig.accountSid.trim(),
+        authToken: twilioConfig.authToken.trim(),
+      });
+
+      if (res.valid) {
+        setTwilioAccountInfo(res);
+        const autoNumber = res.phoneNumbers?.[0]?.phoneNumber;
+        setTwilioConfig((prev) => ({
+          ...prev,
+          enabled: true,
+          phoneNumber: prev.phoneNumber || autoNumber || '',
+        }));
+        toast.success(res.message);
+      } else {
+        toast.error(res.message);
+      }
+    } catch (err: unknown) {
+      toast.error((err as Error)?.message || 'Twilio verificatie mislukt.');
+    } finally {
+      setIsVerifyingTwilio(false);
+    }
+  };
+
   const handleTestTwilioOutbound = async () => {
     if (!testPhoneNumber.trim()) {
       toast.error('Vul een test telefoonnummer in (bijv. +31612345678)');
+      return;
+    }
+    if (!twilioConfig.accountSid.trim() || !twilioConfig.authToken.trim()) {
+      toast.error('Vul eerst je Twilio Account SID en Auth Token in.');
+      return;
+    }
+    if (!twilioConfig.phoneNumber.trim()) {
+      toast.error('Vul eerst een Twilio telefoonnummer in (Caller ID) of verifieer je account.');
       return;
     }
 
@@ -340,7 +388,7 @@ export function IntegrationsPage() {
     try {
       const res = await makeCall({
         to: testPhoneNumber.trim(),
-        from: twilioConfig.phoneNumber,
+        from: twilioConfig.phoneNumber.trim(),
         contactName: 'Test Oproep Bestemming',
         agentName: user?.name || 'CRMos Beheerder',
         orgId,
@@ -348,7 +396,11 @@ export function IntegrationsPage() {
         notes: 'Testoproep uitgevoerd vanuit Integraties Pagina',
       }, twilioConfig);
 
-      toast.success(res.message);
+      if (res.success) {
+        toast.success(res.message);
+      } else {
+        toast.error(res.message);
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Fout bij starten testoproep';
       toast.error(msg);
@@ -511,6 +563,62 @@ export function IntegrationsPage() {
                 className="font-mono text-xs h-10 bg-background/80"
               />
             </div>
+          </div>
+
+          {/* Quick Actions & Twilio Account Status */}
+          <div className="flex flex-wrap items-center justify-between gap-2.5 p-3 rounded-2xl bg-muted/30 border border-border/50 text-xs">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleVerifyTwilio}
+                disabled={isVerifyingTwilio}
+                className="h-8 rounded-xl text-xs gap-1.5 border-primary/30 text-primary hover:bg-primary/10"
+              >
+                {isVerifyingTwilio ? (
+                  <>
+                    <RefreshCw className="h-3 w-3 animate-spin" />
+                    <span>Verifiëren...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                    <span>Verifieer Account &amp; Haal Nummers Op</span>
+                  </>
+                )}
+              </Button>
+
+              {twilioAccountInfo && (
+                <div className="flex items-center gap-1.5 text-muted-foreground">
+                  <span className="font-semibold text-foreground">{twilioAccountInfo.friendlyName}</span>
+                  <Badge variant="outline" className="text-[10px] uppercase">
+                    {twilioAccountInfo.type || 'Account'}
+                  </Badge>
+                </div>
+              )}
+            </div>
+
+            {twilioAccountInfo?.phoneNumbers && twilioAccountInfo.phoneNumbers.length > 0 && (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-muted-foreground text-[11px]">Gevonden Twilio nummers:</span>
+                {twilioAccountInfo.phoneNumbers.map((num) => (
+                  <Badge
+                    key={num.phoneNumber}
+                    onClick={() => {
+                      setTwilioConfig((prev) => ({ ...prev, phoneNumber: num.phoneNumber }));
+                      toast.success(`Afzendernummer ingesteld op ${num.phoneNumber}`);
+                    }}
+                    className={`cursor-pointer transition-all text-[11px] font-mono ${
+                      twilioConfig.phoneNumber === num.phoneNumber
+                        ? 'bg-primary text-primary-foreground font-bold'
+                        : 'bg-background hover:bg-muted text-foreground border'
+                    }`}
+                  >
+                    {num.phoneNumber}
+                  </Badge>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Additional Settings & Toggles */}

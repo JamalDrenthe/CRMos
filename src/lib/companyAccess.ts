@@ -96,6 +96,7 @@ export function canUserAccessRecord(
   // 1. Super Admin or Platform Admin sees ALL data across all companies
   const isSuperAdmin =
     user.email?.toLowerCase() === 'info@jamaldrenthe.com' ||
+    user.email?.toLowerCase() === 'info@crmos.one' ||
     user.is_super_admin === true ||
     user.role === 'admin';
 
@@ -165,6 +166,7 @@ export function filterRecordsForUser<
 
   const isSuperAdmin =
     user.email?.toLowerCase() === 'info@jamaldrenthe.com' ||
+    user.email?.toLowerCase() === 'info@crmos.one' ||
     user.is_super_admin === true ||
     user.role === 'admin';
 
