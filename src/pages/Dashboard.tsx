@@ -18,7 +18,7 @@ import {
   TrendingUp,
   Users,
   Briefcase,
-  DollarSign,
+  Euro,
   Phone,
   Target,
   Activity,
@@ -102,7 +102,7 @@ function PipelineOverview({ deals }: { deals: Deal[] }) {
                     <span>{stage.name}</span>
                     <Badge variant="secondary">{stats.count}</Badge>
                   </div>
-                  <span className="font-medium">${stats.value.toLocaleString()}</span>
+                  <span className="font-medium">€{stats.value.toLocaleString()}</span>
                 </div>
                 <Progress value={percentage} className="h-2" />
               </div>
@@ -201,7 +201,7 @@ function TopDeals({ deals }: { deals: Deal[] }) {
                 <p className="text-xs text-muted-foreground">{deal.company_name}</p>
               </div>
               <div className="text-right">
-                <p className="text-sm font-medium">${deal.value.toLocaleString()}</p>
+                <p className="text-sm font-medium">€{deal.value.toLocaleString()}</p>
                 <Badge variant="outline" className="text-xs">{deal.stage}</Badge>
               </div>
             </div>
@@ -426,7 +426,7 @@ export function Dashboard() {
           value={`€${totalPipelineValue.toLocaleString()}`}
           trend="up"
           trendValue="+12%"
-          icon={DollarSign}
+          icon={Euro}
           iconColor="text-green-500"
         />
         <StatCard

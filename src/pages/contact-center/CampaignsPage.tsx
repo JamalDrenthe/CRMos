@@ -18,10 +18,10 @@ import {
   Pause,
   Edit,
   Eye,
-  BarChart3,
   Filter,
   Layers,
   ShieldCheck,
+  Trash2,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -35,15 +35,24 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 
 export function CampaignsPage() {
-  const { campaigns, startCampaign, pauseCampaign } = useContactCenterStore();
+  const { campaigns, startCampaign, pauseCampaign, updateCampaign, deleteCampaign } = useContactCenterStore();
   const { user, adminCompanyFilter } = useAuthStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [viewingCampaign, setViewingCampaign] = useState<typeof campaigns[0] | null>(null);
+  const [editingCampaign, setEditingCampaign] = useState<typeof campaigns[0] | null>(null);
+  const [editCampaignData, setEditCampaignData] = useState({
+    name: '',
+    description: '',
+    target_contacts: 500,
+  });
+
   const [newCampaignName, setNewCampaignName] = useState('');
   const [newCampaignDesc, setNewCampaignDesc] = useState('');
   const [newCampaignType, setNewCampaignType] = useState<'outbound' | 'inbound'>('outbound');
@@ -61,6 +70,38 @@ export function CampaignsPage() {
       campaign.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       campaign.description?.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const handleStartEdit = (campaign: typeof campaigns[0]) => {
+    setEditingCampaign(campaign);
+    setEditCampaignData({
+      name: campaign.name,
+      description: campaign.description || '',
+      target_contacts: campaign.target_contacts,
+    });
+  };
+
+  const handleSaveEdit = () => {
+    if (!editingCampaign) return;
+    updateCampaign(editingCampaign.id, {
+      name: editCampaignData.name.trim() || editingCampaign.name,
+      description: editCampaignData.description,
+      target_contacts: Number(editCampaignData.target_contacts) || 100,
+    });
+    setEditingCampaign(null);
+    if (viewingCampaign?.id === editingCampaign.id) {
+      setViewingCampaign((prev) =>
+        prev
+          ? {
+              ...prev,
+              name: editCampaignData.name.trim() || prev.name,
+              description: editCampaignData.description,
+              target_contacts: Number(editCampaignData.target_contacts) || 100,
+            }
+          : null
+      );
+    }
+    toast.success('Campagne succesvol bijgewerkt');
+  };
 
   const columns = [
     {
@@ -151,18 +192,30 @@ export function CampaignsPage() {
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem>
-                <Eye className="mr-2 h-4 w-4" />
-                View Details
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuItem
+                onClick={() => setViewingCampaign(row.original)}
+                className="gap-2 cursor-pointer"
+              >
+                <Eye className="h-3.5 w-3.5 text-muted-foreground" />
+                <span>Details & Data</span>
               </DropdownMenuItem>
-              <DropdownMenuItem>
-                <BarChart3 className="mr-2 h-4 w-4" />
-                Analytics
+              <DropdownMenuItem
+                onClick={() => handleStartEdit(row.original)}
+                className="gap-2 cursor-pointer"
+              >
+                <Edit className="h-3.5 w-3.5 text-muted-foreground" />
+                <span>Bewerken</span>
               </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Edit className="mr-2 h-4 w-4" />
-                Edit
+              <DropdownMenuItem
+                onClick={() => {
+                  deleteCampaign(row.original.id);
+                  toast.success('Campagne verwijderd');
+                }}
+                className="gap-2 text-destructive focus:text-destructive cursor-pointer"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                <span>Verwijderen</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -325,7 +378,131 @@ export function CampaignsPage() {
         </Button>
       </div>
 
-      <DataTable columns={columns} data={filteredCampaigns} />
+      <DataTable
+        columns={columns}
+        data={filteredCampaigns}
+        onRowClick={(row) => setViewingCampaign(row)}
+      />
+
+      {/* View Campaign Details Modal */}
+      <Dialog open={!!viewingCampaign} onOpenChange={(open) => !open && setViewingCampaign(null)}>
+        <DialogContent className="max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center justify-between pr-4">
+              <span className="truncate">{viewingCampaign?.name}</span>
+              <Badge variant="secondary" className="capitalize text-xs font-semibold">
+                {viewingCampaign?.status}
+              </Badge>
+            </DialogTitle>
+          </DialogHeader>
+          {viewingCampaign && (
+            <div className="space-y-4 py-2 text-sm">
+              <p className="text-xs text-muted-foreground">{viewingCampaign.description || 'Geen toelichting'}</p>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 rounded-xl border border-border/50 bg-card">
+                  <span className="text-[11px] text-muted-foreground block mb-1">Campagnetype</span>
+                  <p className="font-semibold text-xs capitalize">{viewingCampaign.type}</p>
+                </div>
+                <div className="p-3 rounded-xl border border-border/50 bg-card">
+                  <span className="text-[11px] text-muted-foreground block mb-1">Doel Contacten</span>
+                  <p className="font-semibold text-xs">{viewingCampaign.target_contacts}</p>
+                </div>
+                <div className="p-3 rounded-xl border border-border/50 bg-card">
+                  <span className="text-[11px] text-muted-foreground block mb-1">Voltooide Gesprekken</span>
+                  <p className="font-semibold text-xs">{viewingCampaign.completed_contacts}</p>
+                </div>
+                <div className="p-3 rounded-xl border border-border/50 bg-card">
+                  <span className="text-[11px] text-muted-foreground block mb-1">Succesvolle Conversie</span>
+                  <p className="font-semibold text-xs text-emerald-600 font-mono">{viewingCampaign.conversion_rate}%</p>
+                </div>
+              </div>
+
+              <div className="pt-2 flex items-center justify-between gap-2 border-t border-border/60">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/30"
+                  onClick={() => {
+                    deleteCampaign(viewingCampaign.id);
+                    setViewingCampaign(null);
+                    toast.success('Campagne verwijderd');
+                  }}
+                >
+                  <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                  Verwijderen
+                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="rounded-full"
+                    onClick={() => setViewingCampaign(null)}
+                  >
+                    Sluiten
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="rounded-full"
+                    onClick={() => {
+                      const c = viewingCampaign;
+                      setViewingCampaign(null);
+                      handleStartEdit(c);
+                    }}
+                  >
+                    <Edit className="h-3.5 w-3.5 mr-1.5" />
+                    Bewerken
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Campaign Modal */}
+      <Dialog open={!!editingCampaign} onOpenChange={(open) => !open && setEditingCampaign(null)}>
+        <DialogContent className="max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>Campagne bewerken</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3.5 py-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Campagnenaam</Label>
+              <Input
+                value={editCampaignData.name}
+                onChange={(e) => setEditCampaignData({ ...editCampaignData, name: e.target.value })}
+                className="rounded-xl"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Doel Contacten</Label>
+              <Input
+                type="number"
+                value={editCampaignData.target_contacts}
+                onChange={(e) => setEditCampaignData({ ...editCampaignData, target_contacts: Number(e.target.value) })}
+                className="rounded-xl"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Omschrijving</Label>
+              <Input
+                value={editCampaignData.description}
+                onChange={(e) => setEditCampaignData({ ...editCampaignData, description: e.target.value })}
+                className="rounded-xl"
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" className="rounded-full" onClick={() => setEditingCampaign(null)}>
+              Annuleren
+            </Button>
+            <Button className="rounded-full" onClick={handleSaveEdit}>
+              Wijzigingen opslaan
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

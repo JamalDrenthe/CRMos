@@ -34,9 +34,11 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 
 export function PitchFlowsPage() {
-  const { pitchFlows, addPitchFlow } = useEnhancedStore();
+  const { pitchFlows, addPitchFlow, updatePitchFlow, deletePitchFlow } = useEnhancedStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [editingFlow, setEditingFlow] = useState<typeof pitchFlows[0] | null>(null);
+  const [editFormData, setEditFormData] = useState({ name: '', description: '' });
   const [newPitchFlow, setNewPitchFlow] = useState({
     name: '',
     description: '',
@@ -113,29 +115,58 @@ export function PitchFlowsPage() {
     },
     {
       id: 'actions',
-      cell: () => (
-        <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon">
+      cell: ({ row }: { row: { original: typeof pitchFlows[0] } }) => (
+        <div className="flex items-center gap-1 justify-end">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-emerald-600 hover:bg-emerald-500/10"
+            onClick={() => toast.success(`Pitch flow "${row.original.name}" geactiveerd voor telemarketeers`)}
+            title="Activeren / Oefenen"
+          >
             <Play className="h-4 w-4" />
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon">
+              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem>
-                <Edit className="mr-2 h-4 w-4" />
-                Edit
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuItem
+                onClick={() => {
+                  setEditingFlow(row.original);
+                  setEditFormData({ name: row.original.name, description: row.original.description || '' });
+                }}
+                className="gap-2 cursor-pointer"
+              >
+                <Edit className="h-3.5 w-3.5 text-muted-foreground" />
+                <span>Bewerken</span>
               </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Copy className="mr-2 h-4 w-4" />
-                Duplicate
+              <DropdownMenuItem
+                onClick={() => {
+                  addPitchFlow({
+                    name: `${row.original.name} (Kopie)`,
+                    description: row.original.description,
+                    steps: row.original.steps,
+                    is_active: true,
+                  });
+                  toast.success('Pitch flow gedupliceerd');
+                }}
+                className="gap-2 cursor-pointer"
+              >
+                <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+                <span>Dupliceren</span>
               </DropdownMenuItem>
-              <DropdownMenuItem className="text-destructive">
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete
+              <DropdownMenuItem
+                onClick={() => {
+                  deletePitchFlow(row.original.id);
+                  toast.success('Pitch flow verwijderd');
+                }}
+                className="gap-2 text-destructive focus:text-destructive cursor-pointer"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                <span>Verwijderen</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -231,6 +262,53 @@ export function PitchFlowsPage() {
       </div>
 
       <DataTable columns={columns} data={filteredPitchFlows} />
+
+      {/* Edit Pitch Flow Modal */}
+      <Dialog open={!!editingFlow} onOpenChange={(open) => !open && setEditingFlow(null)}>
+        <DialogContent className="max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>Pitch flow bewerken</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3.5 py-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Naam van belscript / flow</Label>
+              <Input
+                value={editFormData.name}
+                onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                className="rounded-xl"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Omschrijving / Doelstelling</Label>
+              <Input
+                value={editFormData.description}
+                onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
+                className="rounded-xl"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" className="rounded-full" onClick={() => setEditingFlow(null)}>
+              Annuleren
+            </Button>
+            <Button
+              className="rounded-full"
+              onClick={() => {
+                if (editingFlow) {
+                  updatePitchFlow(editingFlow.id, {
+                    name: editFormData.name.trim() || editingFlow.name,
+                    description: editFormData.description,
+                  });
+                  setEditingFlow(null);
+                  toast.success('Pitch flow bijgewerkt');
+                }
+              }}
+            >
+              Opslaan
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

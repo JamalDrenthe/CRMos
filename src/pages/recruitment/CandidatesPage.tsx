@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,24 +6,33 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { DataTable } from '@/components/common/DataTable';
 import { useRecruitmentStore } from '@/stores/recruitmentStore';
+import { useCRMStore } from '@/stores/crmStore';
 import { useAuthStore } from '@/stores/authStore';
 import { filterRecordsForUser, isCoreEcosystemCompany } from '@/lib/companyAccess';
+import type { Candidate } from '@/types';
 import {
   Plus,
   Search,
-  Filter,
   MoreHorizontal,
   ChevronRight,
   ChevronLeft,
   Building2,
   ShieldCheck,
   Lock,
+  Phone,
+  Mail,
+  Calendar,
+  Sparkles,
+  Trash2,
+  Eye,
+  CheckCircle2,
 } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import {
   Dialog,
@@ -31,21 +40,23 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 
 const stages = [
-  { id: 'new', name: 'New', color: 'bg-gray-500' },
+  { id: 'new', name: 'Nieuw', color: 'bg-gray-500' },
   { id: 'screening', name: 'Screening', color: 'bg-blue-500' },
   { id: 'interview', name: 'Interview', color: 'bg-purple-500' },
-  { id: 'offer', name: 'Offer', color: 'bg-orange-500' },
-  { id: 'hired', name: 'Hired', color: 'bg-green-500' },
-  { id: 'rejected', name: 'Rejected', color: 'bg-red-500' },
+  { id: 'offer', name: 'Aanbod', color: 'bg-orange-500' },
+  { id: 'hired', name: 'Aangenomen', color: 'bg-green-500' },
+  { id: 'rejected', name: 'Afgewezen', color: 'bg-red-500' },
 ];
 
 export function CandidatesPage() {
-  const { candidates, moveCandidate, addCandidate } = useRecruitmentStore();
+  const { candidates, moveCandidate, addCandidate, deleteCandidate } = useRecruitmentStore();
+  const { addActivity, addContact } = useCRMStore();
   const { user, organization, adminCompanyFilter } = useAuthStore();
 
   const isSuperAdmin =
@@ -58,7 +69,18 @@ export function CandidatesPage() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('kanban');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [viewingCandidate, setViewingCandidate] = useState<Candidate | null>(null);
+  const [interviewCandidate, setInterviewCandidate] = useState<Candidate | null>(null);
+  const [interviewData, setInterviewData] = useState({
+    title: 'Sollicitatiegesprek',
+    date: new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0],
+    type: 'meeting',
+    notes: 'Kennismakingsgesprek voor salesrol',
+  });
+
   const [newCandidate, setNewCandidate] = useState({
     first_name: '',
     last_name: '',
@@ -71,15 +93,26 @@ export function CandidatesPage() {
     source: 'Manual',
   });
 
-  const accessibleCandidates = filterRecordsForUser(user, candidates, adminCompanyFilter);
-
-  const filteredCandidates = accessibleCandidates.filter(
-    (candidate) =>
-      candidate.first_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      candidate.last_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      candidate.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      candidate.skills.some((s) => s.toLowerCase().includes(searchQuery.toLowerCase()))
+  const accessibleCandidates = useMemo(
+    () => filterRecordsForUser(user, candidates, adminCompanyFilter),
+    [user, candidates, adminCompanyFilter]
   );
+
+  const filteredCandidates = useMemo(() => {
+    return accessibleCandidates.filter(
+      (candidate) =>
+        candidate.first_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        candidate.last_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        candidate.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (candidate.skills && candidate.skills.some((s) => s.toLowerCase().includes(searchQuery.toLowerCase())))
+    );
+  }, [accessibleCandidates, searchQuery]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredCandidates.length / pageSize));
+  const paginatedCandidates = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredCandidates.slice(start, start + pageSize);
+  }, [filteredCandidates, currentPage, pageSize]);
 
   const handleMoveCandidate = (candidateId: string, direction: 'next' | 'prev') => {
     const candidate = candidates.find((c) => c.id === candidateId);
@@ -90,12 +123,16 @@ export function CandidatesPage() {
       ? Math.min(currentStageIndex + 1, stages.length - 1)
       : Math.max(currentStageIndex - 1, 0);
     
-    const newStage = stages[newStageIndex].id as import('@/types').Candidate['status'];
+    const newStage = stages[newStageIndex].id as Candidate['status'];
     moveCandidate(candidateId, newStage);
-    toast.success(`Moved to ${stages[newStageIndex].name}`);
+    toast.success(`Verplaatst naar ${stages[newStageIndex].name}`);
   };
 
   const handleAddCandidate = () => {
+    if (!newCandidate.first_name.trim() || !newCandidate.last_name.trim()) {
+      toast.error('Vul voor- en achternaam in');
+      return;
+    }
     addCandidate({
       ...newCandidate,
       org_id: organization?.id || 'default_org',
@@ -120,11 +157,55 @@ export function CandidatesPage() {
     toast.success('Kandidaat succesvol toegevoegd');
   };
 
+  // Recruitment to Revenue: Convert candidate to active sales agent / team contact
+  const handlePromoteToSales = (candidate: Candidate) => {
+    moveCandidate(candidate.id, 'hired');
+    addContact({
+      first_name: candidate.first_name,
+      last_name: candidate.last_name,
+      email: candidate.email,
+      phone: candidate.phone,
+      company: userCompanyName,
+      title: 'Sales Agent (Nieuw Aangesteld)',
+      status: 'customer',
+      source: 'Recruitment Funnel',
+      tags: ['Sales Agent', 'Recruited', ...(candidate.skills || [])],
+      custom_fields: { candidate_id: candidate.id },
+      org_id: organization?.id || 'default_org',
+      company_name: userCompanyName,
+      allowed_companies: isCorePartner
+        ? ['CRMos', 'VVC', 'Quantum Initium', 'Logs Rent', 'Djobba', 'Trusting Work']
+        : [userCompanyName],
+    });
+    setViewingCandidate(null);
+    toast.success(
+      `🎉 ${candidate.first_name} ${candidate.last_name} aangenomen en direct opgenomen in de CRMos salespool!`
+    );
+  };
+
+  const handleConfirmScheduleInterview = () => {
+    if (!interviewCandidate) return;
+    addActivity({
+      type: 'meeting',
+      title: `${interviewData.title}: ${interviewCandidate.first_name} ${interviewCandidate.last_name}`,
+      description: interviewData.notes,
+      due_date: interviewData.date,
+      status: 'pending',
+      assigned_to: user?.id || 'admin',
+      related_to: { type: 'contact', id: interviewCandidate.id },
+      company_name: userCompanyName,
+      org_id: organization?.id || 'default_org',
+    });
+    moveCandidate(interviewCandidate.id, 'interview');
+    setInterviewCandidate(null);
+    toast.success(`Interview ingepland voor ${interviewCandidate.first_name} op ${interviewData.date}`);
+  };
+
   const columns = [
     {
       accessorKey: 'name',
-      header: 'Candidate',
-      cell: ({ row }: { row: { original: typeof candidates[0] } }) => (
+      header: 'Kandidaat',
+      cell: ({ row }: { row: { original: Candidate } }) => (
         <div className="flex items-center gap-3">
           <Avatar className="h-10 w-10">
             <AvatarImage src={row.original.avatar} />
@@ -133,7 +214,7 @@ export function CandidatesPage() {
             </AvatarFallback>
           </Avatar>
           <div>
-            <p className="font-medium">
+            <p className="font-semibold text-sm text-foreground">
               {row.original.first_name} {row.original.last_name}
             </p>
             <p className="text-xs text-muted-foreground">{row.original.email}</p>
@@ -143,25 +224,25 @@ export function CandidatesPage() {
     },
     {
       accessorKey: 'status',
-      header: 'Status',
-      cell: ({ row }: { row: { original: typeof candidates[0] } }) => {
+      header: 'Fase',
+      cell: ({ row }: { row: { original: Candidate } }) => {
         const stage = stages.find((s) => s.id === row.original.status);
         return (
           <Badge className={stage?.color.replace('bg-', 'bg-opacity-20 text-') || ''}>
-            {stage?.name}
+            {stage?.name || row.original.status}
           </Badge>
         );
       },
     },
     {
       accessorKey: 'skills',
-      header: 'Skills',
-      cell: ({ row }: { row: { original: typeof candidates[0] } }) => (
+      header: 'Vaardigheden',
+      cell: ({ row }: { row: { original: Candidate } }) => (
         <div className="flex flex-wrap gap-1">
-          {row.original.skills.slice(0, 3).map((skill) => (
+          {row.original.skills?.slice(0, 3).map((skill) => (
             <Badge key={skill} variant="secondary" className="text-xs">{skill}</Badge>
           ))}
-          {row.original.skills.length > 3 && (
+          {row.original.skills && row.original.skills.length > 3 && (
             <Badge variant="secondary" className="text-xs">+{row.original.skills.length - 3}</Badge>
           )}
         </div>
@@ -169,36 +250,39 @@ export function CandidatesPage() {
     },
     {
       accessorKey: 'experience',
-      header: 'Experience',
-      cell: ({ row }: { row: { original: typeof candidates[0] } }) => (
-        <span>{row.original.experience_years} years</span>
+      header: 'Ervaring',
+      cell: ({ row }: { row: { original: Candidate } }) => (
+        <span className="text-xs font-medium">{row.original.experience_years} jaar</span>
       ),
     },
     {
       accessorKey: 'expected_salary',
-      header: 'Expected Salary',
-      cell: ({ row }: { row: { original: typeof candidates[0] } }) => (
+      header: 'Salarisindicatie',
+      cell: ({ row }: { row: { original: Candidate } }) => (
         row.original.expected_salary ? (
-          <span>${row.original.expected_salary.toLocaleString()}</span>
+          <span className="text-xs font-semibold text-foreground">
+            €{row.original.expected_salary.toLocaleString('nl-NL')}
+          </span>
         ) : (
-          <span className="text-muted-foreground">-</span>
+          <span className="text-xs text-muted-foreground">-</span>
         )
       ),
     },
     {
       accessorKey: 'source',
-      header: 'Source',
-      cell: ({ row }: { row: { original: typeof candidates[0] } }) => (
-        <Badge variant="outline">{row.original.source}</Badge>
+      header: 'Bron',
+      cell: ({ row }: { row: { original: Candidate } }) => (
+        <Badge variant="outline" className="text-xs">{row.original.source}</Badge>
       ),
     },
     {
       id: 'actions',
-      cell: ({ row }: { row: { original: typeof candidates[0] } }) => (
-        <div className="flex items-center gap-1">
+      cell: ({ row }: { row: { original: Candidate } }) => (
+        <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
           <Button
             variant="ghost"
             size="icon"
+            className="h-8 w-8"
             onClick={() => handleMoveCandidate(row.original.id, 'prev')}
             disabled={row.original.status === 'new'}
           >
@@ -207,6 +291,7 @@ export function CandidatesPage() {
           <Button
             variant="ghost"
             size="icon"
+            className="h-8 w-8"
             onClick={() => handleMoveCandidate(row.original.id, 'next')}
             disabled={row.original.status === 'rejected'}
           >
@@ -214,15 +299,60 @@ export function CandidatesPage() {
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon">
+              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem>View Profile</DropdownMenuItem>
-              <DropdownMenuItem>Schedule Interview</DropdownMenuItem>
-              <DropdownMenuItem>Send Email</DropdownMenuItem>
-              <DropdownMenuItem className="text-destructive">Reject</DropdownMenuItem>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem
+                onClick={() => setViewingCandidate(row.original)}
+                className="gap-2 cursor-pointer"
+              >
+                <Eye className="h-3.5 w-3.5 text-muted-foreground" />
+                <span>Profiel inzien</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => setInterviewCandidate(row.original)}
+                className="gap-2 cursor-pointer"
+              >
+                <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                <span>Interview inplannen</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => window.open(`mailto:${row.original.email}`)}
+                className="gap-2 cursor-pointer"
+              >
+                <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+                <span>Email versturen</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => handlePromoteToSales(row.original)}
+                className="gap-2 text-emerald-600 focus:text-emerald-600 cursor-pointer"
+              >
+                <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+                <span>Aannemen & Promoveren</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => {
+                  moveCandidate(row.original.id, 'rejected');
+                  toast.info('Kandidaat status gezet op afgewezen');
+                }}
+                className="gap-2 text-amber-600 focus:text-amber-600 cursor-pointer"
+              >
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                <span>Afwijzen</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  deleteCandidate(row.original.id);
+                  toast.success('Kandidaat verwijderd');
+                }}
+                className="gap-2 text-destructive focus:text-destructive cursor-pointer"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                <span>Verwijderen</span>
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -385,24 +515,120 @@ export function CandidatesPage() {
         ))}
       </div>
 
-      <div className="flex items-center gap-4">
-        <div className="relative flex-1 max-w-sm">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search candidates..."
-            className="pl-10"
+            placeholder="Zoek op naam, email of vaardigheid..."
+            className="pl-9 h-10 rounded-xl text-xs"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setCurrentPage(1);
+            }}
           />
         </div>
-        <Button variant="outline">
-          <Filter className="mr-2 h-4 w-4" />
-          Filter
-        </Button>
+
+        <div className="flex items-center gap-2 self-end sm:self-auto">
+          {viewMode === 'list' && (
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground mr-2">
+              <span>Weergave:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="h-8 rounded-lg border border-input bg-background px-2 py-0.5 text-xs text-foreground font-medium"
+              >
+                <option value={25}>25 per pagina</option>
+                <option value={50}>50 per pagina</option>
+                <option value={100}>100 per pagina</option>
+              </select>
+            </div>
+          )}
+
+          <div className="flex rounded-xl bg-muted/60 p-1 border border-border/50">
+            <Button
+              variant={viewMode === 'kanban' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('kanban')}
+              className="h-7 text-xs rounded-lg px-3"
+            >
+              Pipeline Kanban
+            </Button>
+            <Button
+              variant={viewMode === 'list' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('list')}
+              className="h-7 text-xs rounded-lg px-3"
+            >
+              Lijstweergave
+            </Button>
+          </div>
+        </div>
       </div>
 
       {viewMode === 'list' ? (
-        <DataTable columns={columns} data={filteredCandidates} />
+        <div className="space-y-4">
+          <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-xs">
+            <DataTable
+              columns={columns}
+              data={paginatedCandidates}
+              onRowClick={(row) => setViewingCandidate(row)}
+            />
+          </div>
+
+          {/* Pagination Controls */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-muted-foreground px-1">
+            <div>
+              {filteredCandidates.length > 0 ? (
+                <span>
+                  Toont{' '}
+                  <strong className="text-foreground">
+                    {(currentPage - 1) * pageSize + 1}
+                  </strong>{' '}
+                  tot{' '}
+                  <strong className="text-foreground">
+                    {Math.min(currentPage * pageSize, filteredCandidates.length)}
+                  </strong>{' '}
+                  van <strong className="text-foreground">{filteredCandidates.length}</strong>{' '}
+                  kandidaten
+                </span>
+              ) : (
+                <span>0 kandidaten gevonden</span>
+              )}
+            </div>
+
+            {totalPages > 1 && (
+              <div className="flex items-center gap-1.5">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="h-8 px-2.5 rounded-lg text-xs"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5 mr-1" />
+                  Vorige
+                </Button>
+                <span className="px-2 font-medium text-foreground">
+                  {currentPage} / {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="h-8 px-2.5 rounded-lg text-xs"
+                >
+                  Volgende
+                  <ChevronRight className="h-3.5 w-3.5 ml-1" />
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
       ) : (
         <div className="flex gap-4 overflow-x-auto pb-4">
           {stages.filter((s) => s.id !== 'rejected').map((stage) => {
@@ -412,54 +638,65 @@ export function CandidatesPage() {
                 <div className="mb-3 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div className={`h-3 w-3 rounded-full ${stage.color}`} />
-                    <span className="font-medium">{stage.name}</span>
-                    <Badge variant="secondary">{stageCandidates.length}</Badge>
+                    <span className="font-semibold text-sm">{stage.name}</span>
+                    <Badge variant="secondary" className="text-xs px-1.5 py-0">{stageCandidates.length}</Badge>
                   </div>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2.5">
                   {stageCandidates.map((candidate) => (
-                    <Card key={candidate.id} className="cursor-pointer hover:shadow-md transition-shadow">
-                      <CardContent className="p-3">
+                    <Card
+                      key={candidate.id}
+                      onClick={() => setViewingCandidate(candidate)}
+                      className="cursor-pointer hover:border-primary/40 hover:shadow-md transition-all rounded-xl border-border/60"
+                    >
+                      <CardContent className="p-3.5">
                         <div className="flex items-start gap-3">
-                          <Avatar className="h-8 w-8">
+                          <Avatar className="h-9 w-9">
                             <AvatarImage src={candidate.avatar} />
                             <AvatarFallback>
                               {candidate.first_name[0]}{candidate.last_name[0]}
                             </AvatarFallback>
                           </Avatar>
                           <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm truncate">
+                            <p className="font-semibold text-sm truncate">
                               {candidate.first_name} {candidate.last_name}
                             </p>
                             <p className="text-xs text-muted-foreground truncate">{candidate.email}</p>
-                            <div className="mt-2 flex flex-wrap gap-1">
-                              {candidate.skills.slice(0, 2).map((skill) => (
-                                <Badge key={skill} variant="secondary" className="text-[10px]">
-                                  {skill}
-                                </Badge>
-                              ))}
-                            </div>
+                            {candidate.skills && candidate.skills.length > 0 && (
+                              <div className="mt-2 flex flex-wrap gap-1">
+                                {candidate.skills.slice(0, 2).map((skill) => (
+                                  <Badge key={skill} variant="secondary" className="text-[10px] px-1.5 py-0">
+                                    {skill}
+                                  </Badge>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         </div>
-                        <div className="mt-3 flex justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6"
-                            onClick={() => handleMoveCandidate(candidate.id, 'prev')}
-                            disabled={stage.id === 'new'}
-                          >
-                            <ChevronLeft className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6"
-                            onClick={() => handleMoveCandidate(candidate.id, 'next')}
-                            disabled={stage.id === 'hired'}
-                          >
-                            <ChevronRight className="h-3 w-3" />
-                          </Button>
+                        <div className="mt-3 pt-2.5 border-t border-border/40 flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
+                          <span className="text-[11px] font-semibold text-emerald-600">
+                            {candidate.expected_salary ? `€${candidate.expected_salary.toLocaleString('nl-NL')}` : ''}
+                          </span>
+                          <div className="flex gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 rounded-md"
+                              onClick={() => handleMoveCandidate(candidate.id, 'prev')}
+                              disabled={stage.id === 'new'}
+                            >
+                              <ChevronLeft className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 rounded-md"
+                              onClick={() => handleMoveCandidate(candidate.id, 'next')}
+                              disabled={stage.id === 'hired'}
+                            >
+                              <ChevronRight className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
@@ -470,6 +707,219 @@ export function CandidatesPage() {
           })}
         </div>
       )}
+
+      {/* Candidate Profile Modal */}
+      <Dialog open={!!viewingCandidate} onOpenChange={(open) => !open && setViewingCandidate(null)}>
+        <DialogContent className="max-w-lg rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-3">
+              <Avatar className="h-10 w-10">
+                <AvatarImage src={viewingCandidate?.avatar} />
+                <AvatarFallback>
+                  {viewingCandidate?.first_name?.[0]}
+                  {viewingCandidate?.last_name?.[0]}
+                </AvatarFallback>
+              </Avatar>
+              <div>
+                <p className="text-base font-bold">
+                  {viewingCandidate?.first_name} {viewingCandidate?.last_name}
+                </p>
+                <p className="text-xs text-muted-foreground font-normal">{viewingCandidate?.email}</p>
+              </div>
+            </DialogTitle>
+          </DialogHeader>
+          {viewingCandidate && (
+            <div className="space-y-4 py-2 text-sm">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 rounded-xl border border-border/50 bg-card">
+                  <span className="text-[11px] text-muted-foreground block mb-1">Status / Fase</span>
+                  <select
+                    className="w-full rounded-lg border border-input bg-background px-2.5 py-1 text-xs font-semibold"
+                    value={viewingCandidate.status}
+                    onChange={(e) => {
+                      const newStatus = e.target.value as Candidate['status'];
+                      moveCandidate(viewingCandidate.id, newStatus);
+                      setViewingCandidate({ ...viewingCandidate, status: newStatus });
+                      toast.success(`Fase gewijzigd naar ${newStatus}`);
+                    }}
+                  >
+                    {stages.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="p-3 rounded-xl border border-border/50 bg-card">
+                  <span className="text-[11px] text-muted-foreground block mb-1">Salarisindicatie</span>
+                  <p className="font-semibold text-xs text-emerald-600">
+                    {viewingCandidate.expected_salary
+                      ? `€${viewingCandidate.expected_salary.toLocaleString('nl-NL')} per jaar`
+                      : 'Niet gespecificeerd'}
+                  </p>
+                </div>
+                <div className="p-3 rounded-xl border border-border/50 bg-card">
+                  <span className="text-[11px] text-muted-foreground block mb-1">Ervaring</span>
+                  <p className="font-semibold text-xs">{viewingCandidate.experience_years} jaar</p>
+                </div>
+                <div className="p-3 rounded-xl border border-border/50 bg-card">
+                  <span className="text-[11px] text-muted-foreground block mb-1">Locatie</span>
+                  <p className="font-semibold text-xs">{viewingCandidate.location || 'Nederland'}</p>
+                </div>
+              </div>
+
+              {viewingCandidate.skills && viewingCandidate.skills.length > 0 && (
+                <div className="p-3 rounded-xl border border-border/50 bg-card space-y-1.5">
+                  <span className="text-[11px] text-muted-foreground block">Vaardigheden & Competenties</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {viewingCandidate.skills.map((skill) => (
+                      <Badge key={skill} variant="secondary" className="text-xs px-2 py-0.5">
+                        {skill}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Direct Quick Actions Bar */}
+              <div className="flex flex-wrap items-center gap-2 pt-2">
+                {viewingCandidate.phone && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="rounded-full gap-1.5 text-xs text-emerald-600 border-emerald-500/30"
+                    onClick={() => window.open(`tel:${viewingCandidate.phone}`)}
+                  >
+                    <Phone className="h-3.5 w-3.5" />
+                    Bellen ({viewingCandidate.phone})
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full gap-1.5 text-xs"
+                  onClick={() => window.open(`mailto:${viewingCandidate.email}`)}
+                >
+                  <Mail className="h-3.5 w-3.5" />
+                  Email sturen
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full gap-1.5 text-xs"
+                  onClick={() => {
+                    const c = viewingCandidate;
+                    setViewingCandidate(null);
+                    setInterviewCandidate(c);
+                  }}
+                >
+                  <Calendar className="h-3.5 w-3.5" />
+                  Interview plannen
+                </Button>
+              </div>
+
+              {/* Recruitment to Revenue Banner */}
+              <div className="p-3.5 rounded-xl bg-gradient-to-r from-emerald-500/10 via-primary/5 to-transparent border border-emerald-500/30 flex items-center justify-between gap-3">
+                <div className="space-y-0.5">
+                  <p className="font-bold text-xs flex items-center gap-1.5 text-foreground">
+                    <Sparkles className="h-4 w-4 text-amber-500 shrink-0" />
+                    Recruitment to Revenue (Conversie)
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Neem deze kandidaat aan en converteer direct naar een actieve sales agent binnen CRMos.
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  className="rounded-full shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
+                  onClick={() => handlePromoteToSales(viewingCandidate)}
+                >
+                  Aannemen
+                </Button>
+              </div>
+
+              <div className="pt-2 flex items-center justify-between gap-2 border-t border-border/60">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/30"
+                  onClick={() => {
+                    deleteCandidate(viewingCandidate.id);
+                    setViewingCandidate(null);
+                    toast.success('Kandidaat verwijderd');
+                  }}
+                >
+                  <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                  Verwijderen
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full"
+                  onClick={() => setViewingCandidate(null)}
+                >
+                  Sluiten
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Schedule Interview Modal */}
+      <Dialog open={!!interviewCandidate} onOpenChange={(open) => !open && setInterviewCandidate(null)}>
+        <DialogContent className="max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5 text-primary" />
+              <span>Interview Plannen</span>
+            </DialogTitle>
+          </DialogHeader>
+          {interviewCandidate && (
+            <div className="space-y-3.5 py-3">
+              <p className="text-xs text-muted-foreground">
+                Plan een sollicitatiegesprek in met{' '}
+                <strong className="text-foreground">
+                  {interviewCandidate.first_name} {interviewCandidate.last_name}
+                </strong>
+                . Dit gesprek wordt automatisch vastgelegd in je CRMos agenda en activiteiten.
+              </p>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Titel van afspraak</Label>
+                <Input
+                  value={interviewData.title}
+                  onChange={(e) => setInterviewData({ ...interviewData, title: e.target.value })}
+                  className="rounded-xl"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Datum van gesprek</Label>
+                <Input
+                  type="date"
+                  value={interviewData.date}
+                  onChange={(e) => setInterviewData({ ...interviewData, date: e.target.value })}
+                  className="rounded-xl"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Notities / Agenda</Label>
+                <Input
+                  value={interviewData.notes}
+                  onChange={(e) => setInterviewData({ ...interviewData, notes: e.target.value })}
+                  className="rounded-xl"
+                  placeholder="Bijv. Eerste screening sales vaardigheden"
+                />
+              </div>
+              <DialogFooter className="gap-2 sm:gap-0 pt-2">
+                <Button variant="outline" className="rounded-full" onClick={() => setInterviewCandidate(null)}>
+                  Annuleren
+                </Button>
+                <Button className="rounded-full" onClick={handleConfirmScheduleInterview}>
+                  Interview Bevestigen
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

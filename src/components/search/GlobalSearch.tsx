@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, User, Briefcase, DollarSign, Building2 } from 'lucide-react';
+import { Search, User, Briefcase, Euro, Building2 } from 'lucide-react';
 import { useAppStore } from '@/stores/appStore';
 import type { Contact, Job, Deal, Company } from '@/types';
 
@@ -96,7 +96,7 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
           type: 'deal',
           item: deal,
           title: deal.name,
-          subtitle: `$${deal.value.toLocaleString()} • ${deal.stage}`,
+          subtitle: `€${deal.value.toLocaleString('nl-NL')} • ${deal.stage}`,
         });
       }
     });
@@ -111,7 +111,7 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
       case 'job':
         return <Briefcase className="w-4 h-4" />;
       case 'deal':
-        return <DollarSign className="w-4 h-4" />;
+        return <Euro className="w-4 h-4" />;
       case 'company':
         return <Building2 className="w-4 h-4" />;
     }

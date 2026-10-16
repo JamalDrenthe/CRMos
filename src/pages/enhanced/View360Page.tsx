@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useCRMStore } from '@/stores/crmStore';
 import { Contact360View } from '@/components/360-view/Contact360View';
-import { Search, Star, TrendingUp, DollarSign, Phone, Mail, Calendar } from 'lucide-react';
+import { Search, Star, TrendingUp, Euro, Phone, Mail, Calendar } from 'lucide-react';
 
 export function View360Page() {
   const { contacts, getContact360 } = useCRMStore();
@@ -67,9 +67,9 @@ export function View360Page() {
 
                 <div className="mt-4 grid grid-cols-2 gap-4">
                   <div className="flex items-center gap-2">
-                    <DollarSign className="h-4 w-4 text-green-500" />
+                    <Euro className="h-4 w-4 text-green-500" />
                     <div>
-                      <p className="text-sm font-medium">${contact360?.lifetime_value.toLocaleString() || 0}</p>
+                      <p className="text-sm font-medium">€{(contact360?.lifetime_value || 0).toLocaleString()}</p>
                       <p className="text-xs text-muted-foreground">Lifetime Value</p>
                     </div>
                   </div>

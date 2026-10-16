@@ -16,7 +16,7 @@ import {
   Award,
   Flame,
   Users,
-  DollarSign,
+  Euro,
   Phone,
   Briefcase,
 } from 'lucide-react';
@@ -85,7 +85,7 @@ export function GamificationPage() {
                 </div>
                 <div className="text-center">
                   <p className="text-3xl font-bold text-green-500">
-                    ${userProfile.total_commission_earned.toLocaleString()}
+                    €{userProfile.total_commission_earned.toLocaleString()}
                   </p>
                   <p className="text-sm text-muted-foreground">Commission Earned</p>
                 </div>
@@ -139,7 +139,7 @@ export function GamificationPage() {
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
                 <div className="rounded-full bg-green-500/10 p-3">
-                  <DollarSign className="h-5 w-5 text-green-500" />
+                  <Euro className="h-5 w-5 text-green-500" />
                 </div>
                 <div>
                   <p className="text-2xl font-bold">{(userProfile.commission_rate * 100).toFixed(0)}%</p>

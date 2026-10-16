@@ -40,7 +40,7 @@ import {
   MessageSquare,
   Calendar,
   FileText,
-  DollarSign,
+  Euro,
   TrendingUp,
   Clock,
   Edit,
@@ -293,7 +293,7 @@ export function Contact360View({ contactId, isOpen, onClose }: Contact360ViewPro
       case 'meeting': return <Calendar className="h-4 w-4" />;
       case 'note': return <FileText className="h-4 w-4" />;
       case 'whatsapp': return <MessageSquare className="h-4 w-4" />;
-      case 'deal_created': return <DollarSign className="h-4 w-4" />;
+      case 'deal_created': return <Euro className="h-4 w-4" />;
       case 'deal_won': return <TrendingUp className="h-4 w-4" />;
       default: return <Clock className="h-4 w-4" />;
     }
@@ -368,7 +368,7 @@ export function Contact360View({ contactId, isOpen, onClose }: Contact360ViewPro
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-56 rounded-xl">
                     <DropdownMenuItem onClick={() => setIsNewDealModalOpen(true)} className="gap-2 cursor-pointer">
-                      <DollarSign className="h-4 w-4 text-emerald-500" />
+                      <Euro className="h-4 w-4 text-emerald-500" />
                       <span>Nieuwe Deal Koppelen</span>
                     </DropdownMenuItem>
                     <DropdownMenuItem
@@ -581,7 +581,7 @@ export function Contact360View({ contactId, isOpen, onClose }: Contact360ViewPro
                       </div>
 
                       <div className="flex items-center gap-3 p-3 rounded-xl bg-amber-500/5 border border-amber-500/10">
-                        <DollarSign className="h-5 w-5 text-amber-500 shrink-0" />
+                        <Euro className="h-5 w-5 text-amber-500 shrink-0" />
                         <div>
                           <p className="text-base font-bold text-foreground">
                             €{(contact.lifetime_value || 0).toLocaleString('nl-NL')}
@@ -1198,7 +1198,7 @@ export function Contact360View({ contactId, isOpen, onClose }: Contact360ViewPro
         <DialogContent className="sm:max-w-md max-w-[95vw] rounded-2xl">
           <DialogHeader>
             <DialogTitle className="text-base font-bold flex items-center gap-2">
-              <DollarSign className="h-4 w-4 text-emerald-500" />
+              <Euro className="h-4 w-4 text-emerald-500" />
               <span>Nieuwe Deal koppelen aan {contact.first_name}</span>
             </DialogTitle>
           </DialogHeader>

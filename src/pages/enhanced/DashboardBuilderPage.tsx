@@ -14,7 +14,7 @@ import {
   Briefcase,
   Target,
   Phone,
-  DollarSign,
+  Euro,
   Activity,
   GripVertical,
   X,
@@ -38,7 +38,7 @@ const widgetTypes = [
   { type: 'tasks', name: 'My Tasks', icon: Target },
   { type: 'calls', name: 'Call Stats', icon: Phone },
   { type: 'leaderboard', name: 'Leaderboard', icon: Users },
-  { type: 'performance', name: 'Performance', icon: DollarSign },
+  { type: 'performance', name: 'Performance', icon: Euro },
 ];
 
 export function DashboardBuilderPage() {
@@ -55,7 +55,7 @@ export function DashboardBuilderPage() {
           <div className="grid grid-cols-2 gap-4">
             <div className="rounded-lg bg-primary/5 p-3">
               <p className="text-sm text-muted-foreground">Pipeline</p>
-              <p className="text-xl font-bold">${deals.reduce((sum, d) => sum + d.value, 0).toLocaleString()}</p>
+              <p className="text-xl font-bold">€{deals.reduce((sum, d) => sum + d.value, 0).toLocaleString()}</p>
             </div>
             <div className="rounded-lg bg-green-500/5 p-3">
               <p className="text-sm text-muted-foreground">Contacts</p>
