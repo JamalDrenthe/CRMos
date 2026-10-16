@@ -5,14 +5,18 @@
  */
 import { initializeApp } from 'firebase/app';
 import {
+  getAuth,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signInAnonymously,
+} from 'firebase/auth';
+import {
   getFirestore,
   collection,
   doc,
   setDoc,
   getDocs,
   deleteDoc,
-  query,
-  where,
   serverTimestamp,
 } from 'firebase/firestore';
 import fs from 'fs';
@@ -43,14 +47,36 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
 const db = getFirestore(app);
 
 const token = process.argv[2] || process.env.HUBSPOT_ACCESS_TOKEN || envVars.HUBSPOT_ACCESS_TOKEN;
 const orgIdArg = process.argv[3] || 'default_org';
 
 if (!token) {
-  console.error('Fout: Geef een HubSpot Private App Access Token op: node scripts/sync-hubspot.mjs <pat-eu1-...>');
+  console.error('Fout: Geef een HubSpot Service Key of Private App Token op: node scripts/sync-hubspot.mjs <token>');
   process.exit(1);
+}
+
+async function authenticateFirebase() {
+  const syncEmail = process.env.CRMOS_SYNC_EMAIL || 'hubspot-sync@crmos.one';
+  const syncPass = process.env.CRMOS_SYNC_PASS || 'CrmosHubSpotSync2026!';
+  try {
+    await signInWithEmailAndPassword(auth, syncEmail, syncPass);
+    console.log(`Geauthenticeerd bij Firebase als ${syncEmail}`);
+  } catch (err) {
+    try {
+      await createUserWithEmailAndPassword(auth, syncEmail, syncPass);
+      console.log(`Service-account aangemaakt en ingelogd bij Firebase als ${syncEmail}`);
+    } catch {
+      try {
+        await signInAnonymously(auth);
+        console.log('Anoniem geauthenticeerd bij Firebase');
+      } catch (anonErr) {
+        console.warn('Waarschuwing: Kon niet automatisch inloggen bij Firebase Auth:', anonErr.message);
+      }
+    }
+  }
 }
 
 async function fetchHubSpot(endpoint) {
@@ -130,8 +156,77 @@ function mapDealStage(hsStage) {
   return { stage: 'lead', probability: 10 };
 }
 
+async function purgeMockDataFromFirestore() {
+  const mockIds = new Set(['1', '2', '3', '4', '5', '6', '7', '8']);
+  const mockEmails = new Set([
+    'jan.devries@techcorp.nl',
+    'lisa@innovate.io',
+    'p.bakker@globaltrade.com',
+    'sophie.jansen@startup.nl',
+    'm.visser@enterprise.nl',
+  ]);
+  const mockNames = new Set([
+    'Jan de Vries',
+    'Lisa van den Berg',
+    'Pieter Bakker',
+    'Sophie Jansen',
+    'Mark Visser',
+    'TechCorp B.V.',
+    'Innovate.io',
+    'GlobalTrade International',
+    'StartupNL',
+    'Enterprise Solutions B.V.',
+    'TechCorp Enterprise License',
+    'Innovate.io Cloud Migration',
+    'GlobalTrade CRM Implementation',
+    'StartupNL Starter Package',
+    'Enterprise Annual Contract',
+  ]);
+
+  const cols = [
+    'crm_contacts',
+    'crm_companies',
+    'crm_deals',
+    'crm_activities',
+    'crm_candidates',
+    'crm_jobs',
+    'crm_calls',
+    'crm_campaigns',
+    'crm_products',
+  ];
+
+  let deleted = 0;
+  for (const colName of cols) {
+    try {
+      const snap = await getDocs(collection(db, colName));
+      for (const d of snap.docs) {
+        const data = d.data();
+        const fullName = `${data.first_name || ''} ${data.last_name || ''}`.trim();
+        const isMock =
+          mockIds.has(d.id) ||
+          mockIds.has(String(data.id || '')) ||
+          mockEmails.has(String(data.email || '').toLowerCase()) ||
+          mockNames.has(String(data.name || '')) ||
+          mockNames.has(fullName) ||
+          data.is_mock === true;
+        if (isMock) {
+          await deleteDoc(doc(db, colName, d.id));
+          deleted++;
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+  if (deleted > 0) {
+    console.log(`   -> ${deleted} oude mock/demo records gewist uit Firestore.`);
+  }
+}
+
 async function run() {
   console.log('=== CRMos HubSpot -> Firestore Synchronisatie Gestart ===');
+  await authenticateFirebase();
+  await purgeMockDataFromFirestore();
 
   // Discover all org_ids in users/organizations so all active user sessions see the imported data
   const orgIds = new Set([orgIdArg, 'default_org', 'crmosone-dev', 'org1']);
@@ -355,6 +450,103 @@ async function run() {
         { merge: true }
       );
     }
+  }
+
+  // 4. Calls (optional scope)
+  try {
+    console.log('4. Gesprekken (Calls) ophalen uit HubSpot...');
+    const hsCalls = await fetchAllObjects(
+      'calls',
+      [
+        'hs_call_title',
+        'hs_call_body',
+        'hs_call_duration',
+        'hs_call_direction',
+        'hs_call_status',
+        'hs_call_to_number',
+        'hs_call_from_number',
+        'hs_timestamp',
+        'hs_createdate',
+      ],
+      ['contacts']
+    );
+    console.log(`   -> ${hsCalls.length} gesprekken gevonden in HubSpot.`);
+    for (const item of hsCalls) {
+      const hsId = String(item.id);
+      const p = item.properties || {};
+      const rawContId = item.associations?.contacts?.results?.[0]?.id;
+      const contactName = (rawContId && contactNameMap.get(String(rawContId))) || 'HubSpot Contact';
+      const durationSec = p.hs_call_duration ? Math.round(Number(p.hs_call_duration) / 1000) : 0;
+
+      for (const orgId of targetOrgIds) {
+        const callDocId = orgId === 'default_org' ? `hs_call_${hsId}` : `hs_call_${orgId}_${hsId}`;
+        await setDoc(
+          doc(db, 'crm_calls', callDocId),
+          {
+            id: callDocId,
+            org_id: orgId,
+            contact_id: rawContId ? `hs_cont_${rawContId}` : '',
+            contact_name: contactName,
+            contact_phone: p.hs_call_to_number || p.hs_call_from_number || '',
+            agent_id: 'user1',
+            agent_name: 'HubSpot Sync',
+            direction: (p.hs_call_direction || '').toUpperCase() === 'INBOUND' ? 'inbound' : 'outbound',
+            status: 'completed',
+            duration: durationSec,
+            notes: stripHtml(p.hs_call_body),
+            outcome: p.hs_call_title || 'HubSpot Call',
+            started_at: p.hs_timestamp || p.hs_createdate || new Date().toISOString(),
+            ended_at: p.hs_timestamp || p.hs_createdate || new Date().toISOString(),
+            _firestore_timestamp: serverTimestamp(),
+          },
+          { merge: true }
+        );
+      }
+    }
+  } catch (e) {
+    console.log('   -> Calls overgeslagen (geen call-scope of leeg):', e.message);
+  }
+
+  // 5. Products (optional scope)
+  try {
+    console.log('5. Producten ophalen uit HubSpot...');
+    const hsProducts = await fetchAllObjects('products', [
+      'name',
+      'description',
+      'price',
+      'hs_sku',
+      'hs_cost_of_goods_sold',
+      'recurringbillingfrequency',
+      'createdate',
+    ]);
+    console.log(`   -> ${hsProducts.length} producten gevonden in HubSpot.`);
+    for (const item of hsProducts) {
+      const hsId = String(item.id);
+      const p = item.properties || {};
+      for (const orgId of targetOrgIds) {
+        const prodDocId = orgId === 'default_org' ? `hs_prod_${hsId}` : `hs_prod_${orgId}_${hsId}`;
+        await setDoc(
+          doc(db, 'crm_products', prodDocId),
+          {
+            id: prodDocId,
+            org_id: orgId,
+            name: p.name || `Product #${hsId}`,
+            sku: p.hs_sku || `HS-${hsId}`,
+            category: 'HubSpot Catalog',
+            price: p.price ? Number(p.price) : 0,
+            currency: 'EUR',
+            unit: p.recurringbillingfrequency ? `per ${p.recurringbillingfrequency}` : 'eenmalig',
+            active: true,
+            description: stripHtml(p.description),
+            created_at: p.createdate || new Date().toISOString(),
+            _firestore_timestamp: serverTimestamp(),
+          },
+          { merge: true }
+        );
+      }
+    }
+  } catch (e) {
+    console.log('   -> Producten overgeslagen (geen product-scope of leeg):', e.message);
   }
 
   console.log('=== HubSpot Synchronisatie Voltooid! ===');
