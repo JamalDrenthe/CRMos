@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { D2DAddressPin, D2DPinStatus, D2DVisitLog } from '@/types';
+import type { D2DAddressPin, D2DPinStatus, D2DVisitLog, Territory } from '@/types';
 import {
   saveD2DPinToFirestore,
   deleteD2DPinFromFirestore,
@@ -354,7 +354,8 @@ interface D2DState {
   ) => void;
 
   bulkImportPins: (pins: D2DAddressPin[]) => void;
-  fetchAddressesFromPDOK: (postcode: string, city?: string) => Promise<{ success: boolean; count: number }>;
+  fetchAddressesFromPDOK: (postcode: string, city?: string, territoryId?: string) => Promise<{ success: boolean; count: number }>;
+  autoSyncKadasterTerritory: (territory: Territory) => Promise<{ success: boolean; count: number; alreadyPopulated: boolean }>;
 
   // Firestore Sync
   syncWithFirestore: (orgId: string) => () => void;
@@ -473,7 +474,7 @@ export const useD2DStore = create<D2DState>()(
         }
       },
 
-      fetchAddressesFromPDOK: async (postcodePrefix, city) => {
+      fetchAddressesFromPDOK: async (postcodePrefix, city, territoryId) => {
         set({ isImporting: true });
         try {
           const user = useAuthStore.getState().user;
@@ -512,6 +513,7 @@ export const useD2DStore = create<D2DState>()(
                         id: `pdok_${doc.id}`,
                         org_id: orgId,
                         company_name: user?.company_name || 'CRMos',
+                        territory_id: territoryId,
                         street: details.straatnaam || doc.weergavenaam.split(' ')[0] || 'Onbekend',
                         house_number: String(details.huisnummer || ''),
                         house_number_addition: details.huisnummertoevoeging || undefined,
@@ -545,6 +547,28 @@ export const useD2DStore = create<D2DState>()(
           set({ isImporting: false });
           return { success: false, count: 0 };
         }
+      },
+
+      autoSyncKadasterTerritory: async (territory) => {
+        if (!territory) return { success: false, count: 0, alreadyPopulated: false };
+        const existingPins = get().pins.filter((p) => p.territory_id === territory.id);
+        if (existingPins.length >= 8) {
+          return { success: true, count: existingPins.length, alreadyPopulated: true };
+        }
+
+        const prefixes = territory.postcode_prefixes && territory.postcode_prefixes.length > 0
+          ? territory.postcode_prefixes
+          : [territory.name];
+
+        let totalImported = 0;
+        for (const prefix of prefixes.slice(0, 3)) {
+          const res = await get().fetchAddressesFromPDOK(prefix, territory.description, territory.id);
+          if (res.success) {
+            totalImported += res.count;
+          }
+        }
+
+        return { success: true, count: totalImported, alreadyPopulated: false };
       },
 
       syncWithFirestore: (orgId) => {

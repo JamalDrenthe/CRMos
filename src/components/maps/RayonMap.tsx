@@ -15,7 +15,15 @@ import {
   RotateCcw,
   Sparkles,
   ExternalLink,
+  Eye,
+  Navigation,
 } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 interface RayonMapProps {
   territory?: Territory | null;
@@ -49,6 +57,7 @@ export function RayonMap({
   const [mapLoaded, setMapLoaded] = useState(false);
   const [canvasZoom, setCanvasZoom] = useState(1);
   const [canvasPan, setCanvasPan] = useState({ x: 0, y: 0 });
+  const [showGoogleStreetView, setShowGoogleStreetView] = useState(false);
 
   // Select pins to display
   const activePins = useMemo(() => {
@@ -452,8 +461,76 @@ export function RayonMap({
               🔴 Geen Int.
             </button>
           </div>
+
+          {/* Google Street View & Pand Inspectie Knop */}
+          <button
+            type="button"
+            onClick={() => setShowGoogleStreetView(true)}
+            className="w-full py-1.5 px-2.5 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 text-xs font-semibold flex items-center justify-center gap-1.5 border border-blue-500/30 transition-colors"
+          >
+            <Eye className="h-3.5 w-3.5" />
+            <span>Google Street View & Satelliet (360°)</span>
+          </button>
         </div>
       )}
+
+      {/* Google Street View & Satelliet Modal */}
+      <Dialog open={showGoogleStreetView} onOpenChange={setShowGoogleStreetView}>
+        <DialogContent className="max-w-2xl rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <Eye className="h-5 w-5 text-blue-500" />
+              <span>Google Street View & Satelliet Pandinspectie</span>
+            </DialogTitle>
+          </DialogHeader>
+          {activePin && (
+            <div className="space-y-3.5 pt-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs text-muted-foreground">
+                <span className="font-semibold text-foreground text-sm">
+                  {activePin.street} {activePin.house_number}{activePin.house_number_addition || ''}, {activePin.postal_code} {activePin.city}
+                </span>
+                <span>Coördinaten: {activePin.latitude.toFixed(4)}, {activePin.longitude.toFixed(4)}</span>
+              </div>
+
+              {/* Embedded Google Maps Satelliet & Pand Viewer */}
+              <div className="relative w-full h-80 rounded-2xl border overflow-hidden shadow-inner bg-muted">
+                <iframe
+                  title="Google Maps Satellite"
+                  src={`https://maps.google.com/maps?q=${activePin.latitude},${activePin.longitude}&t=k&z=19&ie=UTF8&iwloc=&output=embed`}
+                  className="w-full h-full border-0"
+                  loading="lazy"
+                />
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t">
+                <span className="text-[11px] text-muted-foreground">
+                  Kadaster coördinaten gekoppeld aan Google Maps Street View
+                </span>
+                <div className="flex items-center gap-2">
+                  <a
+                    href={`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${activePin.latitude},${activePin.longitude}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium shadow-sm transition-colors"
+                  >
+                    <span>Open 360° Street View</span>
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                  <a
+                    href={`https://www.google.com/maps/dir/?api=1&destination=${activePin.latitude},${activePin.longitude}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-input hover:bg-accent text-xs font-medium transition-colors"
+                  >
+                    <Navigation className="h-3.5 w-3.5" />
+                    <span>Routebeschrijving</span>
+                  </a>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

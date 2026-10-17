@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -42,9 +42,10 @@ import { useD2DStore } from '@/stores/d2dStore';
 
 export function TerritoriesPage() {
   const { territories, addTerritory, updateTerritory, deleteTerritory } = useEnhancedStore();
-  const { pins: d2dPins, fetchAddressesFromPDOK, isImporting } = useD2DStore();
+  const { pins: d2dPins, fetchAddressesFromPDOK, autoSyncKadasterTerritory, isImporting } = useD2DStore();
   const [viewMode, setViewMode] = useState<'map' | 'table'>('map');
   const [selectedTerritoryIdForMapTab, setSelectedTerritoryIdForMapTab] = useState<string>('all');
+  const [autoKadasterSync, setAutoKadasterSync] = useState<boolean>(true);
   const [pdokPostcode, setPdokPostcode] = useState('');
   const [isPdokDialogOpen, setIsPdokDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -55,6 +56,22 @@ export function TerritoriesPage() {
     color: '#3b82f6',
     postcode_prefixes: '',
   });
+
+  // Automatisch Kadaster BAG adressen ophalen als standaard voor de actieve regio's
+  useEffect(() => {
+    if (!autoKadasterSync) return;
+
+    if (selectedTerritoryIdForMapTab === 'all') {
+      for (const t of territories.slice(0, 3)) {
+        autoSyncKadasterTerritory(t);
+      }
+    } else {
+      const activeTerr = territories.find((t) => t.id === selectedTerritoryIdForMapTab);
+      if (activeTerr) {
+        autoSyncKadasterTerritory(activeTerr);
+      }
+    }
+  }, [selectedTerritoryIdForMapTab, territories, autoKadasterSync, autoSyncKadasterTerritory]);
 
   // Modal states
   const [selectedTerritoryForMap, setSelectedTerritoryForMap] = useState<Territory | null>(null);
@@ -92,7 +109,8 @@ export function TerritoriesPage() {
       ? newTerritory.postcode_prefixes.split(',').map((p) => p.trim()).filter(Boolean)
       : [];
 
-    addTerritory({
+    const createdTerr: Territory = {
+      id: `terr_${Date.now()}`,
       name: newTerritory.name,
       description: newTerritory.description,
       color: newTerritory.color,
@@ -105,10 +123,17 @@ export function TerritoriesPage() {
         revenue: 0,
         last_updated: new Date().toISOString(),
       },
-    });
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    addTerritory(createdTerr);
+    if (autoKadasterSync) {
+      autoSyncKadasterTerritory(createdTerr);
+    }
     setIsAddDialogOpen(false);
     setNewTerritory({ name: '', description: '', color: '#3b82f6', postcode_prefixes: '' });
-    toast.success('Regio succesvol aangemaakt');
+    toast.success('Regio succesvol aangemaakt (Kadaster BAG adressen gekoppeld)');
   };
 
   const openEditModal = (territory: Territory) => {
@@ -295,6 +320,24 @@ export function TerritoriesPage() {
               <Table className="h-3.5 w-3.5" />
               Tabeloverzicht
             </Button>
+          </div>
+
+          {/* Kadaster BAG Default Status Badge */}
+          <div
+            className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-blue-500/10 border border-blue-500/25 text-xs text-blue-600 dark:text-blue-400 font-medium cursor-pointer shadow-sm hover:bg-blue-500/15 transition-all"
+            title="Kadaster BAG adresgegevens worden standaard automatisch opgehaald voor elk rayon"
+            onClick={() => {
+              setAutoKadasterSync((prev) => {
+                toast.info(!prev ? 'Automatische Kadaster BAG synchronisatie ingeschakeld' : 'Kadaster BAG synchronisatie gepauzeerd');
+                return !prev;
+              });
+            }}
+          >
+            <span className="relative flex h-2 w-2">
+              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${autoKadasterSync ? 'bg-emerald-400 opacity-75' : 'bg-slate-400'}`}></span>
+              <span className={`relative inline-flex rounded-full h-2 w-2 ${autoKadasterSync ? 'bg-emerald-500' : 'bg-slate-500'}`}></span>
+            </span>
+            <span>Kadaster BAG: {autoKadasterSync ? 'Standaard Actief' : 'Gepauzeerd'}</span>
           </div>
 
           {/* Import Kadaster PDOK Button */}
