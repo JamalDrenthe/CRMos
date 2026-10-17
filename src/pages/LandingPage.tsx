@@ -16,6 +16,7 @@ import {
   Layers,
   MapPin,
   TrendingUp,
+  Database,
 } from 'lucide-react';
 
 export function LandingPage() {
@@ -238,9 +239,9 @@ export function LandingPage() {
             </div>
 
             {/* ================================================================= */}
-            {/* 3 DISCIPLINES QUICK PILLARS BANNER */}
+            {/* 4 DISCIPLINES & DATA INTELLIGENCE QUICK PILLARS BANNER */}
             {/* ===================================================================== */}
-            <div className="mt-14 max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-4 text-left">
+            <div className="mt-14 max-w-6xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-left">
               <div
                 onClick={() => navigate('/solutions?tab=field-sales')}
                 className="p-5 rounded-2xl border border-border/70 bg-card/60 backdrop-blur-md hover:border-primary/50 transition-all cursor-pointer group space-y-2"
@@ -292,6 +293,24 @@ export function LandingPage() {
                 <h4 className="font-bold text-base text-foreground">Recruitment &amp; ATS</h4>
                 <p className="text-xs text-muted-foreground leading-relaxed">
                   Kandidaatpijplijnen, CV-beheer, vacatures en naadloze onboarding naar actieve verkoopteams.
+                </p>
+              </div>
+
+              <div
+                onClick={() => navigate('/data-intelligence')}
+                className="p-5 rounded-2xl border border-primary/40 bg-primary/5 backdrop-blur-md hover:border-primary transition-all cursor-pointer group space-y-2"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="h-9 w-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold">
+                    <Database className="h-4 w-4" />
+                  </div>
+                  <span className="text-[11px] font-semibold text-primary transition-colors flex items-center gap-0.5">
+                    Data Intelligence <ChevronRight className="h-3 w-3" />
+                  </span>
+                </div>
+                <h4 className="font-bold text-base text-foreground">2.5M+ Panden &amp; Geodata</h4>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Kadaster BAG data, 0% woonhuizen en slimme OSRM looproutes. Volledig inbegrepen.
                 </p>
               </div>
             </div>

@@ -39,6 +39,7 @@ const PricingPage = lazy(() => import('@/pages/PricingPage').then((m) => ({ defa
 const SolutionsPage = lazy(() => import('@/pages/SolutionsPage').then((m) => ({ default: m.SolutionsPage })));
 const ComparePage = lazy(() => import('@/pages/ComparePage').then((m) => ({ default: m.ComparePage })));
 const RegisterPage = lazy(() => import('@/pages/RegisterPage').then((m) => ({ default: m.RegisterPage })));
+const DataIntelligencePage = lazy(() => import('@/pages/DataIntelligencePage').then((m) => ({ default: m.DataIntelligencePage })));
 
 function PageLoader() {
   return (
@@ -289,6 +290,9 @@ function App() {
           />
           <Route path="/landing" element={<LandingPage />} />
           <Route path="/solutions" element={<SolutionsPage />} />
+          <Route path="/data-intelligence" element={<DataIntelligencePage />} />
+          <Route path="/data-engine" element={<Navigate to="/data-intelligence" replace />} />
+          <Route path="/geodata" element={<Navigate to="/data-intelligence" replace />} />
           <Route path="/compare" element={<ComparePage />} />
           <Route path="/pricing" element={<PricingPage />} />
           <Route path="/login" element={<LoginPage />} />

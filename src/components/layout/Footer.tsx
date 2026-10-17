@@ -87,6 +87,9 @@ export function Footer() {
                 <Link to="/solutions?tab=automation" className="hover:text-foreground transition-colors">Sales Automation</Link>
               </li>
               <li>
+                <Link to="/data-intelligence" className="hover:text-foreground transition-colors font-medium text-foreground/90">Data Intelligence &amp; Geodata</Link>
+              </li>
+              <li>
                 <Link to="/solutions" className="hover:text-foreground transition-colors">Alle Oplossingen</Link>
               </li>
             </ul>

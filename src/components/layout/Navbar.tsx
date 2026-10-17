@@ -47,6 +47,14 @@ export function Navbar() {
             Oplossingen
           </Link>
           <Link
+            to="/data-intelligence"
+            className={`transition-colors hover:text-foreground ${
+              isCurrent('/data-intelligence') ? 'text-foreground font-semibold' : 'text-muted-foreground'
+            }`}
+          >
+            Data Intelligence
+          </Link>
+          <Link
             to="/compare"
             className={`transition-colors hover:text-foreground ${
               isCurrent('/compare') ? 'text-foreground font-semibold' : 'text-muted-foreground'
@@ -146,6 +154,13 @@ export function Navbar() {
               className="py-1 text-muted-foreground hover:text-foreground transition-colors"
             >
               Oplossingen
+            </Link>
+            <Link
+              to="/data-intelligence"
+              onClick={() => setMobileMenuOpen(false)}
+              className="py-1 text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Data Intelligence
             </Link>
             <Link
               to="/compare"
