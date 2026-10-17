@@ -9,6 +9,31 @@ export interface OpenMapStylePreset {
   category: 'standard' | 'minimal' | 'bright';
 }
 
+export const CARTO_VOYAGER_STYLE = {
+  version: 8,
+  sources: {
+    'carto-voyager': {
+      type: 'raster',
+      tiles: [
+        'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+        'https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+        'https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+      ],
+      tileSize: 256,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions" target="_blank">CARTO</a>',
+    },
+  },
+  layers: [
+    {
+      id: 'carto-voyager-layer',
+      type: 'raster',
+      source: 'carto-voyager',
+      minzoom: 0,
+      maxzoom: 20,
+    },
+  ],
+};
+
 export const OPEN_FREE_MAP_STYLES: OpenMapStylePreset[] = [
   {
     id: 'liberty',
@@ -30,6 +55,13 @@ export const OPEN_FREE_MAP_STYLES: OpenMapStylePreset[] = [
     url: 'https://tiles.openfreemap.org/styles/bright',
     description: 'Hoge verzadiging en duidelijke topografie voor buiteninspectie en daglichtnavigatie.',
     category: 'bright',
+  },
+  {
+    id: 'voyager',
+    name: 'Universeel (Carto Voyager Raster)',
+    url: 'carto-voyager',
+    description: 'Bewezen snelle cartografie. Laadt altijd direct op elk mobiel netwerk.',
+    category: 'standard',
   },
 ];
 

@@ -1,6 +1,17 @@
 import { useEffect, useRef, useState, useMemo } from 'react';
 import * as maplibregl from 'maplibre-gl';
+import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import 'maplibre-gl/dist/maplibre-gl.css';
+
+// Configure Vite Web Worker for MapLibre to avoid silent vector tile decoding failures
+if (typeof window !== 'undefined') {
+  if (typeof (maplibregl as any).setWorkerUrl === 'function') {
+    (maplibregl as any).setWorkerUrl(workerUrl);
+  }
+  if ((maplibregl as any).config) {
+    (maplibregl as any).config.WORKER_URL = workerUrl;
+  }
+}
 import type { Territory, D2DAddressPin, D2DPinStatus } from '@/types';
 import { useD2DStore } from '@/stores/d2dStore';
 import {
@@ -8,6 +19,7 @@ import {
   type OpenMapConfig,
   DEFAULT_OPEN_MAP_CONFIG,
   OPEN_FREE_MAP_STYLES,
+  CARTO_VOYAGER_STYLE,
   calculateRouteOSRM,
   queryOverpassNearby,
   reverseGeocode,
@@ -52,6 +64,7 @@ export function RayonMap({
 }: RayonMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
+  const mapLoadedRef = useRef(false);
   const markersRef = useRef<maplibregl.Marker[]>([]);
   const userMarkerRef = useRef<maplibregl.Marker | null>(null);
 
@@ -120,15 +133,62 @@ export function RayonMap({
       initialCenter = [activePins[0].longitude, activePins[0].latitude];
     }
 
+    const targetStyle = openMapConfig.styleUrl === 'carto-voyager'
+      ? CARTO_VOYAGER_STYLE
+      : (openMapConfig.styleUrl || 'https://tiles.openfreemap.org/styles/liberty');
+
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
-      style: openMapConfig.styleUrl || 'https://tiles.openfreemap.org/styles/liberty',
+      style: targetStyle as any,
       center: initialCenter,
       zoom: openMapConfig.defaultZoom || 15,
       attributionControl: { compact: true },
     });
 
     map.addControl(new maplibregl.NavigationControl({ showCompass: true }), 'top-right');
+
+    const handleResize = () => {
+      if (mapRef.current) {
+        mapRef.current.resize();
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+
+    mapLoadedRef.current = false;
+
+    // Auto-fallback watchdog if vector tiles take too long on slow mobile network or WebGL fails
+    const fallbackTimer = setTimeout(() => {
+      if (!mapLoadedRef.current && targetStyle !== CARTO_VOYAGER_STYLE) {
+        console.warn('Map vector tiles took too long to load; switching to robust Carto Voyager raster style');
+        try {
+          map.setStyle(CARTO_VOYAGER_STYLE as any);
+          setOpenMapConfig((prev) => ({ ...prev, styleUrl: 'carto-voyager' }));
+        } catch (err) {
+          console.error('Watchdog setStyle error:', err);
+        }
+      }
+    }, 3500);
+
+    map.on('error', (e) => {
+      console.warn('MapLibre error event:', e);
+      const errMsg = e.error?.message?.toLowerCase() || '';
+      if (!mapLoadedRef.current && targetStyle !== CARTO_VOYAGER_STYLE && (errMsg.includes('webgl') || errMsg.includes('style') || errMsg.includes('worker') || errMsg.includes('failed to fetch') || errMsg.includes('abort'))) {
+        console.warn('Auto-fallback to robust Carto Voyager style');
+        clearTimeout(fallbackTimer);
+        try {
+          map.setStyle(CARTO_VOYAGER_STYLE as any);
+          setOpenMapConfig((prev) => ({ ...prev, styleUrl: 'carto-voyager' }));
+        } catch (err) {
+          console.error('Fallback setStyle error:', err);
+        }
+      }
+    });
+
+    // Call resize on mount, 100ms, 400ms, and 1200ms to guarantee iOS Safari layout sync
+    const t1 = setTimeout(handleResize, 100);
+    const t2 = setTimeout(handleResize, 400);
+    const t3 = setTimeout(handleResize, 1200);
 
     // On-Demand Click op de kaart: Haal adres direct live op via Kadaster PDOK / Photon zonder iets op te slaan!
     map.on('click', async (e) => {
@@ -166,7 +226,10 @@ export function RayonMap({
     });
 
     map.on('load', () => {
+      clearTimeout(fallbackTimer);
+      mapLoadedRef.current = true;
       setMapLoaded(true);
+      map.resize();
 
       // Add territory polygon layer if coordinates exist
       if (territory?.geometry?.coordinates?.length) {
@@ -220,6 +283,12 @@ export function RayonMap({
     mapRef.current = map;
 
     return () => {
+      clearTimeout(fallbackTimer);
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
       map.remove();
       mapRef.current = null;
     };
@@ -312,7 +381,11 @@ export function RayonMap({
   const handleChangeStyle = (styleUrl: string) => {
     setOpenMapConfig((prev) => ({ ...prev, styleUrl }));
     if (mapRef.current) {
-      mapRef.current.setStyle(styleUrl);
+      if (styleUrl === 'carto-voyager') {
+        mapRef.current.setStyle(CARTO_VOYAGER_STYLE as any);
+      } else {
+        mapRef.current.setStyle(styleUrl);
+      }
     }
   };
 
@@ -396,20 +469,20 @@ export function RayonMap({
       </div>
 
       {/* Style Switcher Pill (Top-Right) */}
-      <div className="absolute top-3 right-12 z-10 hidden sm:flex items-center gap-1 p-1 rounded-xl bg-background/90 backdrop-blur-md border border-border/70 shadow-sm text-xs">
-        <Layers className="h-3.5 w-3.5 text-muted-foreground ml-1.5 mr-0.5" />
+      <div className="absolute top-3 right-12 z-10 flex items-center gap-1 p-1 rounded-xl bg-background/95 backdrop-blur-md border border-border/70 shadow-sm text-xs max-w-[210px] sm:max-w-none overflow-x-auto scrollbar-none">
+        <Layers className="h-3.5 w-3.5 text-muted-foreground ml-1 mr-0.5 shrink-0" />
         {OPEN_FREE_MAP_STYLES.map((st) => (
           <button
             key={st.id}
             type="button"
             onClick={() => handleChangeStyle(st.url)}
-            className={`px-2 py-0.5 rounded-lg text-[11px] font-medium transition-all ${
+            className={`px-2 py-0.5 rounded-lg text-[10px] sm:text-[11px] font-medium transition-all shrink-0 ${
               openMapConfig.styleUrl === st.url
                 ? 'bg-primary text-primary-foreground font-semibold shadow-xs'
                 : 'text-muted-foreground hover:text-foreground'
             }`}
           >
-            {st.id === 'liberty' ? 'Liberty' : st.id === 'positron' ? 'Positron' : 'Bright'}
+            {st.id === 'liberty' ? 'Liberty' : st.id === 'positron' ? 'Positron' : st.id === 'bright' ? 'Bright' : 'Universeel'}
           </button>
         ))}
       </div>
