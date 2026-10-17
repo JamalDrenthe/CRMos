@@ -373,7 +373,7 @@ export function TerritoriesPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2.5">
-            <h1 className="text-3xl font-bold tracking-tight">Verkoopregio's & D2D Kaarten</h1>
+            <h1 className="text-3xl font-bold tracking-tight">Field & D2D Kaarten</h1>
             <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 text-xs px-2.5 py-0.5">
               Rayonbeheer & Geo-Locaties
             </Badge>

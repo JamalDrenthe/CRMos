@@ -106,7 +106,7 @@ const mainNavItems: NavItem[] = [
 const enhancedNavItems: NavItem[] = [
   { title: '360° View', href: '/360-view', icon: UserCircle },
   { title: 'Gamification', href: '/gamification', icon: Trophy },
-  { title: 'Territories', href: '/territories', icon: MapPin },
+  { title: 'Field', href: '/territories', icon: MapPin },
   { title: 'Workflows', href: '/workflows', icon: Workflow },
   { title: 'Dashboard Builder', href: '/dashboard-builder', icon: BarChart3 },
 ];
