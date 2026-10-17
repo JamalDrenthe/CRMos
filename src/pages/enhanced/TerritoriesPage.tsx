@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -57,19 +57,19 @@ export function TerritoriesPage() {
     postcode_prefixes: '',
   });
 
-  // Automatisch Kadaster BAG adressen ophalen als standaard voor de actieve regio's
+  const syncedTerritoriesRef = useRef<Set<string>>(new Set());
+
+  // Automatisch Kadaster BAG adressen ophalen als standaard voor de actieve regio (eenmalig per sessie)
   useEffect(() => {
     if (!autoKadasterSync) return;
 
-    if (selectedTerritoryIdForMapTab === 'all') {
-      for (const t of territories.slice(0, 3)) {
-        autoSyncKadasterTerritory(t);
-      }
-    } else {
-      const activeTerr = territories.find((t) => t.id === selectedTerritoryIdForMapTab);
-      if (activeTerr) {
-        autoSyncKadasterTerritory(activeTerr);
-      }
+    const targetTerritory = selectedTerritoryIdForMapTab === 'all'
+      ? territories[0]
+      : territories.find((t) => t.id === selectedTerritoryIdForMapTab);
+
+    if (targetTerritory && !syncedTerritoriesRef.current.has(targetTerritory.id)) {
+      syncedTerritoriesRef.current.add(targetTerritory.id);
+      autoSyncKadasterTerritory(targetTerritory);
     }
   }, [selectedTerritoryIdForMapTab, territories, autoKadasterSync, autoSyncKadasterTerritory]);
 

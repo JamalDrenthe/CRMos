@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, NavLink } from 'react-router-dom';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Header } from '@/components/layout/Header';
@@ -12,33 +12,44 @@ import {
   Settings,
 } from 'lucide-react';
 
-// Pages
-import { Dashboard } from '@/pages/Dashboard';
-import { ContactsPage } from '@/pages/crm/ContactsPage';
-import { CompaniesPage } from '@/pages/crm/CompaniesPage';
-import { DealsPage } from '@/pages/crm/DealsPage';
-import { ActivitiesPage } from '@/pages/crm/ActivitiesPage';
-import { CandidatesPage } from '@/pages/recruitment/CandidatesPage';
-import { JobsPage } from '@/pages/recruitment/JobsPage';
-import { QuotesPage } from '@/pages/sales/QuotesPage';
-import { ProductsPage } from '@/pages/sales/ProductsPage';
-import { AgentWorkspace } from '@/pages/contact-center/AgentWorkspace';
-import { CampaignsPage } from '@/pages/contact-center/CampaignsPage';
-import { PitchFlowsPage } from '@/pages/contact-center/PitchFlowsPage';
-import { View360Page } from '@/pages/enhanced/View360Page';
-import { GamificationPage } from '@/pages/enhanced/GamificationPage';
-import { TerritoriesPage } from '@/pages/enhanced/TerritoriesPage';
-import { WorkflowsPage } from '@/pages/enhanced/WorkflowsPage';
-import { DashboardBuilderPage } from '@/pages/enhanced/DashboardBuilderPage';
-import { AuditLogsPage } from '@/pages/admin/AuditLogsPage';
-import { SettingsPage } from '@/pages/SettingsPage';
-import { IntegrationsPage } from '@/pages/IntegrationsPage';
-import { LoginPage } from '@/pages/LoginPage';
-import { LandingPage } from '@/pages/LandingPage';
-import { PricingPage } from '@/pages/PricingPage';
-import { SolutionsPage } from '@/pages/SolutionsPage';
-import { ComparePage } from '@/pages/ComparePage';
-import { RegisterPage } from '@/pages/RegisterPage';
+// Lazy Loaded Pages for Instant Performance & Code Splitting
+const Dashboard = lazy(() => import('@/pages/Dashboard').then((m) => ({ default: m.Dashboard })));
+const ContactsPage = lazy(() => import('@/pages/crm/ContactsPage').then((m) => ({ default: m.ContactsPage })));
+const CompaniesPage = lazy(() => import('@/pages/crm/CompaniesPage').then((m) => ({ default: m.CompaniesPage })));
+const DealsPage = lazy(() => import('@/pages/crm/DealsPage').then((m) => ({ default: m.DealsPage })));
+const ActivitiesPage = lazy(() => import('@/pages/crm/ActivitiesPage').then((m) => ({ default: m.ActivitiesPage })));
+const CandidatesPage = lazy(() => import('@/pages/recruitment/CandidatesPage').then((m) => ({ default: m.CandidatesPage })));
+const JobsPage = lazy(() => import('@/pages/recruitment/JobsPage').then((m) => ({ default: m.JobsPage })));
+const QuotesPage = lazy(() => import('@/pages/sales/QuotesPage').then((m) => ({ default: m.QuotesPage })));
+const ProductsPage = lazy(() => import('@/pages/sales/ProductsPage').then((m) => ({ default: m.ProductsPage })));
+const AgentWorkspace = lazy(() => import('@/pages/contact-center/AgentWorkspace').then((m) => ({ default: m.AgentWorkspace })));
+const CampaignsPage = lazy(() => import('@/pages/contact-center/CampaignsPage').then((m) => ({ default: m.CampaignsPage })));
+const PitchFlowsPage = lazy(() => import('@/pages/contact-center/PitchFlowsPage').then((m) => ({ default: m.PitchFlowsPage })));
+const View360Page = lazy(() => import('@/pages/enhanced/View360Page').then((m) => ({ default: m.View360Page })));
+const GamificationPage = lazy(() => import('@/pages/enhanced/GamificationPage').then((m) => ({ default: m.GamificationPage })));
+const TerritoriesPage = lazy(() => import('@/pages/enhanced/TerritoriesPage').then((m) => ({ default: m.TerritoriesPage })));
+const WorkflowsPage = lazy(() => import('@/pages/enhanced/WorkflowsPage').then((m) => ({ default: m.WorkflowsPage })));
+const DashboardBuilderPage = lazy(() => import('@/pages/enhanced/DashboardBuilderPage').then((m) => ({ default: m.DashboardBuilderPage })));
+const AuditLogsPage = lazy(() => import('@/pages/admin/AuditLogsPage').then((m) => ({ default: m.AuditLogsPage })));
+const SettingsPage = lazy(() => import('@/pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
+const IntegrationsPage = lazy(() => import('@/pages/IntegrationsPage').then((m) => ({ default: m.IntegrationsPage })));
+const LoginPage = lazy(() => import('@/pages/LoginPage').then((m) => ({ default: m.LoginPage })));
+const LandingPage = lazy(() => import('@/pages/LandingPage').then((m) => ({ default: m.LandingPage })));
+const PricingPage = lazy(() => import('@/pages/PricingPage').then((m) => ({ default: m.PricingPage })));
+const SolutionsPage = lazy(() => import('@/pages/SolutionsPage').then((m) => ({ default: m.SolutionsPage })));
+const ComparePage = lazy(() => import('@/pages/ComparePage').then((m) => ({ default: m.ComparePage })));
+const RegisterPage = lazy(() => import('@/pages/RegisterPage').then((m) => ({ default: m.RegisterPage })));
+
+function PageLoader() {
+  return (
+    <div className="flex h-[45vh] w-full items-center justify-center">
+      <div className="flex flex-col items-center gap-2.5">
+        <div className="h-7 w-7 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        <span className="text-xs text-muted-foreground animate-pulse font-medium">Laden...</span>
+      </div>
+    </div>
+  );
+}
 
 import { GlobalSearch } from '@/components/search/GlobalSearch';
 import { useAuthStore } from '@/stores/authStore';
@@ -234,34 +245,35 @@ function App() {
     };
   }, [initAuthListener]);
 
+  const isSuperAdmin =
+    user?.email?.toLowerCase() === 'info@jamaldrenthe.com' ||
+    user?.is_super_admin === true ||
+    user?.role === 'admin';
+
+  // Admin has master view to see all data, other organizations are strictly isolated
+  const effectiveOrgId = isSuperAdmin ? 'all' : (organization?.id || user?.org_id || 'default_org');
+
   // Sync CRM, Recruitment, Contact Center, and D2D data with Firestore for active organization
   useEffect(() => {
-    if (organization?.id || user) {
-      const isSuperAdmin =
-        user?.email?.toLowerCase() === 'info@jamaldrenthe.com' ||
-        user?.is_super_admin === true ||
-        user?.role === 'admin';
+    if (!isAuthenticated) return;
 
-      // Admin has master view to see all data, other organizations are strictly isolated
-      const effectiveOrgId = isSuperAdmin ? 'all' : (organization?.id || 'default_org');
-
-      const unsubCRM = syncWithFirestore(effectiveOrgId);
-      const unsubRec = syncRecruitment(effectiveOrgId);
-      const unsubCC = syncContactCenter(effectiveOrgId);
-      const unsubD2D = syncD2D(effectiveOrgId);
-      return () => {
-        if (typeof unsubCRM === 'function') unsubCRM();
-        if (typeof unsubRec === 'function') unsubRec();
-        if (typeof unsubCC === 'function') unsubCC();
-        if (typeof unsubD2D === 'function') unsubD2D();
-      };
-    }
-  }, [organization?.id, user, syncWithFirestore, syncRecruitment, syncContactCenter, syncD2D]);
+    const unsubCRM = syncWithFirestore(effectiveOrgId);
+    const unsubRec = syncRecruitment(effectiveOrgId);
+    const unsubCC = syncContactCenter(effectiveOrgId);
+    const unsubD2D = syncD2D(effectiveOrgId);
+    return () => {
+      if (typeof unsubCRM === 'function') unsubCRM();
+      if (typeof unsubRec === 'function') unsubRec();
+      if (typeof unsubCC === 'function') unsubCC();
+      if (typeof unsubD2D === 'function') unsubD2D();
+    };
+  }, [effectiveOrgId, isAuthenticated, syncWithFirestore, syncRecruitment, syncContactCenter, syncD2D]);
 
   return (
     <TooltipProvider>
       <BrowserRouter>
-        <Routes>
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
           {/* Public Routes */}
           <Route
             path="/"
@@ -459,6 +471,7 @@ function App() {
           {/* Catch all */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </Suspense>
       </BrowserRouter>
       <Toaster />
     </TooltipProvider>

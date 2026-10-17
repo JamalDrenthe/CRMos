@@ -26,6 +26,7 @@ export default defineConfig({
           'vendor-react': ['react', 'react-dom', 'react-router-dom'],
           'vendor-firebase': ['firebase/app', 'firebase/auth', 'firebase/firestore'],
           'vendor-ui': ['framer-motion', 'lucide-react', 'recharts', 'date-fns'],
+          'vendor-maps': ['mapbox-gl'],
         },
       },
     },
