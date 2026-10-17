@@ -506,14 +506,27 @@ export const useD2DStore = create<D2DState>()(
         const orgId = useAuthStore.getState().organization?.id || user?.org_id || 'default_org';
 
         set((state) => {
-          const existingIds = new Set(state.pins.map((p) => p.id));
-          const toAdd = newPins.filter((p) => !existingIds.has(p.id));
-          return { pins: [...toAdd, ...state.pins] };
+          const existingMap = new Map(state.pins.map((p) => [p.id, p]));
+          for (const pin of newPins) {
+            const prev = existingMap.get(pin.id);
+            if (prev) {
+              // Behoud eventuele bezoekhistorie als het pand al eerder bezocht was
+              existingMap.set(pin.id, {
+                ...pin,
+                current_status: prev.current_status !== 'unvisited' ? prev.current_status : pin.current_status,
+                visits: prev.visits?.length ? prev.visits : pin.visits,
+                last_visit_at: prev.last_visit_at || pin.last_visit_at,
+              });
+            } else {
+              existingMap.set(pin.id, pin);
+            }
+          }
+          return { pins: Array.from(existingMap.values()) };
         });
 
-        // Sla ALLEEN adressen op in Firestore die daadwerkelijk bezocht zijn (geen 'unvisited' bulk writes!)
+        // Sla uitsluitend fysieke bedrijfspanden (is_commercial) of bezochte deuren op in Firestore (negeer reguliere woonhuizen!)
         for (const pin of newPins) {
-          if (pin.current_status !== 'unvisited') {
+          if (pin.is_commercial || pin.current_status !== 'unvisited') {
             saveD2DPinToFirestore(pin, orgId);
           }
         }
@@ -524,73 +537,39 @@ export const useD2DStore = create<D2DState>()(
         try {
           const user = useAuthStore.getState().user;
           const orgId = useAuthStore.getState().organization?.id || user?.org_id || 'default_org';
+          const companyName = user?.company_name || 'CRMos';
 
-          const query = city ? `${postcodePrefix} ${city}` : postcodePrefix;
-          // Tijdelijke weergave van adressen uit PDOK (worden NIET opgeslagen in Firestore totdat er wordt aangebeld)
-          const url = `https://api.pdok.nl/bzk/locatieserver/v3_1/free?q=${encodeURIComponent(query)}&rows=25&fq=type:adres&fl=id,weergavenaam,straatnaam,huisnummer,huisnummertoevoeging,postcode,woonplaatsnaam,centroide_ll`;
+          const { runB2BLeadEnrichmentPipeline } = await import('@/services/b2bEnrichmentPipeline');
+          const result = await runB2BLeadEnrichmentPipeline({
+            regionQuery: city ? `${postcodePrefix}` : postcodePrefix,
+            territoryId,
+            orgId,
+            companyName,
+          });
 
-          const response = await fetch(url);
-          if (!response.ok) {
-            throw new Error('PDOK Locatieserver niet bereikbaar');
-          }
-
-          const data = await response.json();
-          const docs = data.response?.docs || [];
-
-          const importedPins: D2DAddressPin[] = [];
-
-          for (const doc of docs) {
-            if (doc.centroide_ll) {
-              const match = doc.centroide_ll.match(/POINT\(([\d\.]+)\s+([\d\.]+)\)/);
-              if (match) {
-                const lng = parseFloat(match[1]);
-                const lat = parseFloat(match[2]);
-
-                const pin: D2DAddressPin = {
-                  id: `pdok_${doc.id}`,
-                  org_id: orgId,
-                  company_name: user?.company_name || 'CRMos',
-                  territory_id: territoryId,
-                  street: doc.straatnaam || doc.weergavenaam?.split(' ')[0] || 'Onbekend',
-                  house_number: String(doc.huisnummer || ''),
-                  house_number_addition: doc.huisnummertoevoeging || undefined,
-                  postal_code: doc.postcode || postcodePrefix,
-                  city: doc.woonplaatsnaam || city || 'Nederland',
-                  latitude: lat,
-                  longitude: lng,
-                  current_status: 'unvisited',
-                  visits: [],
-                  created_at: new Date().toISOString(),
-                  updated_at: new Date().toISOString(),
-                };
-                importedPins.push(pin);
-              }
-            }
-          }
-
-          if (importedPins.length > 0) {
-            get().bulkImportPins(importedPins);
+          if (result.commercialPins.length > 0) {
+            get().bulkImportPins(result.commercialPins);
           }
 
           set({ isImporting: false });
-          return { success: true, count: importedPins.length };
+          return { success: true, count: result.commercialPins.length };
         } catch (error) {
-          console.error('Fout bij ophalen van PDOK adressen:', error);
+          console.error('Fout bij ophalen van B2B PDOK bedrijfspanden:', error);
           set({ isImporting: false });
           return { success: false, count: 0 };
         }
       },
 
       autoSyncKadasterTerritory: async (_territory) => {
-        // Geen automatische bulk-opslag van onbezochte adressen meer nodig:
-        // De kaart toont al alle panden via OpenFreeMap vector tiles en haalt adressen on-the-fly op bij aanklikken!
         return { success: true, count: 0, alreadyPopulated: true };
       },
 
       syncWithFirestore: (orgId) => {
         return subscribeToD2DPins(orgId, (pins) => {
           if (pins.length > 0) {
-            set({ pins: pins.filter((p) => p.current_status !== 'unvisited') });
+            set({
+              pins: pins.filter((p) => p.is_commercial || p.current_status !== 'unvisited'),
+            });
           }
         });
       },
@@ -598,8 +577,8 @@ export const useD2DStore = create<D2DState>()(
     {
       name: 'crmos-d2d-storage',
       partialize: (state) => ({
-        // Sla alleen daadwerkelijk bezochte deuren op in localStorage
-        pins: state.pins.filter((p) => p.current_status !== 'unvisited'),
+        // Sla alleen B2B bedrijfspanden en daadwerkelijk bezochte deuren op (negeer reguliere woonhuizen)
+        pins: state.pins.filter((p) => p.is_commercial || p.current_status !== 'unvisited'),
         activeTerritoryId: state.activeTerritoryId,
         statusFilter: state.statusFilter,
       }),

@@ -216,6 +216,159 @@ def handle_poi_search(latitude: float, longitude: float, radius_meters: int = 50
     except Exception as e:
         return {"error": f"Overpass query failed: {str(e)}"}
 
+def handle_b2b_lead_enrichment(region_query: str, max_buildings: int = 100) -> Dict[str, Any]:
+    """
+    3-Step 100% Free B2B Lead- & Map-Enrichment Pipeline for D2D Field Marketing:
+    - Step 1: PDOK Locatieserver + PDOK BAG WFS v2.0 (filters strictly on commercial buildings, 0% residential)
+    - Step 2: OpenStreetMap Overpass QL (business name, branch, opening_hours, phone, website)
+    - Step 3: Overheid.nl KOOP SRU (officielepublicaties: recent permits & bankruptcies)
+    """
+    import xml.etree.ElementTree as ET
+    region = region_query.strip()
+    if not region:
+        return {"error": "region_query cannot be empty"}
+
+    commercial_purposes = {
+        "winkelfunctie",
+        "kantoorfunctie",
+        "industriefunctie",
+        "bijeenkomstfunctie",
+        "logiesfunctie",
+        "gezondheidszorgfunctie",
+    }
+
+    # STEP 1: Resolve bounding box via PDOK Locatieserver & fetch commercial BAG buildings via PDOK BAG WFS v2.0
+    is_postcode = len(region) >= 4 and region[:4].isdigit()
+    solr_q = f"postcode:{region[:4]}* AND type:adres" if is_postcode else f'woonplaatsnaam:"{region}" AND type:adres'
+    loc_url = (
+        f"https://api.pdok.nl/bzk/locatieserver/search/v3_1/free?q={urllib.parse.quote(solr_q)}"
+        f"&rows=100&fl=id,weergavenaam,straatnaam,huisnummer,huisletter,huisnummertoevoeging,postcode,woonplaatsnaam,centroide_ll,nummeraanduiding_id,pandidentificatie"
+    )
+    loc_data = _rate_limited_request(loc_url)
+    docs = loc_data.get("response", {}).get("docs", [])
+
+    lons, lats = [], []
+    address_by_vbo = {}
+    for d in docs:
+        c = d.get("centroide_ll", "")
+        if c.startswith("POINT(") and c.endswith(")"):
+            p = c[6:-1].split()
+            lon, lat = float(p[0]), float(p[1])
+            lons.append(lon)
+            lats.append(lat)
+            address_by_vbo[f"{lon:.4f},{lat:.4f}"] = d
+
+    if not lons:
+        return {"region": region, "commercial_buildings": [], "mutations": []}
+
+    min_lon, max_lon = min(lons) - 0.002, max(lons) + 0.002
+    min_lat, max_lat = min(lats) - 0.002, max(lats) + 0.002
+
+    wfs_url = (
+        f"https://service.pdok.nl/lv/bag/wfs/v2_0?service=WFS&version=2.0.0&request=GetFeature"
+        f"&typeName=bag:verblijfsobject&outputFormat=application/json&srsName=EPSG:4326"
+        f"&BBOX={min_lon},{min_lat},{max_lon},{max_lat},EPSG:4326&count={max(max_buildings * 3, 250)}"
+    )
+    wfs_data = _rate_limited_request(wfs_url, timeout=20)
+    commercial_buildings = []
+    for feat in wfs_data.get("features", []):
+        props = feat.get("properties", {})
+        doel = (props.get("gebruiksdoel") or "").lower()
+        if not any(cp in doel for cp in commercial_purposes):
+            continue  # Filtert 100% reguliere woonfuncties weg
+        coords = feat.get("geometry", {}).get("coordinates", [0, 0])
+        lon, lat = float(coords[0]), float(coords[1])
+        commercial_buildings.append({
+            "pandidentificatie": props.get("pandidentificatie"),
+            "nummeraanduiding_id": props.get("identificatie"),
+            "gebruiksdoel": props.get("gebruiksdoel"),
+            "oppervlakte_m2": props.get("oppervlakte"),
+            "bouwjaar": props.get("bouwjaar"),
+            "street": props.get("openbare_ruimte") or "",
+            "house_number": str(props.get("huisnummer") or ""),
+            "postal_code": props.get("postcode") or "",
+            "city": props.get("woonplaats") or region,
+            "longitude": lon,
+            "latitude": lat,
+        })
+        if len(commercial_buildings) >= max_buildings:
+            break
+
+    # STEP 2: OpenStreetMap Overpass QL Enrichment
+    overpass_ql = f"""[out:json][timeout:25];
+(
+  nwr["name"]["shop"]({min_lat},{min_lon},{max_lat},{max_lon});
+  nwr["name"]["office"]({min_lat},{min_lon},{max_lat},{max_lon});
+  nwr["name"]["craft"]({min_lat},{min_lon},{max_lat},{max_lon});
+  nwr["name"]["amenity"~"restaurant|cafe|bar|fast_food|bank|clinic|pharmacy"]({min_lat},{min_lon},{max_lat},{max_lon});
+  nwr["name"]["industrial"]({min_lat},{min_lon},{max_lat},{max_lon});
+);
+out center tags;"""
+    try:
+        ov_data = _rate_limited_request(
+            "https://overpass-api.de/api/interpreter",
+            post_data=f"data={urllib.parse.quote(overpass_ql)}".encode("utf-8"),
+            timeout=25,
+        )
+        osm_elements = ov_data.get("elements", [])
+    except Exception:
+        osm_elements = []
+
+    for b in commercial_buildings:
+        for el in osm_elements:
+            tags = el.get("tags", {})
+            el_lat = el.get("lat") or el.get("center", {}).get("lat")
+            el_lon = el.get("lon") or el.get("center", {}).get("lon")
+            if el_lat and el_lon and abs(el_lat - b["latitude"]) < 0.00035 and abs(el_lon - b["longitude"]) < 0.00045:
+                b["business_name"] = tags.get("name")
+                b["branch"] = (
+                    tags.get("shop")
+                    or tags.get("office")
+                    or tags.get("craft")
+                    or tags.get("amenity")
+                    or tags.get("industrial")
+                )
+                b["opening_hours"] = tags.get("opening_hours")
+                b["phone"] = tags.get("phone") or tags.get("contact:phone")
+                b["website"] = tags.get("website") or tags.get("contact:website")
+                break
+
+    # STEP 3: Overheid.nl KOOP SRU API (Recent Permits & Bankruptcies)
+    mutations = []
+    try:
+        sru_q = f'c.product-area==officielepublicaties AND "{region[:4] if is_postcode else region}" AND (vergunning OR faillissement OR horeca)'
+        sru_url = (
+            f"https://repository.overheid.nl/sru?version=2.0&operation=searchRetrieve"
+            f"&query={urllib.parse.quote(sru_q)}&maximumRecords=15"
+        )
+        req = urllib.request.Request(sru_url, headers={"User-Agent": USER_AGENT})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            xml_str = resp.read().decode("utf-8", errors="ignore")
+        root = ET.fromstring(xml_str)
+        for rec in root.findall(".//{http://docs.oasis-open.org/ns/search-ws/sruResponse}record"):
+            titles = [e.text for e in rec.iter() if e.tag.endswith("title") and e.text]
+            dates = [e.text for e in rec.iter() if (e.tag.endswith("modified") or e.tag.endswith("available")) and e.text]
+            idents = [e.text for e in rec.iter() if e.tag.endswith("identifier") and e.text]
+            if titles:
+                doc_id = idents[0] if idents else ""
+                mutations.append({
+                    "id": doc_id,
+                    "title": titles[0],
+                    "date": dates[0] if dates else "",
+                    "url": f"https://zoek.officielebekendmakingen.nl/{doc_id}.html" if doc_id else None,
+                })
+    except Exception:
+        pass
+
+    return {
+        "region": region,
+        "total_commercial_buildings": len(commercial_buildings),
+        "total_osm_businesses_in_bbox": len(osm_elements),
+        "total_mutations": len(mutations),
+        "commercial_buildings": commercial_buildings,
+        "mutations": mutations,
+    }
+
 def main():
     """Standard JSON-RPC 2.0 MCP loop over stdio"""
     for line in sys.stdin:
@@ -283,6 +436,18 @@ def main():
                             },
                             "required": ["latitude", "longitude"]
                         }
+                    },
+                    {
+                        "name": "geo_b2b_lead_enrichment",
+                        "description": "3-Step 100% Free B2B Lead- & Map-Enrichment Pipeline (PDOK BAG Commercial Buildings + OpenStreetMap Overpass Business Names/Branches + Overheid.nl KOOP SRU Permits & Bankruptcies). Filters out 100% of residential houses.",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "region_query": {"type": "string", "description": "Target postal code (e.g. '1012', '3511') or Dutch municipality name (e.g. 'Utrecht')"},
+                                "max_buildings": {"type": "integer", "description": "Maximum commercial buildings to return (default 100)"}
+                            },
+                            "required": ["region_query"]
+                        }
                     }
                 ]
                 res = {"jsonrpc": "2.0", "id": req_id, "result": {"tools": tools}}
@@ -313,6 +478,11 @@ def main():
                         int(args.get("radius_meters", 500)),
                         args.get("tag_key", "amenity"),
                         args.get("tag_value")
+                    )
+                elif tool_name == "geo_b2b_lead_enrichment":
+                    result = handle_b2b_lead_enrichment(
+                        args.get("region_query", "1012"),
+                        int(args.get("max_buildings", 100))
                     )
                 else:
                     result = {"error": f"Unknown tool: {tool_name}"}

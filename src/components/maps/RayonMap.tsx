@@ -68,9 +68,9 @@ export function RayonMap({
   const [isLoadingPOIs, setIsLoadingPOIs] = useState(false);
   const [routeInfo, setRouteInfo] = useState<{ distanceMeters: number; durationSeconds: number } | null>(null);
 
-  // Alleen daadwerkelijk bezochte deuren tonen als gekleurde markers op de kaart
+  // Toon zowel B2B bedrijfspanden (is_commercial) als daadwerkelijk bezochte deuren op de kaart (negeer reguliere woonhuizen)
   const activePins = useMemo(() => {
-    const list = (propPins || storePins).filter((p) => p.current_status !== 'unvisited');
+    const list = (propPins || storePins).filter((p) => p.is_commercial || p.current_status !== 'unvisited');
     if (territory) {
       return list.filter((p) => p.territory_id === territory.id || !p.territory_id);
     }
@@ -84,25 +84,28 @@ export function RayonMap({
   }, [orgId]);
 
   // Status Color Helper
-  const getStatusColor = (status: D2DPinStatus) => {
+  const getStatusColor = (status: D2DPinStatus, isCommercial?: boolean, hasMutations?: boolean) => {
     switch (status) {
       case 'deal_closed': return '#22c55e'; // Emerald
       case 'not_home': return '#f59e0b';    // Amber
       case 'no_interest': return '#ef4444'; // Red
       case 'appointment': return '#a855f7'; // Purple
       case 'do_not_knock': return '#0f172a';// Charcoal
-      default: return '#64748b';            // Slate
+      default:
+        if (hasMutations) return '#ea580c'; // Oranje/Goud voor bedrijfspand met nieuwe vergunning/mutatie
+        if (isCommercial) return '#0284c7'; // Zakelijk Blauw voor B2B bedrijfspand
+        return '#64748b';
     }
   };
 
-  const getStatusLabel = (status: D2DPinStatus) => {
+  const getStatusLabel = (status: D2DPinStatus, isCommercial?: boolean) => {
     switch (status) {
       case 'deal_closed': return 'Deal Gesloten 🟢';
-      case 'not_home': return 'Niet Thuis 🟡';
+      case 'not_home': return 'Niet Aanwezig 🟡';
       case 'no_interest': return 'Geen Interesse 🔴';
       case 'appointment': return 'Afspraak Gemaakt 🟣';
       case 'do_not_knock': return 'Niet Aanbellen ⛔';
-      default: return 'Onbezocht Pand (Live Kadaster) ⚪';
+      default: return isCommercial ? 'B2B Bedrijfspand (Te Bezoeken) 🏢' : 'Onbezocht Pand (Live Kadaster) ⚪';
     }
   };
 
@@ -223,7 +226,7 @@ export function RayonMap({
     };
   }, [openMapConfig.styleUrl, territory?.id]);
 
-  // 2. Render D2D Pins on MapLibre (Alleen bezochte adressen!)
+  // 2. Render D2D & B2B Pins on MapLibre
   useEffect(() => {
     if (!mapRef.current || !mapLoaded || !showD2DPins) return;
 
@@ -234,11 +237,15 @@ export function RayonMap({
     activePins.forEach((pin) => {
       const el = document.createElement('div');
       el.className = 'd2d-pin-element cursor-pointer transition-transform hover:scale-125';
-      const color = getStatusColor(pin.current_status);
+      const hasMutations = Boolean(pin.mutations && pin.mutations.length > 0);
+      const color = getStatusColor(pin.current_status, pin.is_commercial, hasMutations);
+      const borderStyle = hasMutations
+        ? '2.5px solid #fde047'
+        : '2.5px solid #ffffff';
 
       el.innerHTML = `
-        <div style="background-color: ${color}; width: 24px; height: 24px; border-radius: 50%; border: 2.5px solid #ffffff; box-shadow: 0 3px 8px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; color: white; font-size: 10px; font-weight: 800; font-family: system-ui, sans-serif;">
-          ${pin.house_number.slice(0, 3)}
+        <div title="${pin.business_name || `${pin.street} ${pin.house_number}`}" style="background-color: ${color}; width: 26px; height: 26px; border-radius: ${pin.is_commercial ? '8px' : '50%'}; border: ${borderStyle}; box-shadow: 0 3px 8px rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; color: white; font-size: 10px; font-weight: 800; font-family: system-ui, sans-serif;">
+          ${pin.house_number.slice(0, 4)}
         </div>
       `;
 
@@ -256,7 +263,23 @@ export function RayonMap({
 
       markersRef.current.push(marker);
     });
-  }, [activePins, mapLoaded, showD2DPins, onSelectPin]);
+
+    // Als er net nieuwe B2B bedrijfspanden zijn ingeladen (en geen vaste territory polygoon), zoom automatisch naar de panden
+    if (activePins.length > 0 && !territory?.geometry?.coordinates?.length) {
+      try {
+        const bounds = activePins.slice(0, 150).reduce(
+          (b, p) => b.extend([p.longitude, p.latitude]),
+          new maplibregl.LngLatBounds(
+            [activePins[0].longitude, activePins[0].latitude],
+            [activePins[0].longitude, activePins[0].latitude]
+          )
+        );
+        mapRef.current.fitBounds(bounds, { padding: 55, maxZoom: 16, duration: 800 });
+      } catch {
+        // ignore bounds error
+      }
+    }
+  }, [activePins, mapLoaded, showD2DPins, onSelectPin, territory?.geometry?.coordinates?.length]);
 
   // 3. User Geolocation (GPS)
   const handleLocateUser = () => {
@@ -397,9 +420,15 @@ export function RayonMap({
 
       {/* Pin Quick Status Inspector Card */}
       {activePin && (
-        <div className="absolute bottom-3 left-3 right-3 sm:left-auto sm:right-3 sm:w-84 z-20 p-3.5 rounded-2xl bg-card/95 border border-border/80 shadow-2xl backdrop-blur-md space-y-2.5 animate-in fade-in slide-in-from-bottom-2 duration-200">
-          <div className="flex items-start justify-between">
+        <div className="absolute bottom-3 left-3 right-3 sm:left-auto sm:right-3 sm:w-92 z-20 p-3.5 rounded-2xl bg-card/95 border border-border/80 shadow-2xl backdrop-blur-md space-y-2.5 animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <div className="flex items-start justify-between gap-2">
             <div>
+              {activePin.business_name && (
+                <p className="font-extrabold text-sm text-sky-600 dark:text-sky-400 flex items-center gap-1.5">
+                  <Building2 className="h-3.5 w-3.5 shrink-0" />
+                  <span>{activePin.business_name}</span>
+                </p>
+              )}
               <p className="font-bold text-sm text-foreground">
                 {activePin.street} {activePin.house_number}{activePin.house_number_addition || ''}
               </p>
@@ -415,14 +444,69 @@ export function RayonMap({
             </button>
           </div>
 
+          {/* B2B Bedrijfspand Verrijking (Kadaster BAG + OSM Overpass) */}
+          {(activePin.is_commercial || activePin.branch || activePin.surface_area_m2 || activePin.opening_hours) && (
+            <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+              {activePin.branch && (
+                <Badge variant="secondary" className="text-[10px] font-semibold bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30">
+                  {activePin.branch}
+                </Badge>
+              )}
+              {activePin.surface_area_m2 ? (
+                <Badge variant="outline" className="text-[10px] font-mono">
+                  {activePin.surface_area_m2} m² BAG
+                </Badge>
+              ) : null}
+              {activePin.build_year ? (
+                <Badge variant="outline" className="text-[10px] font-mono">
+                  Bouwjaar {activePin.build_year}
+                </Badge>
+              ) : null}
+              {activePin.opening_hours && (
+                <span className="text-[10px] text-muted-foreground w-full truncate" title={activePin.opening_hours}>
+                  🕒 {activePin.opening_hours}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Overheid.nl KOOP SRU Mutaties (Vergunningen / Faillissementen) */}
+          {activePin.mutations && activePin.mutations.length > 0 && (
+            <div className="p-2 rounded-xl bg-amber-500/15 border border-amber-500/30 space-y-1">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300">
+                ⚡ Officiële Bekendmaking ({activePin.mutations[0].type === 'faillissement' ? 'Faillissement' : 'Vergunning'})
+              </p>
+              <p className="text-[11px] font-medium text-foreground line-clamp-2">
+                {activePin.mutations[0].title}
+              </p>
+              {activePin.mutations[0].url && (
+                <a
+                  href={activePin.mutations[0].url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-[10px] text-amber-700 dark:text-amber-300 underline font-semibold"
+                >
+                  <span>Bekijk publicatie ({activePin.mutations[0].date})</span>
+                  <ExternalLink className="h-2.5 w-2.5" />
+                </a>
+              )}
+            </div>
+          )}
+
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5">
               <span className="text-[11px] text-muted-foreground">Status:</span>
               <Badge
                 className="text-[10px] font-semibold text-white"
-                style={{ backgroundColor: getStatusColor(activePin.current_status) }}
+                style={{
+                  backgroundColor: getStatusColor(
+                    activePin.current_status,
+                    activePin.is_commercial,
+                    Boolean(activePin.mutations && activePin.mutations.length > 0)
+                  ),
+                }}
               >
-                {getStatusLabel(activePin.current_status)}
+                {getStatusLabel(activePin.current_status, activePin.is_commercial)}
               </Badge>
             </div>
             <span className="text-[10px] text-muted-foreground font-mono">

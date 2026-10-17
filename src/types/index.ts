@@ -483,6 +483,16 @@ export interface D2DVisitLog {
   follow_up_date?: string;
 }
 
+export interface B2BMutationItem {
+  id: string;
+  title: string;
+  type: 'vergunning' | 'faillissement' | 'bekendmaking';
+  rubriek: string;
+  date: string;
+  url: string;
+  abstract?: string;
+}
+
 export interface D2DAddressPin {
   id: string;
   org_id?: string;
@@ -503,6 +513,20 @@ export interface D2DAddressPin {
   assigned_agent_name?: string;
   deal_id?: string;
   contact_id?: string;
+  // B2B Enrichment Fields (PDOK BAG + OSM Overpass + Overheid.nl Bekendmakingen)
+  is_commercial?: boolean;
+  business_name?: string;
+  branch?: string;
+  bag_gebruiksdoel?: string;
+  surface_area_m2?: number;
+  build_year?: number;
+  pand_identificatie?: string;
+  nummeraanduiding_id?: string;
+  opening_hours?: string;
+  business_phone?: string;
+  business_website?: string;
+  business_email?: string;
+  mutations?: B2BMutationItem[];
   visits: D2DVisitLog[];
   created_at: string;
   updated_at: string;

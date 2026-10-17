@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DataTable } from '@/components/common/DataTable';
 import { useEnhancedStore } from '@/stores/enhancedStore';
+import { useCRMStore } from '@/stores/crmStore';
+import { useAuthStore } from '@/stores/authStore';
 import type { Territory } from '@/types';
 import {
   Plus,
@@ -20,6 +22,11 @@ import {
   Table,
   DownloadCloud,
   Sparkles,
+  Building2,
+  ExternalLink,
+  CheckCircle2,
+  Loader2,
+  AlertTriangle,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -39,15 +46,33 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { RayonMap } from '@/components/maps/RayonMap';
 import { useD2DStore } from '@/stores/d2dStore';
+import {
+  runB2BLeadEnrichmentPipeline,
+  ALLOWED_COMMERCIAL_PURPOSES,
+  COMMERCIAL_PURPOSE_LABELS,
+  type B2BEnrichmentPipelineResult,
+  type PipelineStepProgress,
+  type BAGCommercialPurpose,
+} from '@/services/b2bEnrichmentPipeline';
 
 export function TerritoriesPage() {
   const { territories, addTerritory, updateTerritory, deleteTerritory } = useEnhancedStore();
-  const { pins: d2dPins, fetchAddressesFromPDOK, autoSyncKadasterTerritory, isImporting } = useD2DStore();
+  const { pins: d2dPins, bulkImportPins, autoSyncKadasterTerritory } = useD2DStore();
+  const { companies, addCompany } = useCRMStore();
+  const { organization, user } = useAuthStore();
   const [viewMode, setViewMode] = useState<'map' | 'table'>('map');
   const [selectedTerritoryIdForMapTab, setSelectedTerritoryIdForMapTab] = useState<string>('all');
   const [autoKadasterSync, setAutoKadasterSync] = useState<boolean>(true);
-  const [pdokPostcode, setPdokPostcode] = useState('');
+  const [pdokPostcode, setPdokPostcode] = useState('1012');
   const [isPdokDialogOpen, setIsPdokDialogOpen] = useState(false);
+  const [isRunningPipeline, setIsRunningPipeline] = useState(false);
+  const [syncToCrmCompanies, setSyncToCrmCompanies] = useState(true);
+  const [selectedPurposes, setSelectedPurposes] = useState<BAGCommercialPurpose[]>([
+    ...ALLOWED_COMMERCIAL_PURPOSES,
+  ]);
+  const [pipelineProgress, setPipelineProgress] = useState<PipelineStepProgress | null>(null);
+  const [lastPipelineResult, setLastPipelineResult] = useState<B2BEnrichmentPipelineResult | null>(null);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [newTerritory, setNewTerritory] = useState({
@@ -171,23 +196,84 @@ export function TerritoriesPage() {
     toast.success(`Regio "${territory.name}" verwijderd`);
   };
 
-  const handleImportPDOK = async () => {
+  const togglePurpose = (purpose: BAGCommercialPurpose) => {
+    setSelectedPurposes((prev) =>
+      prev.includes(purpose)
+        ? prev.length > 1
+          ? prev.filter((p) => p !== purpose)
+          : prev
+        : [...prev, purpose]
+    );
+  };
+
+  const handleRunB2BPipeline = async () => {
     if (!pdokPostcode.trim()) {
-      toast.error('Voer een postcode (bijv. 1012) of plaatsnaam in');
+      toast.error('Voer een postcode (bijv. 1012 of 3511) of gemeentenaam (bijv. Utrecht) in');
       return;
     }
-    const res = await fetchAddressesFromPDOK(pdokPostcode.trim());
-    if (res.success) {
-      toast.success(`${res.count} adressen succesvol geïmporteerd vanuit Kadaster (PDOK/BAG)`);
-      setIsPdokDialogOpen(false);
-      setPdokPostcode('');
-    } else {
-      toast.error('Geen adressen gevonden voor deze invoer via PDOK Locatieserver');
+
+    setIsRunningPipeline(true);
+    setPipelineProgress({
+      step: 1,
+      stepLabel: 'Stap 1/3: PDOK / BAG Bedrijfspanden',
+      bagBuildingsCount: 0,
+      enrichedOsmCount: 0,
+      mutationsCount: 0,
+      message: 'Stap 1/3 starten: PDOK / BAG bedrijfspanden ophalen...',
+    });
+
+    try {
+      const orgId = organization?.id || user?.org_id || 'default_org';
+      const companyName = user?.company_name || 'CRMos';
+      const activeTerritoryId =
+        selectedTerritoryIdForMapTab !== 'all' ? selectedTerritoryIdForMapTab : undefined;
+
+      const result = await runB2BLeadEnrichmentPipeline({
+        regionQuery: pdokPostcode.trim(),
+        territoryId: activeTerritoryId,
+        orgId,
+        companyName,
+        allowedPurposes: selectedPurposes,
+        onProgress: (prog) => setPipelineProgress(prog),
+      });
+
+      setLastPipelineResult(result);
+
+      if (result.commercialPins.length > 0) {
+        bulkImportPins(result.commercialPins);
+
+        // Synchroniseer verrijkte bedrijfspanden ook direct naar de CRM Companies database (indien aangevinkt)
+        let addedCompaniesCount = 0;
+        if (syncToCrmCompanies && result.crmCompanies.length > 0) {
+          const existingNames = new Set(companies.map((c) => `${c.name.toLowerCase()}|${(c.address?.street || '').toLowerCase()}`));
+          for (const comp of result.crmCompanies) {
+            const key = `${comp.name.toLowerCase()}|${(comp.address?.street || '').toLowerCase()}`;
+            if (!existingNames.has(key)) {
+              existingNames.add(key);
+              addCompany(comp);
+              addedCompaniesCount++;
+            }
+          }
+        }
+
+        toast.success(
+          `B2B Pipeline voltooid: ${result.stats.totalBagCommercial} bedrijfspanden op kaart (${result.stats.withBusinessName} met OSM bedrijfsnaam, ${result.regionMutations.length} mutaties${addedCompaniesCount > 0 ? `, ${addedCompaniesCount} nieuwe CRM bedrijven` : ''})`
+        );
+      } else {
+        toast.warning('Geen zakelijke bedrijfspanden gevonden voor dit gebied via PDOK/BAG');
+      }
+    } catch (err) {
+      console.error('Fout in B2B Lead Enrichment Pipeline:', err);
+      toast.error('Er trad een fout op tijdens de B2B Lead-Enrichment Pipeline');
+    } finally {
+      setIsRunningPipeline(false);
     }
   };
 
   const d2dMetrics = {
-    total: d2dPins.length,
+    total: d2dPins.filter((p) => p.is_commercial || p.current_status !== 'unvisited').length,
+    commercial: d2dPins.filter((p) => p.is_commercial).length,
+    withMutations: d2dPins.filter((p) => p.mutations && p.mutations.length > 0).length,
     deal_closed: d2dPins.filter((p) => p.current_status === 'deal_closed').length,
     not_home: d2dPins.filter((p) => p.current_status === 'not_home').length,
     no_interest: d2dPins.filter((p) => p.current_status === 'no_interest').length,
@@ -340,15 +426,15 @@ export function TerritoriesPage() {
             <span>Kadaster BAG: {autoKadasterSync ? 'Standaard Actief' : 'Gepauzeerd'}</span>
           </div>
 
-          {/* Import Kadaster PDOK Button */}
+          {/* Start 3-Step B2B Enrichment Pipeline Button */}
           <Button
             variant="outline"
             size="sm"
             onClick={() => setIsPdokDialogOpen(true)}
-            className="rounded-xl border-blue-500/30 hover:bg-blue-500/10 text-blue-600 dark:text-blue-400 gap-1.5 h-8 text-xs font-medium"
+            className="rounded-xl border-sky-500/40 bg-sky-500/10 hover:bg-sky-500/20 text-sky-600 dark:text-sky-400 gap-1.5 h-8 text-xs font-semibold shadow-xs"
           >
-            <DownloadCloud className="h-3.5 w-3.5" />
-            Importeer Kadaster (BAG)
+            <Building2 className="h-3.5 w-3.5" />
+            B2B Lead-Enrichment Pipeline (€ 0,00)
           </Button>
 
           {/* New Territory Dialog */}
@@ -425,8 +511,16 @@ export function TerritoriesPage() {
         </Card>
         <Card className="rounded-2xl border bg-card shadow-sm">
           <CardContent className="p-5">
-            <p className="text-sm font-medium text-muted-foreground">D2D Adressen (BAG)</p>
-            <p className="text-2xl font-bold mt-1 text-primary">{d2dMetrics.total}</p>
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-muted-foreground">B2B Bedrijfspanden & Deuren</p>
+              <Badge variant="secondary" className="text-[10px]">0% Woonhuizen</Badge>
+            </div>
+            <p className="text-2xl font-bold mt-1 text-sky-600 dark:text-sky-400">
+              {d2dMetrics.total}{' '}
+              <span className="text-xs font-normal text-muted-foreground">
+                ({d2dMetrics.commercial} zakelijk BAG)
+              </span>
+            </p>
           </CardContent>
         </Card>
         <Card className="rounded-2xl border bg-card shadow-sm">
@@ -480,6 +574,14 @@ export function TerritoriesPage() {
 
             {/* D2D Status Legend / Counters */}
             <div className="flex items-center gap-1.5 overflow-x-auto text-xs shrink-0">
+              <Badge variant="outline" className="border-sky-500/30 bg-sky-500/10 text-sky-600 dark:text-sky-400 font-medium">
+                🏢 B2B Pand: {d2dMetrics.commercial}
+              </Badge>
+              {d2dMetrics.withMutations > 0 && (
+                <Badge variant="outline" className="border-amber-500/40 bg-amber-500/15 text-amber-700 dark:text-amber-300 font-semibold">
+                  ⚡ Vergunning/Mutatie: {d2dMetrics.withMutations}
+                </Badge>
+              )}
               <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-medium">
                 Deal: {d2dMetrics.deal_closed}
               </Badge>
@@ -509,6 +611,68 @@ export function TerritoriesPage() {
               className="h-[620px] w-full"
             />
           </div>
+
+          {/* Overheid.nl KOOP SRU Mutaties & Vergunningen Feed */}
+          {lastPipelineResult && lastPipelineResult.regionMutations.length > 0 && (
+            <Card className="rounded-2xl border border-amber-500/30 bg-amber-500/5 shadow-sm">
+              <CardContent className="p-4 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                    <h3 className="text-sm font-bold text-foreground">
+                      Recente Bedrijfsmutaties, Vergunningen & Faillissementen ({lastPipelineResult.query})
+                    </h3>
+                    <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-700 dark:text-amber-300">
+                      Overheid.nl KOOP SRU Open Data
+                    </Badge>
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    {lastPipelineResult.stats.totalBagCommercial} BAG bedrijfspanden &bull; {lastPipelineResult.stats.withBusinessName} OSM bedrijfsnamen
+                  </span>
+                </div>
+
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {lastPipelineResult.regionMutations.slice(0, 6).map((mut) => (
+                    <div
+                      key={mut.id}
+                      className="p-3 rounded-xl bg-background/90 border border-border/70 flex flex-col justify-between gap-2 text-xs"
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between gap-1.5">
+                          <Badge
+                            variant="secondary"
+                            className={`text-[10px] font-semibold ${
+                              mut.type === 'faillissement'
+                                ? 'bg-red-500/15 text-red-700 dark:text-red-300'
+                                : 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+                            }`}
+                          >
+                            {mut.type === 'faillissement' ? '⚠️ Faillissement' : '📋 Vergunning / Mutatie'}
+                          </Badge>
+                          <span className="text-[10px] text-muted-foreground font-mono">{mut.date}</span>
+                        </div>
+                        <p className="font-semibold text-foreground line-clamp-2">{mut.title}</p>
+                        {mut.abstract && (
+                          <p className="text-[11px] text-muted-foreground line-clamp-2">{mut.abstract}</p>
+                        )}
+                      </div>
+                      {mut.url && (
+                        <a
+                          href={mut.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline font-medium pt-1"
+                        >
+                          <span>Officiële Bekendmaking openen</span>
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       ) : (
         <div className="space-y-4">
@@ -724,74 +888,171 @@ export function TerritoriesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* PDOK Kadaster BAG Importer Dialog */}
+      {/* 3-Stappen Gratis B2B Lead- & Kaart-Enrichment Pipeline Dialog */}
       <Dialog open={isPdokDialogOpen} onOpenChange={setIsPdokDialogOpen}>
-        <DialogContent className="max-w-md rounded-2xl">
+        <DialogContent className="max-w-xl rounded-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-xl">
-              <DownloadCloud className="h-5 w-5 text-blue-500" />
-              Kadaster BAG Adressen Importeren
+              <Building2 className="h-5 w-5 text-sky-600" />
+              100% Gratis B2B Lead- & Kaart-Enrichment Pipeline
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-2">
+          <div className="space-y-4 py-1">
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Importeer officiële Nederlandse Kadaster BAG pand- en adrescoördinaten via de PDOK Locatieserver API. Ideaal voor direct aanbellen in Field Sales & Rayonbeheer.
+              Vult onze <strong>CRM-database</strong> én <strong>interactieve D2D-loopkaarten</strong> met fysieke bedrijfspanden, bedrijfsnamen, branches en recente vergunningen/faillissementen. <strong>Woonfuncties worden 100% weggefilterd.</strong>
             </p>
 
+            {/* Regio Invoer */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Postcode of Straat + Plaats</Label>
+              <Label className="text-xs font-semibold">Doelgebied: Postcodegebied (PC4/PC6) of Gemeentenaam</Label>
               <Input
-                placeholder="bijv. 1012 DH, Coolsingel Rotterdam, of 3511"
+                placeholder="bijv. 1012, 3511, 3011 of Utrecht"
                 value={pdokPostcode}
                 onChange={(e) => setPdokPostcode(e.target.value)}
                 className="rounded-xl"
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleImportPDOK();
+                  if (e.key === 'Enter' && !isRunningPipeline) handleRunB2BPipeline();
                 }}
               />
             </div>
 
-            <div className="flex flex-wrap gap-1.5 pt-1">
-              <span className="text-[11px] text-muted-foreground w-full">Snelle suggesties:</span>
-              <Badge
-                variant="secondary"
-                className="cursor-pointer text-xs hover:bg-primary/20 transition-colors"
-                onClick={() => setPdokPostcode('1012 DH Singel')}
-              >
-                1012 DH (Singel A'dam)
-              </Badge>
-              <Badge
-                variant="secondary"
-                className="cursor-pointer text-xs hover:bg-primary/20 transition-colors"
-                onClick={() => setPdokPostcode('3011 Coolsingel')}
-              >
-                3011 (Coolsingel R'dam)
-              </Badge>
-              <Badge
-                variant="secondary"
-                className="cursor-pointer text-xs hover:bg-primary/20 transition-colors"
-                onClick={() => setPdokPostcode('3511 Oudegracht')}
-              >
-                3511 (Oudegracht Utrecht)
-              </Badge>
+            {/* Snelle suggesties */}
+            <div className="flex flex-wrap gap-1.5">
+              <span className="text-[11px] text-muted-foreground w-full">Snelle B2B gebieden:</span>
+              {[
+                { label: '1012 (Amsterdam Centrum)', val: '1012' },
+                { label: '3511 (Utrecht Centrum)', val: '3511' },
+                { label: '3011 (Rotterdam Centrum)', val: '3011' },
+                { label: '2511 (Den Haag Centrum)', val: '2511' },
+                { label: 'Gemeente Utrecht', val: 'Utrecht' },
+              ].map((s) => (
+                <Badge
+                  key={s.val}
+                  variant="secondary"
+                  className="cursor-pointer text-xs hover:bg-sky-500/20 transition-colors"
+                  onClick={() => setPdokPostcode(s.val)}
+                >
+                  {s.label}
+                </Badge>
+              ))}
             </div>
+
+            {/* Stap 1 Gebruiksdoel Filter */}
+            <div className="space-y-1.5 p-3 rounded-xl bg-muted/40 border">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-semibold">Stap 1: BAG Zakelijke Gebruiksdoelen (Woonhuizen uitgesloten)</Label>
+                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">100% Zakelijk</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {ALLOWED_COMMERCIAL_PURPOSES.map((purpose) => {
+                  const active = selectedPurposes.includes(purpose);
+                  return (
+                    <button
+                      key={purpose}
+                      type="button"
+                      onClick={() => togglePurpose(purpose)}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-all ${
+                        active
+                          ? 'bg-sky-600 text-white border-sky-600 shadow-xs'
+                          : 'bg-background text-muted-foreground border-border hover:text-foreground'
+                      }`}
+                    >
+                      {active ? '✓ ' : ''}{COMMERCIAL_PURPOSE_LABELS[purpose]}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* CRM Sync Checkbox */}
+            <label className="flex items-center gap-2.5 text-xs cursor-pointer select-none p-2.5 rounded-xl bg-sky-500/5 border border-sky-500/20">
+              <input
+                type="checkbox"
+                checked={syncToCrmCompanies}
+                onChange={(e) => setSyncToCrmCompanies(e.target.checked)}
+                className="rounded border-border text-sky-600 focus:ring-sky-500 h-4 w-4"
+              />
+              <span>
+                Verrijkte bedrijfspanden met OSM bedrijfsnaam direct toevoegen aan <strong>CRM Bedrijven (Companies)</strong>
+              </span>
+            </label>
+
+            {/* Live 3-Stappen Pipeline Voortgang */}
+            {pipelineProgress && (
+              <div className="p-3 rounded-xl bg-card border space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold flex items-center gap-1.5">
+                    {pipelineProgress.step === 1 || pipelineProgress.step === 2 || pipelineProgress.step === 3 ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-600" />
+                    ) : pipelineProgress.step === 'completed' ? (
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                    ) : (
+                      <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                    )}
+                    {pipelineProgress.stepLabel}
+                  </span>
+                  <Badge variant="outline" className="text-[10px]">
+                    {pipelineProgress.step === 1
+                      ? 'PDOK / BAG WFS'
+                      : pipelineProgress.step === 2
+                      ? 'OSM Overpass QL'
+                      : pipelineProgress.step === 3
+                      ? 'Overheid.nl KOOP SRU'
+                      : 'Voltooid'}
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">{pipelineProgress.message}</p>
+                <div className="grid grid-cols-3 gap-1.5 pt-1">
+                  {[1, 2, 3].map((s) => {
+                    const currentStepNum =
+                      pipelineProgress.step === 'completed'
+                        ? 4
+                        : typeof pipelineProgress.step === 'number'
+                        ? pipelineProgress.step
+                        : 0;
+                    return (
+                      <div
+                        key={s}
+                        className={`h-1.5 rounded-full transition-all ${
+                          currentStepNum > s
+                            ? 'bg-emerald-500'
+                            : currentStepNum === s
+                            ? 'bg-sky-500 animate-pulse'
+                            : 'bg-muted'
+                        }`}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             <div className="flex items-center justify-between pt-3 border-t">
               <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                <Sparkles className="h-3.5 w-3.5 text-blue-500" />
-                PDOK Open Data (Gratis)
+                <Sparkles className="h-3.5 w-3.5 text-sky-500" />
+                PDOK BAG + OSM Overpass + Overheid.nl (€ 0,00)
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={() => setIsPdokDialogOpen(false)} className="rounded-xl">
-                  Annuleren
+                  Sluiten
                 </Button>
                 <Button
                   size="sm"
-                  onClick={handleImportPDOK}
-                  disabled={isImporting}
-                  className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white"
+                  onClick={handleRunB2BPipeline}
+                  disabled={isRunningPipeline}
+                  className="rounded-xl bg-sky-600 hover:bg-sky-700 text-white gap-1.5"
                 >
-                  {isImporting ? 'Importeren...' : 'Adressen Ophalen'}
+                  {isRunningPipeline ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Pipeline Draait...
+                    </>
+                  ) : (
+                    <>
+                      <DownloadCloud className="h-3.5 w-3.5" />
+                      Start 3-Stappen Pipeline
+                    </>
+                  )}
                 </Button>
               </div>
             </div>
@@ -801,3 +1062,4 @@ export function TerritoriesPage() {
     </div>
   );
 }
+
