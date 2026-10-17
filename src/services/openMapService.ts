@@ -230,36 +230,93 @@ export async function geocodeAddress(
   return null;
 }
 
+export interface ReverseGeocodeResult {
+  address: string;
+  street: string;
+  houseNumber: string;
+  houseNumberAddition?: string;
+  city: string;
+  postalCode?: string;
+  source: string;
+}
+
 /**
- * Reverse Geocoding: Coördinaten -> Adres
- * 1. Photon Reverse API
- * 2. Nominatim Reverse (met custom User-Agent)
+ * Reverse Geocoding: Coördinaten -> Exact Adres (On-the-fly bij klik op de kaart)
+ * 1. PDOK Locatieserver Reverse (voor Nederland: officiële Kadaster BAG data)
+ * 2. Photon Reverse API (Wereldwijd)
+ * 3. Nominatim Reverse (Fallback met custom User-Agent)
  */
 export async function reverseGeocode(
   lat: number,
   lng: number
-): Promise<{ address: string; city: string; postalCode?: string; source: string } | null> {
-  const cacheKey = `geo_rev_${lat.toFixed(4)}_${lng.toFixed(4)}`;
-  const cached = getCached<{ address: string; city: string; postalCode?: string; source: string }>(cacheKey);
+): Promise<ReverseGeocodeResult | null> {
+  const cacheKey = `geo_rev_${lat.toFixed(5)}_${lng.toFixed(5)}`;
+  const cached = getCached<ReverseGeocodeResult>(cacheKey);
   if (cached) return cached;
 
-  // 1. Photon Reverse
+  // 1. Als coördinaten binnen Nederland vallen: gebruik razendsnelle PDOK Kadaster Reverse API
+  const isInNetherlands = lat >= 50.7 && lat <= 53.6 && lng >= 3.3 && lng <= 7.3;
+  if (isInNetherlands) {
+    try {
+      const pdokRevUrl = `https://api.pdok.nl/bzk/locatieserver/search/v3_1/reverse?lat=${lat}&lon=${lng}&type=adres&rows=1`;
+      const res = await fetch(pdokRevUrl);
+      if (res.ok) {
+        const json = await res.json();
+        const docId = json.response?.docs?.[0]?.id;
+        if (docId) {
+          // Haal adresdetails op via lookup of free query
+          const lookupUrl = `https://api.pdok.nl/bzk/locatieserver/search/v3_1/lookup?id=${encodeURIComponent(docId)}&fl=weergavenaam,straatnaam,huisnummer,huisnummertoevoeging,postcode,woonplaatsnaam`;
+          const lookupRes = await fetch(lookupUrl);
+          if (lookupRes.ok) {
+            const lookupJson = await lookupRes.json();
+            const d = lookupJson.response?.docs?.[0];
+            if (d) {
+              const street = d.straatnaam || 'Onbekende straat';
+              const houseNumber = String(d.huisnummer || '');
+              const houseNumberAddition = d.huisnummertoevoeging || undefined;
+              const address = `${street} ${houseNumber}${houseNumberAddition || ''}`.trim();
+              const result: ReverseGeocodeResult = {
+                address,
+                street,
+                houseNumber,
+                houseNumberAddition,
+                city: d.woonplaatsnaam || 'Nederland',
+                postalCode: d.postcode || '',
+                source: 'PDOK Kadaster BAG',
+              };
+              setCached(cacheKey, result);
+              return result;
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('PDOK reverse geocode fout, fallback naar Photon:', err);
+    }
+  }
+
+  // 2. Photon Reverse (Wereldwijd)
   try {
     const photonUrl = `https://photon.komoot.io/reverse?lon=${lng}&lat=${lat}`;
-    const res = await fetch(photonUrl, {
-      headers: { 'User-Agent': GEO_USER_AGENT },
-    });
+    const res = await fetch(photonUrl);
     if (res.ok) {
       const json = await res.json();
       const feat = json.features?.[0];
       if (feat?.properties) {
         const p = feat.properties;
-        const street = p.street || p.name || '';
-        const num = p.housenumber || '';
-        const address = `${street} ${num}`.trim() || 'Onbekende straat';
+        const street = p.street || p.name || 'Locatie';
+        const houseNumber = String(p.housenumber || '');
+        const address = `${street} ${houseNumber}`.trim() || 'Geselecteerd pand';
         const city = p.city || p.town || p.village || '';
         const postalCode = p.postcode || '';
-        const result = { address, city, postalCode, source: 'Photon (OSM)' };
+        const result: ReverseGeocodeResult = {
+          address,
+          street,
+          houseNumber,
+          city,
+          postalCode,
+          source: 'Photon (OSM)',
+        };
         setCached(cacheKey, result);
         return result;
       }
@@ -268,7 +325,7 @@ export async function reverseGeocode(
     console.warn('Photon reverse geocode fout, fallback naar Nominatim:', err);
   }
 
-  // 2. Nominatim Reverse
+  // 3. Nominatim Reverse
   try {
     const nomUrl = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=jsonv2`;
     const res = await fetch(nomUrl, {
@@ -277,12 +334,19 @@ export async function reverseGeocode(
     if (res.ok) {
       const data = await res.json();
       const addr = data.address || {};
-      const street = addr.road || addr.pedestrian || addr.suburb || '';
-      const num = addr.house_number || '';
-      const address = `${street} ${num}`.trim() || data.display_name?.split(',')?.[0] || 'Onbekende straat';
+      const street = addr.road || addr.pedestrian || addr.suburb || 'Locatie';
+      const houseNumber = String(addr.house_number || '');
+      const address = `${street} ${houseNumber}`.trim() || data.display_name?.split(',')?.[0] || 'Geselecteerd pand';
       const city = addr.city || addr.town || addr.village || addr.municipality || '';
       const postalCode = addr.postcode || '';
-      const result = { address, city, postalCode, source: 'Nominatim (OSM)' };
+      const result: ReverseGeocodeResult = {
+        address,
+        street,
+        houseNumber,
+        city,
+        postalCode,
+        source: 'Nominatim (OSM)',
+      };
       setCached(cacheKey, result);
       return result;
     }

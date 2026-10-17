@@ -10,6 +10,7 @@ import {
   OPEN_FREE_MAP_STYLES,
   calculateRouteOSRM,
   queryOverpassNearby,
+  reverseGeocode,
 } from '@/services/openMapService';
 import { useAuthStore } from '@/stores/authStore';
 import { Button } from '@/components/ui/button';
@@ -67,9 +68,9 @@ export function RayonMap({
   const [isLoadingPOIs, setIsLoadingPOIs] = useState(false);
   const [routeInfo, setRouteInfo] = useState<{ distanceMeters: number; durationSeconds: number } | null>(null);
 
-  // Filter pins based on territory
+  // Alleen daadwerkelijk bezochte deuren tonen als gekleurde markers op de kaart
   const activePins = useMemo(() => {
-    const list = propPins || storePins;
+    const list = (propPins || storePins).filter((p) => p.current_status !== 'unvisited');
     if (territory) {
       return list.filter((p) => p.territory_id === territory.id || !p.territory_id);
     }
@@ -101,7 +102,7 @@ export function RayonMap({
       case 'no_interest': return 'Geen Interesse 🔴';
       case 'appointment': return 'Afspraak Gemaakt 🟣';
       case 'do_not_knock': return 'Niet Aanbellen ⛔';
-      default: return 'Onbezocht ⚪';
+      default: return 'Onbezocht Pand (Live Kadaster) ⚪';
     }
   };
 
@@ -121,11 +122,46 @@ export function RayonMap({
       container: mapContainerRef.current,
       style: openMapConfig.styleUrl || 'https://tiles.openfreemap.org/styles/liberty',
       center: initialCenter,
-      zoom: openMapConfig.defaultZoom || 14,
+      zoom: openMapConfig.defaultZoom || 15,
       attributionControl: { compact: true },
     });
 
     map.addControl(new maplibregl.NavigationControl({ showCompass: true }), 'top-right');
+
+    // On-Demand Click op de kaart: Haal adres direct live op via Kadaster PDOK / Photon zonder iets op te slaan!
+    map.on('click', async (e) => {
+      const target = e.originalEvent.target as HTMLElement | null;
+      if (target?.closest('.d2d-pin-element')) {
+        return; // Klik was op een bestaande gekleurde pin
+      }
+
+      const lat = e.lngLat.lat;
+      const lng = e.lngLat.lng;
+
+      const resolved = await reverseGeocode(lat, lng);
+      if (resolved) {
+        const tempPin: D2DAddressPin = {
+          id: `on_demand_${Date.now()}`,
+          org_id: orgId,
+          company_name: user?.company_name || 'CRMos',
+          territory_id: territory?.id,
+          street: resolved.street,
+          house_number: resolved.houseNumber || '',
+          house_number_addition: resolved.houseNumberAddition,
+          postal_code: resolved.postalCode || '',
+          city: resolved.city || 'Nederland',
+          latitude: lat,
+          longitude: lng,
+          current_status: 'unvisited',
+          visits: [],
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+        setActivePin(tempPin);
+        setNearbyPOIs([]);
+        setRouteInfo(null);
+      }
+    });
 
     map.on('load', () => {
       setMapLoaded(true);
@@ -187,7 +223,7 @@ export function RayonMap({
     };
   }, [openMapConfig.styleUrl, territory?.id]);
 
-  // 2. Render D2D Pins on MapLibre
+  // 2. Render D2D Pins on MapLibre (Alleen bezochte adressen!)
   useEffect(() => {
     if (!mapRef.current || !mapLoaded || !showD2DPins) return;
 
@@ -206,7 +242,8 @@ export function RayonMap({
         </div>
       `;
 
-      el.addEventListener('click', () => {
+      el.addEventListener('click', (ev) => {
+        ev.stopPropagation();
         setActivePin(pin);
         onSelectPin?.(pin);
         setNearbyPOIs([]);
@@ -393,13 +430,13 @@ export function RayonMap({
             </span>
           </div>
 
-          {/* Quick Door Logging Buttons for Rep */}
+          {/* Quick Door Logging Buttons for Rep (Slaat pas op in database bij klik!) */}
           <div className="grid grid-cols-3 gap-1.5 pt-0.5">
             <button
               type="button"
               onClick={() => {
-                logVisit(activePin.id, 'deal_closed', 'Deal gesloten');
-                setActivePin({ ...activePin, current_status: 'deal_closed' });
+                const saved = logVisit(activePin.id, 'deal_closed', 'Deal gesloten', undefined, undefined, undefined, activePin);
+                setActivePin(saved || { ...activePin, current_status: 'deal_closed' });
               }}
               className="p-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-600 dark:text-emerald-400 text-[10px] font-semibold text-center border border-emerald-500/30"
             >
@@ -408,8 +445,8 @@ export function RayonMap({
             <button
               type="button"
               onClick={() => {
-                logVisit(activePin.id, 'not_home', 'Niet thuis');
-                setActivePin({ ...activePin, current_status: 'not_home' });
+                const saved = logVisit(activePin.id, 'not_home', 'Niet thuis', undefined, undefined, undefined, activePin);
+                setActivePin(saved || { ...activePin, current_status: 'not_home' });
               }}
               className="p-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 dark:text-amber-400 text-[10px] font-semibold text-center border border-amber-500/30"
             >
@@ -418,12 +455,34 @@ export function RayonMap({
             <button
               type="button"
               onClick={() => {
-                logVisit(activePin.id, 'no_interest', 'Geen interesse');
-                setActivePin({ ...activePin, current_status: 'no_interest' });
+                const saved = logVisit(activePin.id, 'no_interest', 'Geen interesse', undefined, undefined, undefined, activePin);
+                setActivePin(saved || { ...activePin, current_status: 'no_interest' });
               }}
               className="p-1.5 rounded-lg bg-red-500/15 hover:bg-red-500/25 text-red-600 dark:text-red-400 text-[10px] font-semibold text-center border border-red-500/30"
             >
               🔴 Geen Int.
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                const saved = logVisit(activePin.id, 'appointment', 'Afspraak ingepland', undefined, undefined, undefined, activePin);
+                setActivePin(saved || { ...activePin, current_status: 'appointment' });
+              }}
+              className="p-1.5 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 text-purple-600 dark:text-purple-400 text-[10px] font-semibold text-center border border-purple-500/30"
+            >
+              🟣 Afspraak
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const saved = logVisit(activePin.id, 'do_not_knock', 'Niet aanbellen / Sticker', undefined, undefined, undefined, activePin);
+                setActivePin(saved || { ...activePin, current_status: 'do_not_knock' });
+              }}
+              className="p-1.5 rounded-lg bg-slate-500/15 hover:bg-slate-500/25 text-slate-700 dark:text-slate-300 text-[10px] font-semibold text-center border border-slate-500/30"
+            >
+              ⛔ Niet Bellen
             </button>
           </div>
 

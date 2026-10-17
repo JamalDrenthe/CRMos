@@ -350,8 +350,9 @@ interface D2DState {
     notes?: string,
     followUpDate?: string,
     agentId?: string,
-    agentName?: string
-  ) => void;
+    agentName?: string,
+    fallbackPinData?: Partial<D2DAddressPin>
+  ) => D2DAddressPin | null;
 
   bulkImportPins: (pins: D2DAddressPin[]) => void;
   fetchAddressesFromPDOK: (postcode: string, city?: string, territoryId?: string) => Promise<{ success: boolean; count: number }>;
@@ -364,7 +365,7 @@ interface D2DState {
 export const useD2DStore = create<D2DState>()(
   persist(
     (set, get) => ({
-      pins: initialD2DPins,
+      pins: initialD2DPins.filter((p) => p.current_status !== 'unvisited'),
       selectedPin: null,
       activeTerritoryId: null,
       userLocation: null,
@@ -395,7 +396,10 @@ export const useD2DStore = create<D2DState>()(
         };
 
         set((state) => ({ pins: [newPin, ...state.pins] }));
-        saveD2DPinToFirestore(newPin, orgId);
+        // Alleen opslaan in Firestore als er daadwerkelijk een bezoekstatus is (niet 'unvisited')
+        if (newPin.current_status !== 'unvisited') {
+          saveD2DPinToFirestore(newPin, orgId);
+        }
         return newPin;
       },
 
@@ -408,7 +412,7 @@ export const useD2DStore = create<D2DState>()(
             p.id === id ? { ...p, ...updates, updated_at: new Date().toISOString() } : p
           );
           const updated = updatedPins.find((p) => p.id === id);
-          if (updated) {
+          if (updated && updated.current_status !== 'unvisited') {
             saveD2DPinToFirestore(updated, orgId);
           }
           return { pins: updatedPins };
@@ -423,7 +427,7 @@ export const useD2DStore = create<D2DState>()(
         deleteD2DPinFromFirestore(id);
       },
 
-      logVisit: (pinId, status, notes, followUpDate, agentId, agentName) => {
+      logVisit: (pinId, status, notes, followUpDate, agentId, agentName, fallbackPinData) => {
         const user = useAuthStore.getState().user;
         const orgId = useAuthStore.getState().organization?.id || user?.org_id || 'default_org';
 
@@ -437,26 +441,64 @@ export const useD2DStore = create<D2DState>()(
           follow_up_date: followUpDate || undefined,
         };
 
-        set((state) => {
-          const updatedPins = state.pins.map((p) => {
-            if (p.id === pinId) {
-              return {
-                ...p,
-                current_status: status,
-                last_visit_at: visitLog.visited_at,
-                visits: [visitLog, ...p.visits],
-                updated_at: new Date().toISOString(),
-              };
-            }
-            return p;
-          });
+        let resultPin: D2DAddressPin | null = null;
 
-          const updated = updatedPins.find((p) => p.id === pinId);
-          if (updated) {
-            saveD2DPinToFirestore(updated, orgId);
+        set((state) => {
+          const exists = state.pins.some((p) => p.id === pinId);
+
+          if (exists) {
+            const updatedPins = state.pins.map((p) => {
+              if (p.id === pinId) {
+                const updated: D2DAddressPin = {
+                  ...p,
+                  current_status: status,
+                  last_visit_at: visitLog.visited_at,
+                  visits: [visitLog, ...p.visits],
+                  updated_at: new Date().toISOString(),
+                };
+                resultPin = updated;
+                return updated;
+              }
+              return p;
+            });
+
+            if (resultPin && status !== 'unvisited') {
+              saveD2DPinToFirestore(resultPin, orgId);
+            }
+            return { pins: updatedPins, selectedPin: resultPin || state.selectedPin };
+          } else if (fallbackPinData) {
+            // On-the-fly geklikt pand op de kaart: maak nu pas de pin aan omdat er een echte status wordt gelogd!
+            const created: D2DAddressPin = {
+              id: pinId.startsWith('on_demand_') ? `pin_${generateId()}` : pinId,
+              org_id: orgId,
+              company_name: user?.company_name || 'CRMos',
+              territory_id: fallbackPinData.territory_id,
+              street: fallbackPinData.street || 'Onbekend',
+              house_number: fallbackPinData.house_number || '',
+              house_number_addition: fallbackPinData.house_number_addition,
+              postal_code: fallbackPinData.postal_code || '',
+              city: fallbackPinData.city || 'Nederland',
+              latitude: fallbackPinData.latitude || 52.3732,
+              longitude: fallbackPinData.longitude || 4.8891,
+              current_status: status,
+              last_visit_at: visitLog.visited_at,
+              assigned_agent_id: visitLog.agent_id,
+              assigned_agent_name: visitLog.agent_name,
+              visits: [visitLog],
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            };
+            resultPin = created;
+            if (status !== 'unvisited') {
+              saveD2DPinToFirestore(created, orgId);
+            }
+            return { pins: [created, ...state.pins], selectedPin: created };
           }
-          return { pins: updatedPins, selectedPin: updated || state.selectedPin };
+
+          return state;
         });
+
+        return resultPin;
       },
 
       bulkImportPins: (newPins) => {
@@ -469,8 +511,11 @@ export const useD2DStore = create<D2DState>()(
           return { pins: [...toAdd, ...state.pins] };
         });
 
+        // Sla ALLEEN adressen op in Firestore die daadwerkelijk bezocht zijn (geen 'unvisited' bulk writes!)
         for (const pin of newPins) {
-          saveD2DPinToFirestore(pin, orgId);
+          if (pin.current_status !== 'unvisited') {
+            saveD2DPinToFirestore(pin, orgId);
+          }
         }
       },
 
@@ -481,7 +526,7 @@ export const useD2DStore = create<D2DState>()(
           const orgId = useAuthStore.getState().organization?.id || user?.org_id || 'default_org';
 
           const query = city ? `${postcodePrefix} ${city}` : postcodePrefix;
-          // Use high-performance PDOK free endpoint: returns 25 addresses WITH coordinates in a single 60ms call!
+          // Tijdelijke weergave van adressen uit PDOK (worden NIET opgeslagen in Firestore totdat er wordt aangebeld)
           const url = `https://api.pdok.nl/bzk/locatieserver/v3_1/free?q=${encodeURIComponent(query)}&rows=25&fq=type:adres&fl=id,weergavenaam,straatnaam,huisnummer,huisnummertoevoeging,postcode,woonplaatsnaam,centroide_ll`;
 
           const response = await fetch(url);
@@ -536,32 +581,16 @@ export const useD2DStore = create<D2DState>()(
         }
       },
 
-      autoSyncKadasterTerritory: async (territory) => {
-        if (!territory) return { success: false, count: 0, alreadyPopulated: false };
-        const existingPins = get().pins.filter((p) => p.territory_id === territory.id);
-        if (existingPins.length >= 8) {
-          return { success: true, count: existingPins.length, alreadyPopulated: true };
-        }
-
-        const prefixes = territory.postcode_prefixes && territory.postcode_prefixes.length > 0
-          ? territory.postcode_prefixes
-          : [territory.name];
-
-        let totalImported = 0;
-        for (const prefix of prefixes.slice(0, 1)) {
-          const res = await get().fetchAddressesFromPDOK(prefix, territory.description, territory.id);
-          if (res.success) {
-            totalImported += res.count;
-          }
-        }
-
-        return { success: true, count: totalImported, alreadyPopulated: false };
+      autoSyncKadasterTerritory: async (_territory) => {
+        // Geen automatische bulk-opslag van onbezochte adressen meer nodig:
+        // De kaart toont al alle panden via OpenFreeMap vector tiles en haalt adressen on-the-fly op bij aanklikken!
+        return { success: true, count: 0, alreadyPopulated: true };
       },
 
       syncWithFirestore: (orgId) => {
         return subscribeToD2DPins(orgId, (pins) => {
           if (pins.length > 0) {
-            set({ pins });
+            set({ pins: pins.filter((p) => p.current_status !== 'unvisited') });
           }
         });
       },
@@ -569,7 +598,8 @@ export const useD2DStore = create<D2DState>()(
     {
       name: 'crmos-d2d-storage',
       partialize: (state) => ({
-        pins: state.pins,
+        // Sla alleen daadwerkelijk bezochte deuren op in localStorage
+        pins: state.pins.filter((p) => p.current_status !== 'unvisited'),
         activeTerritoryId: state.activeTerritoryId,
         statusFilter: state.statusFilter,
       }),
