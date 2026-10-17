@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useCRMStore } from '@/stores/crmStore';
-import { useD2DStore } from '@/stores/d2dStore';
 import { Contact360View } from '@/components/360-view/Contact360View';
 import { Company360View } from '@/components/360-view/Company360View';
 import {
@@ -23,7 +22,6 @@ import {
 
 export function View360Page() {
   const { contacts, companies, deals, getContact360 } = useCRMStore();
-  const { pins } = useD2DStore();
   const [viewType, setViewType] = useState<'contacts' | 'companies'>('companies');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
@@ -57,7 +55,7 @@ export function View360Page() {
             </Badge>
           </div>
           <p className="text-muted-foreground mt-1">
-            Integraal 360° beeld van je contactpersonen, B2B bedrijfspanden, deals en Kadaster-verrijking
+            Integraal 360° beeld van je contactpersonen, bedrijven, deals en vestigingsdata
           </p>
         </div>
 
@@ -182,15 +180,6 @@ export function View360Page() {
                 (c.company && c.company.toLowerCase() === company.name.toLowerCase())
             );
 
-            // Check linked D2D pin for mutations
-            const matchedPin = pins.find(
-              (p) =>
-                p.business_name?.toLowerCase() === company.name.toLowerCase() ||
-                (company.address?.street &&
-                  `${p.street} ${p.house_number}`.toLowerCase() ===
-                    company.address.street.toLowerCase())
-            );
-
             return (
               <Card
                 key={company.id}
@@ -228,11 +217,6 @@ export function View360Page() {
                     {company.domain && (
                       <Badge variant="outline" className="text-[10px] text-muted-foreground">
                         🌐 {company.domain}
-                      </Badge>
-                    )}
-                    {matchedPin?.mutations && matchedPin.mutations.length > 0 && (
-                      <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 text-[10px] font-semibold">
-                        ⚡ Bekendmaking
                       </Badge>
                     )}
                   </div>

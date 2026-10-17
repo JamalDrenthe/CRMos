@@ -84,7 +84,7 @@ export function RayonMap({
   }, [orgId]);
 
   // Status Color Helper
-  const getStatusColor = (status: D2DPinStatus, isCommercial?: boolean, hasMutations?: boolean) => {
+  const getStatusColor = (status: D2DPinStatus, isCommercial?: boolean) => {
     switch (status) {
       case 'deal_closed': return '#22c55e'; // Emerald
       case 'not_home': return '#f59e0b';    // Amber
@@ -92,7 +92,6 @@ export function RayonMap({
       case 'appointment': return '#a855f7'; // Purple
       case 'do_not_knock': return '#0f172a';// Charcoal
       default:
-        if (hasMutations) return '#ea580c'; // Oranje/Goud voor bedrijfspand met nieuwe vergunning/mutatie
         if (isCommercial) return '#0284c7'; // Zakelijk Blauw voor B2B bedrijfspand
         return '#64748b';
     }
@@ -105,7 +104,7 @@ export function RayonMap({
       case 'no_interest': return 'Geen Interesse 🔴';
       case 'appointment': return 'Afspraak Gemaakt 🟣';
       case 'do_not_knock': return 'Niet Aanbellen ⛔';
-      default: return isCommercial ? 'B2B Bedrijfspand (Te Bezoeken) 🏢' : 'Onbezocht Pand (Live Kadaster) ⚪';
+      default: return isCommercial ? 'B2B Bedrijfspand (Te Bezoeken) 🏢' : 'Onbezocht Pand ⚪';
     }
   };
 
@@ -237,11 +236,8 @@ export function RayonMap({
     activePins.forEach((pin) => {
       const el = document.createElement('div');
       el.className = 'd2d-pin-element cursor-pointer transition-transform hover:scale-125';
-      const hasMutations = Boolean(pin.mutations && pin.mutations.length > 0);
-      const color = getStatusColor(pin.current_status, pin.is_commercial, hasMutations);
-      const borderStyle = hasMutations
-        ? '2.5px solid #fde047'
-        : '2.5px solid #ffffff';
+      const color = getStatusColor(pin.current_status, pin.is_commercial);
+      const borderStyle = '2.5px solid #ffffff';
 
       el.innerHTML = `
         <div title="${pin.business_name || `${pin.street} ${pin.house_number}`}" style="background-color: ${color}; width: 26px; height: 26px; border-radius: ${pin.is_commercial ? '8px' : '50%'}; border: ${borderStyle}; box-shadow: 0 3px 8px rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; color: white; font-size: 10px; font-weight: 800; font-family: system-ui, sans-serif;">
@@ -444,7 +440,7 @@ export function RayonMap({
             </button>
           </div>
 
-          {/* B2B Bedrijfspand Verrijking (Kadaster BAG + OSM Overpass) */}
+          {/* B2B Bedrijfspand Verrijking */}
           {(activePin.is_commercial || activePin.branch || activePin.surface_area_m2 || activePin.opening_hours) && (
             <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
               {activePin.branch && (
@@ -454,7 +450,7 @@ export function RayonMap({
               )}
               {activePin.surface_area_m2 ? (
                 <Badge variant="outline" className="text-[10px] font-mono">
-                  {activePin.surface_area_m2} m² BAG
+                  {activePin.surface_area_m2} m²
                 </Badge>
               ) : null}
               {activePin.build_year ? (
@@ -470,29 +466,6 @@ export function RayonMap({
             </div>
           )}
 
-          {/* Overheid.nl KOOP SRU Mutaties (Vergunningen / Faillissementen) */}
-          {activePin.mutations && activePin.mutations.length > 0 && (
-            <div className="p-2 rounded-xl bg-amber-500/15 border border-amber-500/30 space-y-1">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300">
-                ⚡ Officiële Bekendmaking ({activePin.mutations[0].type === 'faillissement' ? 'Faillissement' : 'Vergunning'})
-              </p>
-              <p className="text-[11px] font-medium text-foreground line-clamp-2">
-                {activePin.mutations[0].title}
-              </p>
-              {activePin.mutations[0].url && (
-                <a
-                  href={activePin.mutations[0].url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 text-[10px] text-amber-700 dark:text-amber-300 underline font-semibold"
-                >
-                  <span>Bekijk publicatie ({activePin.mutations[0].date})</span>
-                  <ExternalLink className="h-2.5 w-2.5" />
-                </a>
-              )}
-            </div>
-          )}
-
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5">
               <span className="text-[11px] text-muted-foreground">Status:</span>
@@ -501,8 +474,7 @@ export function RayonMap({
                 style={{
                   backgroundColor: getStatusColor(
                     activePin.current_status,
-                    activePin.is_commercial,
-                    Boolean(activePin.mutations && activePin.mutations.length > 0)
+                    activePin.is_commercial
                   ),
                 }}
               >
@@ -606,7 +578,7 @@ export function RayonMap({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-lg">
               <Building2 className="h-5 w-5 text-primary" />
-              <span>Open-Source Pandinspectie & Omgevingsdata</span>
+              <span>Pand- & Omgevingsanalyse</span>
             </DialogTitle>
           </DialogHeader>
 
@@ -617,29 +589,29 @@ export function RayonMap({
                   <p className="font-bold text-foreground text-sm">
                     {activePin.street} {activePin.house_number}{activePin.house_number_addition || ''}
                   </p>
-                  <p>{activePin.postal_code} {activePin.city} &bull; Kadaster BAG Geometrie</p>
+                  <p>{activePin.postal_code} {activePin.city}</p>
                 </div>
                 <div className="font-mono text-[11px] text-right">
                   <span>GPS: {activePin.latitude.toFixed(5)}, {activePin.longitude.toFixed(5)}</span>
                 </div>
               </div>
 
-              {/* OpenStreetMap Interactive Embed */}
+              {/* Interactive Map Embed */}
               <div className="relative w-full h-64 rounded-xl border overflow-hidden shadow-inner bg-muted">
                 <iframe
-                  title="OpenStreetMap Inspection"
+                  title="Omgeving Kaart"
                   src={`https://www.openstreetmap.org/export/embed.html?bbox=${activePin.longitude - 0.002}%2C${activePin.latitude - 0.0015}%2C${activePin.longitude + 0.002}%2C${activePin.latitude + 0.0015}&layer=mapnik&marker=${activePin.latitude}%2C${activePin.longitude}`}
                   className="w-full h-full border-0"
                   loading="lazy"
                 />
               </div>
 
-              {/* Overpass Nearby POIs Section */}
+              {/* Nearby POIs Section */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold flex items-center gap-1.5">
                     <Search className="h-3.5 w-3.5 text-primary" />
-                    <span>Overpass API Omgevingsanalyse (Straal 400m)</span>
+                    <span>Voorzieningen in de omgeving (Straal 400m)</span>
                   </span>
                   <Button
                     variant="outline"
@@ -666,7 +638,7 @@ export function RayonMap({
                   </div>
                 ) : (
                   <p className="text-[11px] text-muted-foreground italic">
-                    Klik op &quot;Zoek Voorzieningen&quot; om horeca, winkels en openbare faciliteiten rond dit pand op te vragen via OpenStreetMap Overpass QL.
+                    Klik op &quot;Zoek Voorzieningen&quot; om horeca, winkels en faciliteiten rond dit pand op te vragen.
                   </p>
                 )}
               </div>
@@ -675,7 +647,7 @@ export function RayonMap({
               <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t">
                 <span className="text-[11px] text-muted-foreground flex items-center gap-1">
                   <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-                  100% Open-Source &amp; Privacy-vriendelijk (OpenStreetMap &bull; OSRM &bull; PDOK)
+                  CRMos Slim Rayonbeheer &bull; Realtime Geo-Analyse
                 </span>
                 <div className="flex items-center gap-2">
                   <a

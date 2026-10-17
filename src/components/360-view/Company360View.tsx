@@ -12,7 +12,6 @@ import {
   Globe,
   Phone,
   ExternalLink,
-  Sparkles,
   Layers,
   CheckCircle2,
   Clock,
@@ -28,7 +27,7 @@ interface Company360ViewProps {
 export function Company360View({ companyId, isOpen, onClose, onSelectContact }: Company360ViewProps) {
   const { companies, contacts, deals } = useCRMStore();
   const { pins } = useD2DStore();
-  const [activeTab, setActiveTab] = useState<'overview' | 'deals' | 'contacts' | 'kadaster'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'deals' | 'contacts' | 'specs'>('overview');
 
   const company = useMemo(() => {
     return companies.find((c) => c.id === companyId) || null;
@@ -59,7 +58,7 @@ export function Company360View({ companyId, isOpen, onClose, onSelectContact }: 
     return linkedDeals.reduce((sum, d) => sum + (d.value || 0), 0);
   }, [linkedDeals]);
 
-  // Find matching D2D pin (with Kadaster BAG data & Overheid.nl mutaties)
+  // Find matching D2D pin (with building specs and geo data)
   const matchedPin = useMemo(() => {
     if (!company) return null;
     return pins.find((p) => {
@@ -120,11 +119,6 @@ export function Company360View({ companyId, isOpen, onClose, onSelectContact }: 
                 {company.size}
               </Badge>
             )}
-            {matchedPin?.mutations && matchedPin.mutations.length > 0 && (
-              <Badge className="bg-amber-500 text-white text-xs font-semibold">
-                ⚡ {matchedPin.mutations.length} Mutatie(s) Bekendmaking
-              </Badge>
-            )}
           </div>
 
           {/* KPI Strip */}
@@ -175,10 +169,10 @@ export function Company360View({ companyId, isOpen, onClose, onSelectContact }: 
                 </span>
               </TabsTrigger>
               <TabsTrigger
-                value="kadaster"
+                value="specs"
                 className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-2 text-xs font-semibold gap-1"
               >
-                <span>Kadaster BAG & Mutaties</span>
+                <span>Pandspecificaties</span>
               </TabsTrigger>
             </TabsList>
           </Tabs>
@@ -344,72 +338,40 @@ export function Company360View({ companyId, isOpen, onClose, onSelectContact }: 
             </div>
           )}
 
-          {activeTab === 'kadaster' && (
+          {activeTab === 'specs' && (
             <div className="space-y-4">
               <Card className="rounded-2xl border shadow-xs">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm font-semibold flex items-center gap-2">
                     <Layers className="h-4 w-4 text-sky-600" />
-                    Officiële Kadaster BAG Pandkenmerken
+                    Pandspecificaties & Vestiging
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2 text-xs">
                   <div className="grid grid-cols-2 gap-2 p-2.5 rounded-xl bg-muted/40">
                     <div>
-                      <span className="text-muted-foreground">Gebruiksdoel:</span>
-                      <p className="font-semibold mt-0.5">{matchedPin?.bag_gebruiksdoel || company.industry || 'Bedrijfsfunctie'}</p>
+                      <span className="text-muted-foreground">Type Pand / Bestemming:</span>
+                      <p className="font-semibold mt-0.5">{matchedPin?.bag_gebruiksdoel || company.industry || 'Bedrijfspand'}</p>
                     </div>
                     <div>
-                      <span className="text-muted-foreground">Oppervlakte:</span>
+                      <span className="text-muted-foreground">Vloeroppervlakte:</span>
                       <p className="font-semibold mt-0.5">{matchedPin?.surface_area_m2 ? `${matchedPin.surface_area_m2} m²` : (company.size || 'Onbekend')}</p>
                     </div>
                   </div>
                   {matchedPin?.build_year && (
                     <div className="flex items-center justify-between p-2 rounded-xl bg-muted/40">
-                      <span className="text-muted-foreground">Bouwjaar:</span>
+                      <span className="text-muted-foreground">Bouwjaar Pand:</span>
                       <span className="font-semibold">{matchedPin.build_year}</span>
                     </div>
                   )}
                   {matchedPin?.pand_identificatie && (
                     <div className="flex items-center justify-between p-2 rounded-xl bg-muted/40">
-                      <span className="text-muted-foreground">BAG Pand Identificatie:</span>
+                      <span className="text-muted-foreground">Pand Referentienummer:</span>
                       <span className="font-mono text-[11px]">{matchedPin.pand_identificatie}</span>
                     </div>
                   )}
                 </CardContent>
               </Card>
-
-              {/* Overheid.nl Bekendmakingen & Vergunningen */}
-              {matchedPin?.mutations && matchedPin.mutations.length > 0 && (
-                <div className="space-y-2">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                    <Sparkles className="h-3.5 w-3.5 text-amber-500" />
-                    Recente Overheidsbekendmakingen & Mutaties
-                  </h4>
-                  {matchedPin.mutations.map((mut) => (
-                    <div key={mut.id} className="p-3 rounded-xl border border-amber-500/30 bg-amber-500/10 space-y-1 text-xs">
-                      <div className="flex items-center justify-between">
-                        <Badge className="text-[10px] bg-amber-600 text-white">
-                          {mut.type === 'faillissement' ? 'Faillissement' : 'Vergunning / Mutatie'}
-                        </Badge>
-                        <span className="text-[10px] text-muted-foreground font-mono">{mut.date}</span>
-                      </div>
-                      <p className="font-semibold text-foreground pt-1">{mut.title}</p>
-                      {mut.url && (
-                        <a
-                          href={mut.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center gap-1 text-[11px] text-primary underline font-medium pt-1"
-                        >
-                          <span>Bekijk officiële publicatie</span>
-                          <ExternalLink className="h-3 w-3" />
-                        </a>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           )}
         </ScrollArea>

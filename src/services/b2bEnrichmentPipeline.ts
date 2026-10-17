@@ -387,75 +387,7 @@ out center tags;`;
 }
 
 /**
- * STAP 3: Haal recente zakelijke mutaties (vergunningen & faillissementen) op via Overheid.nl KOOP SRU Open Data API
- */
-async function step3FetchOfficialMutations(
-  regionQuery: string,
-  city: string
-): Promise<B2BMutationItem[]> {
-  const clean = regionQuery.trim();
-  const isPostcode = /^\d{4}/.test(clean);
-  const pc4 = clean.slice(0, 4);
-
-  const cqlQuery = isPostcode
-    ? `c.product-area=="officielepublicaties" AND cql.textAndIndexes="${pc4}" AND (cql.textAndIndexes="vergunning" OR cql.textAndIndexes="horeca" OR cql.textAndIndexes="faillissement" OR cql.textAndIndexes="exploitatievergunning") sortBy dt.modified/sort.descending`
-    : `c.product-area=="officielepublicaties" AND dt.creator=="${city}" AND (cql.textAndIndexes="vergunning" OR cql.textAndIndexes="faillissement" OR cql.textAndIndexes="exploitatievergunning") sortBy dt.modified/sort.descending`;
-
-  const sruUrl =
-    `https://repository.overheid.nl/sru?version=2.0&operation=searchRetrieve` +
-    `&query=${encodeURIComponent(cqlQuery)}&maximumRecords=15`;
-
-  try {
-    const res = await fetch(sruUrl);
-    if (!res.ok) return [];
-
-    const xmlText = await res.text();
-    const parser = new DOMParser();
-    const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
-    const records = Array.from(xmlDoc.getElementsByTagName('sru:record'));
-
-    const mutations: B2BMutationItem[] = [];
-
-    for (const rec of records) {
-      const id = rec.getElementsByTagName('dcterms:identifier')[0]?.textContent || '';
-      const title = rec.getElementsByTagName('dcterms:title')[0]?.textContent || '';
-      const rubriek = rec.getElementsByTagName('dcterms:type')[0]?.textContent || 'bekendmaking';
-      const date =
-        rec.getElementsByTagName('dcterms:modified')[0]?.textContent ||
-        rec.getElementsByTagName('dcterms:date')[0]?.textContent ||
-        new Date().toISOString().slice(0, 10);
-      const abstract = rec.getElementsByTagName('dcterms:abstract')[0]?.textContent || undefined;
-
-      if (!id || !title) continue;
-
-      const lower = `${title} ${rubriek}`.toLowerCase();
-      const type: 'vergunning' | 'faillissement' | 'bekendmaking' = lower.includes('faillissement') ||
-        lower.includes('surseance')
-        ? 'faillissement'
-        : lower.includes('vergunning')
-        ? 'vergunning'
-        : 'bekendmaking';
-
-      mutations.push({
-        id,
-        title,
-        type,
-        rubriek,
-        date,
-        url: `https://zoek.officielebekendmakingen.nl/${id}.html`,
-        abstract,
-      });
-    }
-
-    return mutations;
-  } catch (err) {
-    console.warn('Overheid.nl SRU mutaties ophalen mislukt:', err);
-    return [];
-  }
-}
-
-/**
- * Voert de volledige 3-stappen B2B Lead- & Kaart-Enrichment Pipeline uit
+ * Voert de B2B Lead- & Kaart-Enrichment Pipeline uit
  */
 export async function runB2BLeadEnrichmentPipeline(params: {
   regionQuery: string;
@@ -474,41 +406,31 @@ export async function runB2BLeadEnrichmentPipeline(params: {
     onProgress,
   } = params;
 
-  // STAP 1: PDOK / BAG Zakelijke Bedrijfspanden
+  // STAP 1: Bedrijfspanden ophalen
   onProgress?.({
     step: 1,
-    stepLabel: 'Stap 1/3: Fysieke bedrijfspanden ophalen uit Kadaster BAG (PDOK)...',
+    stepLabel: 'Stap 1/2: Fysieke bedrijfspanden ophalen...',
     bagBuildingsCount: 0,
     enrichedOsmCount: 0,
     mutationsCount: 0,
-    message: 'Filteren op winkels, kantoren, horeca, industrie, logies & zorg (woonhuizen worden genegeerd)...',
+    message: 'Zakelijke panden lokaliseren in het doelgebied...',
   });
 
   const { buildings, city, bbox } = await step1FetchCommercialBAGBuildings(regionQuery, allowedPurposes);
 
-  // STAP 2: OpenStreetMap Overpass API Verrijking
+  // STAP 2: Bedrijfsnamen, branches & openingstijden verrijken
   onProgress?.({
     step: 2,
-    stepLabel: 'Stap 2/3: Bedrijfsnamen, branches & openingstijden verrijken (Overpass QL)...',
+    stepLabel: 'Stap 2/2: Bedrijfsnamen, branches & openingstijden verrijken...',
     bagBuildingsCount: buildings.length,
     enrichedOsmCount: 0,
     mutationsCount: 0,
-    message: `${buildings.length} zakelijke BAG-panden gevonden. Nu matchen met OpenStreetMap bedrijfsdata...`,
+    message: `${buildings.length} bedrijfspanden gevonden. Gegevens verrijken met bedrijfsnamen en branches...`,
   });
 
   const osmBusinesses = await step2FetchOverpassBusinesses(bbox);
 
-  // STAP 3: Overheid.nl Bekendmakingen (Vergunningen & Faillissementen)
-  onProgress?.({
-    step: 3,
-    stepLabel: 'Stap 3/3: Recente vergunningen & faillissementen analyseren (Overheid.nl)...',
-    bagBuildingsCount: buildings.length,
-    enrichedOsmCount: osmBusinesses.length,
-    mutationsCount: 0,
-    message: 'Officiële bekendmakingen (Gemeenteblad & Staatscourant) controleren op mutaties...',
-  });
-
-  const regionMutations = await step3FetchOfficialMutations(regionQuery, city);
+  const regionMutations: B2BMutationItem[] = [];
 
   // KOPPEL & MERGE DATA
   const usedOsmIds = new Set<number>();
