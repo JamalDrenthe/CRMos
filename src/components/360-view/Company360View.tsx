@@ -60,20 +60,27 @@ export function Company360View({ companyId, isOpen, onClose, onSelectContact }: 
 
   // Find matching D2D pin (with building specs and geo data)
   const matchedPin = useMemo(() => {
-    if (!company) return null;
-    return pins.find((p) => {
-      if (p.business_name && p.business_name.toLowerCase() === company.name.toLowerCase()) {
-        return true;
-      }
-      if (company.address?.street && company.address.postal_code) {
-        const compAddr = `${company.address.street}`.toLowerCase().replace(/\s+/g, '');
-        const pinAddr = `${p.street}${p.house_number}`.toLowerCase().replace(/\s+/g, '');
-        if (compAddr.includes(pinAddr) || pinAddr.includes(compAddr)) {
-          return true;
+    if (!company || pins.length === 0) return null;
+    const compNameLower = company.name?.toLowerCase().trim();
+    if (compNameLower) {
+      for (let i = 0; i < pins.length; i++) {
+        const p = pins[i];
+        if (p.business_name && p.business_name.toLowerCase().trim() === compNameLower) {
+          return p;
         }
       }
-      return false;
-    });
+    }
+    if (company.address?.street && company.address.postal_code) {
+      const compAddr = `${company.address.street}`.toLowerCase().replace(/\s+/g, '');
+      for (let i = 0; i < pins.length; i++) {
+        const p = pins[i];
+        const pinAddr = `${p.street}${p.house_number}`.toLowerCase().replace(/\s+/g, '');
+        if (compAddr.includes(pinAddr) || pinAddr.includes(compAddr)) {
+          return p;
+        }
+      }
+    }
+    return null;
   }, [company, pins]);
 
   if (!company) return null;

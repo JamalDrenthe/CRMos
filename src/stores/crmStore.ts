@@ -451,6 +451,9 @@ export const useCRMStore = create<CRMState>()(
     }),
     {
       name: 'crmos-crm-live-v3',
+      partialize: (state) => ({
+        pipelines: state.pipelines,
+      }),
     }
   )
 );
