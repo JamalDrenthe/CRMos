@@ -291,7 +291,7 @@ export function TerritoriesPage() {
           <div className="flex items-center gap-2.5">
             <h1 className="text-3xl font-bold tracking-tight">Verkoopregio's & D2D Kaarten</h1>
             <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 text-xs px-2.5 py-0.5">
-              Mapbox & Kadaster
+              MapLibre & Kadaster PDOK
             </Badge>
           </div>
           <p className="text-muted-foreground mt-1">

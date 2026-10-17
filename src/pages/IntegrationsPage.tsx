@@ -48,6 +48,7 @@ import {
   Map,
   Layers,
   ArrowUpRight,
+  Navigation,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -66,13 +67,12 @@ import {
   verifyTwilioAccount,
 } from '@/services/twilioService';
 import {
-  loadMapboxConfigFromFirestore,
-  saveMapboxConfigToFirestore,
-  verifyMapboxToken,
-  DEFAULT_MAPBOX_CONFIG,
-  POPULAR_MAPBOX_STYLES,
-  type MapboxConfig,
-} from '@/services/mapboxService';
+  loadOpenMapConfigFromFirestore,
+  saveOpenMapConfigToFirestore,
+  DEFAULT_OPEN_MAP_CONFIG,
+  OPEN_FREE_MAP_STYLES,
+  type OpenMapConfig,
+} from '@/services/openMapService';
 import { purgeDemoAndMockDataFromFirestore } from '@/services/firestoreService';
 import { useAuthStore } from '@/stores/authStore';
 import { useCRMStore } from '@/stores/crmStore';
@@ -111,19 +111,19 @@ export const INITIAL_INTEGRATIONS: Integration[] = [
     apiKeyPlaceholder: 'ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
   },
   {
-    id: 'mapbox-gl',
-    name: 'Mapbox Vector Kaarten & AI MCP',
-    tagline: 'Door-to-Door Pandkaarten, Rayonbeheer & Looproutes',
+    id: 'open-geo',
+    name: 'Open-Source Kaarten & Geodata Hub',
+    tagline: 'MapLibre GL, OpenFreeMap Vector Tiles & Kadaster PDOK',
     category: 'Logistiek & Expansie',
     description:
-      'GPU-versnelde vector kaarten voor veldvertegenwoordigers en rayon managers. Huis-voor-huis status logging, pandcontouren, postcode-polygonen en Mapbox MCP AI looproute-optimalisatie.',
+      '100% open-source en keyless geodata-architectuur voor veldvertegenwoordigers en rayon managers. MapLibre GL JS vector kaarten, Kadaster PDOK adres-resolutie, OSRM looproutes en Overpass POI analyse. Géén commerciële API-keys vereist.',
     icon: MapPin,
-    gradient: 'from-cyan-500 to-blue-600',
-    badgeColor: 'bg-cyan-500/10 text-cyan-600 border-cyan-500/20',
-    website: 'https://www.mapbox.com/',
+    gradient: 'from-sky-500 to-indigo-600',
+    badgeColor: 'bg-sky-500/10 text-sky-600 border-sky-500/20',
+    website: 'https://openfreemap.org/',
     status: 'connected',
-    features: ['3D Pandcontouren & Huisnummers', 'Mapbox AI MCP Server', 'Rayon Polygoon Tekentool', 'Live GPS Field Tracking'],
-    apiKeyPlaceholder: 'pk.eyJ1IjoieW91cmFjY291bnQi...',
+    features: ['MapLibre GL JS Vector Engine', 'OpenFreeMap Liberty / Positron / Bright', 'Kadaster PDOK & Photon Geocoding', 'OSRM Routeplanner & Overpass POIs'],
+    apiKeyPlaceholder: 'Geen API-key nodig (100% Keyless)',
   },
   {
     id: 'quantum-initium',
@@ -300,13 +300,10 @@ export function IntegrationsPage() {
     phoneNumbers?: Array<{ phoneNumber: string; friendlyName: string }>;
   } | null>(null);
 
-  // Mapbox & Kaarten State
-  const [mapboxConfig, setMapboxConfig] = useState<MapboxConfig>(DEFAULT_MAPBOX_CONFIG);
-  const [isMapboxSaving, setIsMapboxSaving] = useState(false);
-  const [isVerifyingMapbox, setIsVerifyingMapbox] = useState(false);
-  const [showMapboxMcpGuide, setShowMapboxMcpGuide] = useState(false);
-  const [showMapboxToken, setShowMapboxToken] = useState(false);
-  const [mapboxVerificationResult, setMapboxVerificationResult] = useState<{ valid: boolean; message: string } | null>(null);
+  // Open-Source Geodata & Kaarten State (MapLibre & OpenFreeMap)
+  const [openMapConfig, setOpenMapConfig] = useState<OpenMapConfig>(DEFAULT_OPEN_MAP_CONFIG);
+  const [isOpenMapSaving, setIsOpenMapSaving] = useState(false);
+  const [showOpenMapMcpGuide, setShowOpenMapMcpGuide] = useState(false);
 
   useEffect(() => {
     loadHubSpotConfigFromFirestore(orgId).then((cfg) => {
@@ -322,43 +319,22 @@ export function IntegrationsPage() {
       }
     });
 
-    loadMapboxConfigFromFirestore(orgId).then((mbCfg) => {
-      if (mbCfg) {
-        setMapboxConfig(mbCfg);
+    loadOpenMapConfigFromFirestore(orgId).then((omCfg) => {
+      if (omCfg) {
+        setOpenMapConfig(omCfg);
       }
     });
   }, [orgId]);
 
-  const handleSaveMapboxConfig = async () => {
-    setIsMapboxSaving(true);
+  const handleSaveOpenMapConfig = async () => {
+    setIsOpenMapSaving(true);
     try {
-      await saveMapboxConfigToFirestore(mapboxConfig, orgId);
-      toast.success('Mapbox kaartinstellingen succesvol opgeslagen & gesynchroniseerd!');
+      await saveOpenMapConfigToFirestore(openMapConfig, orgId);
+      toast.success('Open-Source kaartinstellingen succesvol opgeslagen & gesynchroniseerd!');
     } catch {
-      toast.error('Fout bij opslaan van Mapbox configuratie.');
+      toast.error('Fout bij opslaan van kaartconfiguratie.');
     } finally {
-      setIsMapboxSaving(false);
-    }
-  };
-
-  const handleVerifyMapbox = async () => {
-    if (!mapboxConfig.publicToken.trim()) {
-      toast.error('Vul eerst je Mapbox Public Token in (begint met pk.).');
-      return;
-    }
-    setIsVerifyingMapbox(true);
-    try {
-      const res = await verifyMapboxToken(mapboxConfig.publicToken);
-      setMapboxVerificationResult(res);
-      if (res.valid) {
-        toast.success(res.message);
-      } else {
-        toast.error(res.message);
-      }
-    } catch (err) {
-      toast.error((err as Error)?.message || 'Validatie mislukt.');
-    } finally {
-      setIsVerifyingMapbox(false);
+      setIsOpenMapSaving(false);
     }
   };
 
@@ -849,34 +825,31 @@ export function IntegrationsPage() {
       </Card>
 
       {/* ===================================================================== */}
-      {/* 2. MAPBOX VECTOR KAARTEN & AI MCP SERVER (D2D & RAYONBEHEER)          */}
       {/* ===================================================================== */}
-      <Card className="relative overflow-hidden rounded-3xl border-2 border-cyan-500/30 bg-gradient-to-br from-cyan-500/10 via-card/90 to-card p-5 sm:p-7 shadow-md">
+      {/* 2. OPEN-SOURCE GEODATA HUB (MAPLIBRE, OPENFREEMAP, PDOK & OSRM)       */}
+      {/* ===================================================================== */}
+      <Card className="relative overflow-hidden rounded-3xl border-2 border-sky-500/30 bg-gradient-to-br from-sky-500/10 via-card/90 to-card p-5 sm:p-7 shadow-md">
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-start gap-3.5">
-              <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white shadow-md shrink-0">
+              <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-sky-500 to-indigo-600 flex items-center justify-center text-white shadow-md shrink-0">
                 <MapPin className="h-6 w-6" />
               </div>
               <div>
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="text-lg sm:text-xl font-bold text-foreground">
-                    Mapbox Vector Kaarten &amp; Mapbox AI MCP Server
+                    Open-Source Kaarten &amp; Geodata Hub
                   </h2>
-                  <Badge className={`text-[10px] ${
-                    mapboxConfig.publicToken
-                      ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
-                      : 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 border-cyan-500/30'
-                  }`}>
-                    {mapboxConfig.publicToken ? 'Mapbox Verbonden' : 'Klaar voor Inrichting'}
+                  <Badge className="text-[10px] bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30">
+                    100% Keyless &amp; Operationeel ✓
                   </Badge>
-                  <Badge variant="outline" className="text-[10px] bg-primary/5 text-primary border-primary/20 gap-1">
+                  <Badge variant="outline" className="text-[10px] bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20 gap-1">
                     <Sparkles className="h-3 w-3" />
-                    <span>D2D &amp; Rayons Ready</span>
+                    <span>MapLibre GL + OpenFreeMap</span>
                   </Badge>
                 </div>
                 <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-                  GPU-versnelde vector kaarten voor Door-to-Door verkoop, pandcontouren, postcode-rayons en AI Model Context Protocol (MCP) route-optimalisatie.
+                  100% open-source vector kaarten, Kadaster PDOK adres-resolutie, OSRM looproutes en Overpass POI analyse. Géén Google Maps / Mapbox API-keys of billing accounts nodig.
                 </p>
               </div>
             </div>
@@ -886,7 +859,7 @@ export function IntegrationsPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => navigate('/territories')}
-                className="rounded-full text-xs gap-1.5 border-cyan-500/30 text-cyan-600 dark:text-cyan-400 hover:bg-cyan-500/10"
+                className="rounded-full text-xs gap-1.5 border-sky-500/30 text-sky-600 dark:text-sky-400 hover:bg-sky-500/10"
               >
                 <Map className="h-3.5 w-3.5" />
                 <span>Open Rayon Kaart</span>
@@ -896,131 +869,100 @@ export function IntegrationsPage() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setShowMapboxMcpGuide(!showMapboxMcpGuide)}
+                onClick={() => setShowOpenMapMcpGuide(!showOpenMapMcpGuide)}
                 className="rounded-full text-xs gap-1.5 border-border/80 text-foreground hover:bg-muted"
               >
                 <Terminal className="h-3.5 w-3.5 text-primary" />
-                <span>{showMapboxMcpGuide ? 'Verberg MCP Guide' : 'Mapbox MCP Setup Guide'}</span>
-                {showMapboxMcpGuide ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                <span>{showOpenMapMcpGuide ? 'Verberg MCP Guide' : 'Open-Geo MCP Setup'}</span>
+                {showOpenMapMcpGuide ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
               </Button>
             </div>
           </div>
 
-          {/* Mapbox Credentials & Style Selection */}
+          {/* OpenFreeMap Vector Styles & Geodata Presets */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 md:col-span-2">
               <Label className="text-xs font-semibold flex items-center justify-between">
                 <span className="flex items-center gap-1.5">
-                  <KeyRound className="h-3.5 w-3.5 text-cyan-500" />
-                  <span>Mapbox Public Token (pk.eyJ...)</span>
+                  <Layers className="h-3.5 w-3.5 text-sky-500" />
+                  <span>Standaard Vector Stijl (OpenFreeMap)</span>
                 </span>
-                <button
-                  type="button"
-                  onClick={() => setShowMapboxToken(!showMapboxToken)}
-                  className="text-muted-foreground hover:text-foreground text-[11px]"
-                >
-                  {showMapboxToken ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                </button>
+                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">Geen API-key vereist</span>
               </Label>
               <Input
-                type={showMapboxToken ? 'text' : 'password'}
-                placeholder="pk.eyJ1IjoieW91cmFjY291bnQi..."
-                value={mapboxConfig.publicToken}
-                onChange={(e) => setMapboxConfig({ ...mapboxConfig, publicToken: e.target.value.trim() })}
+                value={openMapConfig.styleUrl}
+                onChange={(e) => setOpenMapConfig({ ...openMapConfig, styleUrl: e.target.value.trim() })}
+                placeholder="https://tiles.openfreemap.org/styles/liberty"
                 className="font-mono text-xs h-10 bg-background/80"
               />
-              <p className="text-[11px] text-muted-foreground">
-                Vind je gratis openbare token in je <a href="https://account.mapbox.com/" target="_blank" rel="noreferrer" className="underline text-primary">Mapbox Dashboard</a> (50.000 gratis map loads per maand).
-              </p>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold flex items-center gap-1.5">
-                <Layers className="h-3.5 w-3.5 text-blue-500" />
-                <span>Kaartstijl URL (Mapbox Style)</span>
-              </Label>
-              <Input
-                placeholder="mapbox://styles/mapbox/dark-v11"
-                value={mapboxConfig.customStyleUrl || ''}
-                onChange={(e) => setMapboxConfig({ ...mapboxConfig, customStyleUrl: e.target.value.trim() })}
-                className="font-mono text-xs h-10 bg-background/80"
-              />
-              <div className="flex flex-wrap gap-1.5 pt-1">
-                {POPULAR_MAPBOX_STYLES.map((st) => (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                {OPEN_FREE_MAP_STYLES.map((st) => (
                   <button
                     key={st.id}
                     type="button"
-                    onClick={() => setMapboxConfig({ ...mapboxConfig, customStyleUrl: st.url })}
-                    className={`text-[10px] px-2 py-0.5 rounded-full border transition-all ${
-                      mapboxConfig.customStyleUrl === st.url
-                        ? 'border-cyan-500 bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 font-semibold'
+                    onClick={() => setOpenMapConfig({ ...openMapConfig, styleUrl: st.url })}
+                    className={`text-left p-2.5 rounded-xl border transition-all text-xs flex flex-col justify-between ${
+                      openMapConfig.styleUrl === st.url
+                        ? 'border-sky-500 bg-sky-500/15 text-foreground ring-2 ring-sky-500/30'
                         : 'border-border/60 bg-muted/40 hover:bg-muted text-muted-foreground'
                     }`}
                   >
-                    {st.name}
+                    <span className="font-semibold text-foreground text-[11px]">{st.name}</span>
+                    <span className="text-[10px] line-clamp-2 mt-1 opacity-80">{st.description}</span>
                   </button>
                 ))}
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold flex items-center gap-1.5">
-                <Globe2 className="h-3.5 w-3.5 text-amber-500" />
-                <span>Google Maps API Key (Optioneel: Street View)</span>
-              </Label>
-              <Input
-                type="password"
-                placeholder="AIzaSy..."
-                value={mapboxConfig.googleMapsApiKey || ''}
-                onChange={(e) => setMapboxConfig({ ...mapboxConfig, googleMapsApiKey: e.target.value.trim() })}
-                className="font-mono text-xs h-10 bg-background/80"
-              />
-              <p className="text-[11px] text-muted-foreground">
-                Voor 360° Google Street View inspectie van huizen vóór aanbellen aan de deur.
-              </p>
+            <div className="space-y-3 p-3.5 rounded-2xl bg-muted/40 border border-border/50 text-xs">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold flex items-center gap-1.5">
+                  <Navigation className="h-3.5 w-3.5 text-indigo-500" />
+                  <span>OSRM Routeprofiel</span>
+                </Label>
+                <div className="flex gap-1.5 pt-1">
+                  {(['foot', 'cycling', 'driving'] as const).map((prof) => (
+                    <button
+                      key={prof}
+                      type="button"
+                      onClick={() => setOpenMapConfig({ ...openMapConfig, routingProfile: prof })}
+                      className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-medium capitalize border transition-all ${
+                        openMapConfig.routingProfile === prof
+                          ? 'bg-sky-500 text-white font-bold border-sky-600'
+                          : 'bg-background hover:bg-muted border-border/60 text-muted-foreground'
+                      }`}
+                    >
+                      {prof === 'foot' ? '🏃 Te Voet' : prof === 'cycling' ? '🚲 Fiets' : '🚗 Auto'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-1 pt-1">
+                <span className="font-semibold text-foreground text-[11px]">Geodata Bronnen Overzicht:</span>
+                <ul className="space-y-1 text-[10px] text-muted-foreground list-disc pl-4">
+                  <li><strong>Kadaster PDOK:</strong> Officiële BAG-adressen &amp; postcodes van Nederland.</li>
+                  <li><strong>Photon &amp; Nominatim:</strong> Wereldwijde forward &amp; reverse geocoding.</li>
+                  <li><strong>OSRM:</strong> Realtime looproutes en afstandsberekening.</li>
+                  <li><strong>Overpass API:</strong> POI voorzieningen scan (straal in meters).</li>
+                </ul>
+              </div>
             </div>
           </div>
 
-          {/* Quick Actions & Verification */}
+          {/* Save Settings */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-border/50">
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleVerifyMapbox}
-                disabled={isVerifyingMapbox}
-                className="rounded-xl text-xs gap-1.5 border-border/80"
-              >
-                {isVerifyingMapbox ? (
-                  <>
-                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                    <span>Valideren...</span>
-                  </>
-                ) : (
-                  <>
-                    <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
-                    <span>Verifieer Mapbox Token</span>
-                  </>
-                )}
-              </Button>
-
-              {mapboxVerificationResult && (
-                <Badge className={`text-xs ${
-                  mapboxVerificationResult.valid
-                    ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
-                    : 'bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30'
-                }`}>
-                  {mapboxVerificationResult.valid ? 'Token Gevalideerd ✓' : 'Validatie Mislukt'}
-                </Badge>
-              )}
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <ShieldCheck className="h-4 w-4 text-emerald-500" />
+              <span>Alle geodata-diensten draaien keyless en sturen automatisch de verplichte User-Agent header mee.</span>
             </div>
 
             <Button
-              onClick={handleSaveMapboxConfig}
-              disabled={isMapboxSaving}
-              className="rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-semibold text-xs gap-2 shadow-md"
+              onClick={handleSaveOpenMapConfig}
+              disabled={isOpenMapSaving}
+              className="rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white font-semibold text-xs gap-2 shadow-md"
             >
-              {isMapboxSaving ? (
+              {isOpenMapSaving ? (
                 <>
                   <RefreshCw className="h-4 w-4 animate-spin" />
                   <span>Opslaan...</span>
@@ -1028,44 +970,38 @@ export function IntegrationsPage() {
               ) : (
                 <>
                   <CheckCircle2 className="h-4 w-4" />
-                  <span>Mapbox Instellingen Opslaan</span>
+                  <span>Kaartinstellingen Opslaan</span>
                 </>
               )}
             </Button>
           </div>
 
-          {/* Collapsible Mapbox AI MCP Server Documentation & Setup */}
-          {showMapboxMcpGuide && (
-            <div className="mt-4 rounded-2xl bg-muted/30 border border-cyan-500/30 p-4 sm:p-5 space-y-4">
+          {/* Collapsible Open-Source Geo MCP Server Setup */}
+          {showOpenMapMcpGuide && (
+            <div className="mt-4 rounded-2xl bg-muted/30 border border-sky-500/30 p-4 sm:p-5 space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Terminal className="h-5 w-5 text-cyan-500" />
+                  <Terminal className="h-5 w-5 text-sky-500" />
                   <h3 className="text-sm font-bold text-foreground">
-                    Mapbox Model Context Protocol (MCP) Server Setup
+                    Open-Source Geo Model Context Protocol (MCP) Setup
                   </h3>
                 </div>
-                <a
-                  href="https://github.com/modelcontextprotocol/servers"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-xs text-primary hover:underline flex items-center gap-1"
-                >
-                  <span>Mapbox MCP Documentatie</span>
-                  <ExternalLink className="h-3 w-3" />
-                </a>
+                <Badge variant="outline" className="text-[11px] bg-emerald-500/10 text-emerald-600 border-emerald-500/30">
+                  100% Gratis &bull; Geen Token
+                </Badge>
               </div>
 
               <p className="text-xs text-muted-foreground leading-relaxed">
-                De Mapbox MCP server stelt AI coding agents (Claude Code CLI, Cursor en OpenCode) in staat om zelfstandig <strong>postcodes te analyseren, rayon-polygonen te construeren, loopafstanden (isochronen) te berekenen en looproutes</strong> uit te stippelen voor field sales teams.
+                De Open-Source Geo MCP server stelt AI coding agents (Claude Code CLI, Cursor en OpenCode) in staat om zelfstandig <strong>Nederlandse Kadaster adressen op te zoeken, looproutes via OSRM te berekenen en voorzieningen te scannen via Overpass QL</strong>, volledig zonder API-tokens of verbruikskosten.
               </p>
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs font-semibold">
-                  <span>Claude Code CLI &amp; Claude Desktop Config (<code>claude_desktop_config.json</code>)</span>
+                  <span>Claude Desktop / Claude Code Config (<code>claude_desktop_config.json</code>)</span>
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => handleCopyText(`{\n  "mcpServers": {\n    "mapbox": {\n      "command": "npx",\n      "args": ["-y", "@modelcontextprotocol/server-mapbox"],\n      "env": {\n        "MAPBOX_ACCESS_TOKEN": "${mapboxConfig.publicToken || '<JOUW_MAPBOX_TOKEN>'}"\n      }\n    }\n  }\n}`, 'Mapbox MCP configuratie')}
+                    onClick={() => handleCopyText(`{\n  "mcpServers": {\n    "open-geo": {\n      "command": "python3",\n      "args": ["${navigator.userAgent.includes('Mac') ? '~' : '/home/jsdrenthe'}/.gemini/config/scripts/open_geo_mcp.py"]\n    }\n  }\n}`, 'Open-Geo MCP configuratie')}
                     className="h-7 text-xs gap-1 text-primary"
                   >
                     <Copy className="h-3 w-3" />
@@ -1075,12 +1011,9 @@ export function IntegrationsPage() {
                 <pre className="rounded-xl bg-background/90 p-3 text-[11px] font-mono text-foreground border overflow-x-auto">
 {`{
   "mcpServers": {
-    "mapbox": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-mapbox"],
-      "env": {
-        "MAPBOX_ACCESS_TOKEN": "${mapboxConfig.publicToken || '<JOUW_MAPBOX_PUBLIC_TOKEN>'}"
-      }
+    "open-geo": {
+      "command": "python3",
+      "args": ["~/.gemini/config/scripts/open_geo_mcp.py"]
     }
   }
 }`}
@@ -1088,19 +1021,23 @@ export function IntegrationsPage() {
               </div>
 
               <div className="space-y-1.5 pt-1 text-xs">
-                <p className="font-semibold text-foreground">Beschikbare AI MCP Kaarttools:</p>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <p className="font-semibold text-foreground">Beschikbare Open-Source Geo MCP Kaarttools:</p>
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
                   <div className="p-2.5 rounded-xl bg-muted/40 border border-border/40 space-y-1">
-                    <span className="font-mono font-bold text-cyan-600 dark:text-cyan-400">mapbox__geocoding</span>
-                    <p className="text-muted-foreground text-[10px]">Zet Nederlandse postcodes, straten en huisnummers om in exacte coördinaten.</p>
+                    <span className="font-mono font-bold text-sky-600 dark:text-sky-400">geo_geocode</span>
+                    <p className="text-muted-foreground text-[10px]">Zoekt adressen en postcodes via Kadaster PDOK &amp; Photon (OSM).</p>
                   </div>
                   <div className="p-2.5 rounded-xl bg-muted/40 border border-border/40 space-y-1">
-                    <span className="font-mono font-bold text-cyan-600 dark:text-cyan-400">mapbox__directions</span>
-                    <p className="text-muted-foreground text-[10px]">Berekent de meest efficiënte looproute van deur tot deur voor veldvertegenwoordigers.</p>
+                    <span className="font-mono font-bold text-sky-600 dark:text-sky-400">geo_reverse_geocode</span>
+                    <p className="text-muted-foreground text-[10px]">Zet GPS-coördinaten om in straatnaam, huisnummer en woonplaats.</p>
                   </div>
                   <div className="p-2.5 rounded-xl bg-muted/40 border border-border/40 space-y-1">
-                    <span className="font-mono font-bold text-cyan-600 dark:text-cyan-400">mapbox__isochrone</span>
-                    <p className="text-muted-foreground text-[10px]">Genereert polygooncirkels op basis van maximale loop- of reistijd per rayon.</p>
+                    <span className="font-mono font-bold text-sky-600 dark:text-sky-400">geo_directions</span>
+                    <p className="text-muted-foreground text-[10px]">Berekent de meest efficiënte looproute van deur tot deur via OSRM.</p>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-muted/40 border border-border/40 space-y-1">
+                    <span className="font-mono font-bold text-sky-600 dark:text-sky-400">geo_poi_search</span>
+                    <p className="text-muted-foreground text-[10px]">Vraagt voorzieningen en panden in de buurt op via Overpass QL.</p>
                   </div>
                 </div>
               </div>
