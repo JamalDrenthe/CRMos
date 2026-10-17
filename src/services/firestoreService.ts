@@ -21,7 +21,9 @@ import type {
   Campaign, 
   Call, 
   Quote, 
-  Product 
+  Product,
+  Territory,
+  D2DAddressPin,
 } from '@/types';
 
 // Collection Names
@@ -36,6 +38,8 @@ export const COLLECTIONS = {
   CALLS: 'crm_calls',
   QUOTES: 'crm_quotes',
   PRODUCTS: 'crm_products',
+  TERRITORIES: 'crm_territories',
+  D2D_PINS: 'crm_d2d_pins',
 };
 
 // ====================================================
@@ -751,3 +755,92 @@ export async function seedDemoDataToFirestore(orgId: string): Promise<{ success:
     return { success: false, count: 0 };
   }
 }
+
+// ====================================================
+// TERRITORIES (RAYONS)
+// ====================================================
+
+export async function saveTerritoryToFirestore(territory: Territory, orgId: string): Promise<void> {
+  if (!isFirebaseConfigured()) return;
+  try {
+    const docRef = doc(db, COLLECTIONS.TERRITORIES, territory.id);
+    await setDoc(docRef, {
+      ...territory,
+      org_id: orgId,
+      updated_at: new Date().toISOString(),
+      _firestore_timestamp: serverTimestamp(),
+    }, { merge: true });
+  } catch (err) {
+    console.error('Fout bij opslaan van rayon/territory:', err);
+  }
+}
+
+export async function deleteTerritoryFromFirestore(territoryId: string): Promise<void> {
+  if (!isFirebaseConfigured()) return;
+  try {
+    await deleteDoc(doc(db, COLLECTIONS.TERRITORIES, territoryId));
+  } catch (err) {
+    console.error('Fout bij verwijderen van rayon/territory:', err);
+  }
+}
+
+export function subscribeToTerritories(
+  orgId: string,
+  callback: (territories: Territory[]) => void
+): Unsubscribe {
+  if (!isFirebaseConfigured()) return () => {};
+  const isMasterView = orgId === 'all' || orgId === '*';
+  const q = isMasterView
+    ? query(collection(db, COLLECTIONS.TERRITORIES))
+    : query(collection(db, COLLECTIONS.TERRITORIES), where('org_id', '==', orgId));
+
+  return onSnapshot(q, (snap) => {
+    const items = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Territory));
+    callback(items);
+  }, (err) => console.warn('Real-time territories subscription fout:', err));
+}
+
+// ====================================================
+// D2D ADDRESS PINS (FIELD SALES)
+// ====================================================
+
+export async function saveD2DPinToFirestore(pin: D2DAddressPin, orgId: string): Promise<void> {
+  if (!isFirebaseConfigured()) return;
+  try {
+    const docRef = doc(db, COLLECTIONS.D2D_PINS, pin.id);
+    await setDoc(docRef, {
+      ...pin,
+      org_id: orgId,
+      updated_at: new Date().toISOString(),
+      _firestore_timestamp: serverTimestamp(),
+    }, { merge: true });
+  } catch (err) {
+    console.error('Fout bij opslaan van D2D adres-pin:', err);
+  }
+}
+
+export async function deleteD2DPinFromFirestore(pinId: string): Promise<void> {
+  if (!isFirebaseConfigured()) return;
+  try {
+    await deleteDoc(doc(db, COLLECTIONS.D2D_PINS, pinId));
+  } catch (err) {
+    console.error('Fout bij verwijderen van D2D adres-pin:', err);
+  }
+}
+
+export function subscribeToD2DPins(
+  orgId: string,
+  callback: (pins: D2DAddressPin[]) => void
+): Unsubscribe {
+  if (!isFirebaseConfigured()) return () => {};
+  const isMasterView = orgId === 'all' || orgId === '*';
+  const q = isMasterView
+    ? query(collection(db, COLLECTIONS.D2D_PINS))
+    : query(collection(db, COLLECTIONS.D2D_PINS), where('org_id', '==', orgId));
+
+  return onSnapshot(q, (snap) => {
+    const items = snap.docs.map((d) => ({ id: d.id, ...d.data() } as D2DAddressPin));
+    callback(items);
+  }, (err) => console.warn('Real-time D2D pins subscription fout:', err));
+}
+

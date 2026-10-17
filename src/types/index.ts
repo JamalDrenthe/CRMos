@@ -430,15 +430,21 @@ export interface LeaderboardEntry {
   rank: number;
 }
 
-// ===== Territory Management =====
+// ===== Territory Management & D2D =====
 export interface Territory {
   id: string;
+  org_id?: string;
+  company_name?: string;
+  allowed_companies?: string[];
+  is_crmos_core?: boolean;
   name: string;
   description?: string;
   geometry: GeoJSONPolygon;
   agent_ids: string[];
   color: string;
   postcode_prefixes?: string[];
+  status?: 'planned' | 'active' | 'completed' | 'on_hold';
+  target_doors?: number;
   metrics?: TerritoryMetrics;
   created_at: string;
   updated_at: string;
@@ -453,7 +459,53 @@ export interface TerritoryMetrics {
   contacts_count: number;
   deals_count: number;
   revenue: number;
+  total_doors?: number;
+  visited_doors?: number;
   last_updated: string;
+}
+
+// ===== Door-to-Door (D2D) & Field Sales =====
+export type D2DPinStatus = 
+  | 'unvisited'       // Nog niet bezocht (Grijs)
+  | 'not_home'        // Niet thuis (Geel/Amber)
+  | 'no_interest'     // Geen interesse (Rood)
+  | 'appointment'     // Afspraak ingepland (Paars)
+  | 'deal_closed'     // Deal gesloten / Contract getekend (Groen)
+  | 'do_not_knock';   // Colportageverbod / Niet aanbellen (Zwart)
+
+export interface D2DVisitLog {
+  id: string;
+  visited_at: string;
+  agent_id: string;
+  agent_name: string;
+  status: D2DPinStatus;
+  notes?: string;
+  follow_up_date?: string;
+}
+
+export interface D2DAddressPin {
+  id: string;
+  org_id?: string;
+  company_name?: string;
+  allowed_companies?: string[];
+  is_crmos_core?: boolean;
+  territory_id?: string;
+  street: string;
+  house_number: string;
+  house_number_addition?: string;
+  postal_code: string;
+  city: string;
+  latitude: number;
+  longitude: number;
+  current_status: D2DPinStatus;
+  last_visit_at?: string;
+  assigned_agent_id?: string;
+  assigned_agent_name?: string;
+  deal_id?: string;
+  contact_id?: string;
+  visits: D2DVisitLog[];
+  created_at: string;
+  updated_at: string;
 }
 
 // ===== Workflows & Automation =====

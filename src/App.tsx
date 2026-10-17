@@ -45,6 +45,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useCRMStore } from '@/stores/crmStore';
 import { useRecruitmentStore } from '@/stores/recruitmentStore';
 import { useContactCenterStore } from '@/stores/contactCenterStore';
+import { useD2DStore } from '@/stores/d2dStore';
 import { useThemeStore } from '@/stores/themeStore';
 import { cn } from '@/lib/utils';
 
@@ -209,6 +210,7 @@ function App() {
   const { syncWithFirestore } = useCRMStore();
   const { syncWithFirestore: syncRecruitment } = useRecruitmentStore();
   const { syncWithFirestore: syncContactCenter } = useContactCenterStore();
+  const { syncWithFirestore: syncD2D } = useD2DStore();
   const { theme } = useThemeStore();
 
   // Sync theme class on document element
@@ -232,7 +234,7 @@ function App() {
     };
   }, [initAuthListener]);
 
-  // Sync CRM, Recruitment, and Contact Center data with Firestore for active organization
+  // Sync CRM, Recruitment, Contact Center, and D2D data with Firestore for active organization
   useEffect(() => {
     if (organization?.id || user) {
       const isSuperAdmin =
@@ -246,13 +248,15 @@ function App() {
       const unsubCRM = syncWithFirestore(effectiveOrgId);
       const unsubRec = syncRecruitment(effectiveOrgId);
       const unsubCC = syncContactCenter(effectiveOrgId);
+      const unsubD2D = syncD2D(effectiveOrgId);
       return () => {
         if (typeof unsubCRM === 'function') unsubCRM();
         if (typeof unsubRec === 'function') unsubRec();
         if (typeof unsubCC === 'function') unsubCC();
+        if (typeof unsubD2D === 'function') unsubD2D();
       };
     }
-  }, [organization?.id, user, syncWithFirestore, syncRecruitment, syncContactCenter]);
+  }, [organization?.id, user, syncWithFirestore, syncRecruitment, syncContactCenter, syncD2D]);
 
   return (
     <TooltipProvider>

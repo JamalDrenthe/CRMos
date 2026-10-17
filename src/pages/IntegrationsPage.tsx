@@ -44,7 +44,12 @@ import {
   Sparkles,
   Eye,
   EyeOff,
+  MapPin,
+  Map,
+  Layers,
+  ArrowUpRight,
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import {
   syncAllDataFromHubSpot,
   loadHubSpotConfigFromFirestore,
@@ -60,6 +65,14 @@ import {
   makeCall,
   verifyTwilioAccount,
 } from '@/services/twilioService';
+import {
+  loadMapboxConfigFromFirestore,
+  saveMapboxConfigToFirestore,
+  verifyMapboxToken,
+  DEFAULT_MAPBOX_CONFIG,
+  POPULAR_MAPBOX_STYLES,
+  type MapboxConfig,
+} from '@/services/mapboxService';
 import { purgeDemoAndMockDataFromFirestore } from '@/services/firestoreService';
 import { useAuthStore } from '@/stores/authStore';
 import { useCRMStore } from '@/stores/crmStore';
@@ -96,6 +109,21 @@ export const INITIAL_INTEGRATIONS: Integration[] = [
     status: 'connected',
     features: ['In-browser Web Dialer', 'Twilio AI MCP Server (1.800+ APIs)', 'Gespreksopnames & Tijdlijn Sync', 'Direct bellen via GSM (`tel:`)'],
     apiKeyPlaceholder: 'ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+  },
+  {
+    id: 'mapbox-gl',
+    name: 'Mapbox Vector Kaarten & AI MCP',
+    tagline: 'Door-to-Door Pandkaarten, Rayonbeheer & Looproutes',
+    category: 'Logistiek & Expansie',
+    description:
+      'GPU-versnelde vector kaarten voor veldvertegenwoordigers en rayon managers. Huis-voor-huis status logging, pandcontouren, postcode-polygonen en Mapbox MCP AI looproute-optimalisatie.',
+    icon: MapPin,
+    gradient: 'from-cyan-500 to-blue-600',
+    badgeColor: 'bg-cyan-500/10 text-cyan-600 border-cyan-500/20',
+    website: 'https://www.mapbox.com/',
+    status: 'connected',
+    features: ['3D Pandcontouren & Huisnummers', 'Mapbox AI MCP Server', 'Rayon Polygoon Tekentool', 'Live GPS Field Tracking'],
+    apiKeyPlaceholder: 'pk.eyJ1IjoieW91cmFjY291bnQi...',
   },
   {
     id: 'quantum-initium',
@@ -243,6 +271,7 @@ export function IntegrationsPage() {
 
   const [integrations, setIntegrations] = useState<Integration[]>(INITIAL_INTEGRATIONS);
   const [searchQuery, setSearchQuery] = useState('');
+  const navigate = useNavigate();
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [configIntegration, setConfigIntegration] = useState<Integration | null>(null);
   const [apiKeyInput, setApiKeyInput] = useState('');
@@ -271,6 +300,14 @@ export function IntegrationsPage() {
     phoneNumbers?: Array<{ phoneNumber: string; friendlyName: string }>;
   } | null>(null);
 
+  // Mapbox & Kaarten State
+  const [mapboxConfig, setMapboxConfig] = useState<MapboxConfig>(DEFAULT_MAPBOX_CONFIG);
+  const [isMapboxSaving, setIsMapboxSaving] = useState(false);
+  const [isVerifyingMapbox, setIsVerifyingMapbox] = useState(false);
+  const [showMapboxMcpGuide, setShowMapboxMcpGuide] = useState(false);
+  const [showMapboxToken, setShowMapboxToken] = useState(false);
+  const [mapboxVerificationResult, setMapboxVerificationResult] = useState<{ valid: boolean; message: string } | null>(null);
+
   useEffect(() => {
     loadHubSpotConfigFromFirestore(orgId).then((cfg) => {
       if (cfg) {
@@ -284,7 +321,46 @@ export function IntegrationsPage() {
         setTwilioConfig(twCfg);
       }
     });
+
+    loadMapboxConfigFromFirestore(orgId).then((mbCfg) => {
+      if (mbCfg) {
+        setMapboxConfig(mbCfg);
+      }
+    });
   }, [orgId]);
+
+  const handleSaveMapboxConfig = async () => {
+    setIsMapboxSaving(true);
+    try {
+      await saveMapboxConfigToFirestore(mapboxConfig, orgId);
+      toast.success('Mapbox kaartinstellingen succesvol opgeslagen & gesynchroniseerd!');
+    } catch {
+      toast.error('Fout bij opslaan van Mapbox configuratie.');
+    } finally {
+      setIsMapboxSaving(false);
+    }
+  };
+
+  const handleVerifyMapbox = async () => {
+    if (!mapboxConfig.publicToken.trim()) {
+      toast.error('Vul eerst je Mapbox Public Token in (begint met pk.).');
+      return;
+    }
+    setIsVerifyingMapbox(true);
+    try {
+      const res = await verifyMapboxToken(mapboxConfig.publicToken);
+      setMapboxVerificationResult(res);
+      if (res.valid) {
+        toast.success(res.message);
+      } else {
+        toast.error(res.message);
+      }
+    } catch (err) {
+      toast.error((err as Error)?.message || 'Validatie mislukt.');
+    } finally {
+      setIsVerifyingMapbox(false);
+    }
+  };
 
   const handleHubSpotSync = async () => {
     if (!hubspotToken.trim()) {
@@ -773,7 +849,268 @@ export function IntegrationsPage() {
       </Card>
 
       {/* ===================================================================== */}
-      {/* 2. HUBSPOT LIVE CRM MIGRATION & SYNC BANNER                           */}
+      {/* 2. MAPBOX VECTOR KAARTEN & AI MCP SERVER (D2D & RAYONBEHEER)          */}
+      {/* ===================================================================== */}
+      <Card className="relative overflow-hidden rounded-3xl border-2 border-cyan-500/30 bg-gradient-to-br from-cyan-500/10 via-card/90 to-card p-5 sm:p-7 shadow-md">
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-3.5">
+              <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white shadow-md shrink-0">
+                <MapPin className="h-6 w-6" />
+              </div>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-lg sm:text-xl font-bold text-foreground">
+                    Mapbox Vector Kaarten &amp; Mapbox AI MCP Server
+                  </h2>
+                  <Badge className={`text-[10px] ${
+                    mapboxConfig.publicToken
+                      ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+                      : 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 border-cyan-500/30'
+                  }`}>
+                    {mapboxConfig.publicToken ? 'Mapbox Verbonden' : 'Klaar voor Inrichting'}
+                  </Badge>
+                  <Badge variant="outline" className="text-[10px] bg-primary/5 text-primary border-primary/20 gap-1">
+                    <Sparkles className="h-3 w-3" />
+                    <span>D2D &amp; Rayons Ready</span>
+                  </Badge>
+                </div>
+                <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+                  GPU-versnelde vector kaarten voor Door-to-Door verkoop, pandcontouren, postcode-rayons en AI Model Context Protocol (MCP) route-optimalisatie.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate('/territories')}
+                className="rounded-full text-xs gap-1.5 border-cyan-500/30 text-cyan-600 dark:text-cyan-400 hover:bg-cyan-500/10"
+              >
+                <Map className="h-3.5 w-3.5" />
+                <span>Open Rayon Kaart</span>
+                <ArrowUpRight className="h-3.5 w-3.5" />
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowMapboxMcpGuide(!showMapboxMcpGuide)}
+                className="rounded-full text-xs gap-1.5 border-border/80 text-foreground hover:bg-muted"
+              >
+                <Terminal className="h-3.5 w-3.5 text-primary" />
+                <span>{showMapboxMcpGuide ? 'Verberg MCP Guide' : 'Mapbox MCP Setup Guide'}</span>
+                {showMapboxMcpGuide ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+              </Button>
+            </div>
+          </div>
+
+          {/* Mapbox Credentials & Style Selection */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <KeyRound className="h-3.5 w-3.5 text-cyan-500" />
+                  <span>Mapbox Public Token (pk.eyJ...)</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowMapboxToken(!showMapboxToken)}
+                  className="text-muted-foreground hover:text-foreground text-[11px]"
+                >
+                  {showMapboxToken ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                </button>
+              </Label>
+              <Input
+                type={showMapboxToken ? 'text' : 'password'}
+                placeholder="pk.eyJ1IjoieW91cmFjY291bnQi..."
+                value={mapboxConfig.publicToken}
+                onChange={(e) => setMapboxConfig({ ...mapboxConfig, publicToken: e.target.value.trim() })}
+                className="font-mono text-xs h-10 bg-background/80"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Vind je gratis openbare token in je <a href="https://account.mapbox.com/" target="_blank" rel="noreferrer" className="underline text-primary">Mapbox Dashboard</a> (50.000 gratis map loads per maand).
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold flex items-center gap-1.5">
+                <Layers className="h-3.5 w-3.5 text-blue-500" />
+                <span>Kaartstijl URL (Mapbox Style)</span>
+              </Label>
+              <Input
+                placeholder="mapbox://styles/mapbox/dark-v11"
+                value={mapboxConfig.customStyleUrl || ''}
+                onChange={(e) => setMapboxConfig({ ...mapboxConfig, customStyleUrl: e.target.value.trim() })}
+                className="font-mono text-xs h-10 bg-background/80"
+              />
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {POPULAR_MAPBOX_STYLES.map((st) => (
+                  <button
+                    key={st.id}
+                    type="button"
+                    onClick={() => setMapboxConfig({ ...mapboxConfig, customStyleUrl: st.url })}
+                    className={`text-[10px] px-2 py-0.5 rounded-full border transition-all ${
+                      mapboxConfig.customStyleUrl === st.url
+                        ? 'border-cyan-500 bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 font-semibold'
+                        : 'border-border/60 bg-muted/40 hover:bg-muted text-muted-foreground'
+                    }`}
+                  >
+                    {st.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold flex items-center gap-1.5">
+                <Globe2 className="h-3.5 w-3.5 text-amber-500" />
+                <span>Google Maps API Key (Optioneel: Street View)</span>
+              </Label>
+              <Input
+                type="password"
+                placeholder="AIzaSy..."
+                value={mapboxConfig.googleMapsApiKey || ''}
+                onChange={(e) => setMapboxConfig({ ...mapboxConfig, googleMapsApiKey: e.target.value.trim() })}
+                className="font-mono text-xs h-10 bg-background/80"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Voor 360° Google Street View inspectie van huizen vóór aanbellen aan de deur.
+              </p>
+            </div>
+          </div>
+
+          {/* Quick Actions & Verification */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-border/50">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleVerifyMapbox}
+                disabled={isVerifyingMapbox}
+                className="rounded-xl text-xs gap-1.5 border-border/80"
+              >
+                {isVerifyingMapbox ? (
+                  <>
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                    <span>Valideren...</span>
+                  </>
+                ) : (
+                  <>
+                    <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
+                    <span>Verifieer Mapbox Token</span>
+                  </>
+                )}
+              </Button>
+
+              {mapboxVerificationResult && (
+                <Badge className={`text-xs ${
+                  mapboxVerificationResult.valid
+                    ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+                    : 'bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30'
+                }`}>
+                  {mapboxVerificationResult.valid ? 'Token Gevalideerd ✓' : 'Validatie Mislukt'}
+                </Badge>
+              )}
+            </div>
+
+            <Button
+              onClick={handleSaveMapboxConfig}
+              disabled={isMapboxSaving}
+              className="rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-semibold text-xs gap-2 shadow-md"
+            >
+              {isMapboxSaving ? (
+                <>
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                  <span>Opslaan...</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="h-4 w-4" />
+                  <span>Mapbox Instellingen Opslaan</span>
+                </>
+              )}
+            </Button>
+          </div>
+
+          {/* Collapsible Mapbox AI MCP Server Documentation & Setup */}
+          {showMapboxMcpGuide && (
+            <div className="mt-4 rounded-2xl bg-muted/30 border border-cyan-500/30 p-4 sm:p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Terminal className="h-5 w-5 text-cyan-500" />
+                  <h3 className="text-sm font-bold text-foreground">
+                    Mapbox Model Context Protocol (MCP) Server Setup
+                  </h3>
+                </div>
+                <a
+                  href="https://github.com/modelcontextprotocol/servers"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs text-primary hover:underline flex items-center gap-1"
+                >
+                  <span>Mapbox MCP Documentatie</span>
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              </div>
+
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                De Mapbox MCP server stelt AI coding agents (Claude Code CLI, Cursor en OpenCode) in staat om zelfstandig <strong>postcodes te analyseren, rayon-polygonen te construeren, loopafstanden (isochronen) te berekenen en looproutes</strong> uit te stippelen voor field sales teams.
+              </p>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs font-semibold">
+                  <span>Claude Code CLI &amp; Claude Desktop Config (<code>claude_desktop_config.json</code>)</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleCopyText(`{\n  "mcpServers": {\n    "mapbox": {\n      "command": "npx",\n      "args": ["-y", "@modelcontextprotocol/server-mapbox"],\n      "env": {\n        "MAPBOX_ACCESS_TOKEN": "${mapboxConfig.publicToken || '<JOUW_MAPBOX_TOKEN>'}"\n      }\n    }\n  }\n}`, 'Mapbox MCP configuratie')}
+                    className="h-7 text-xs gap-1 text-primary"
+                  >
+                    <Copy className="h-3 w-3" />
+                    <span>Kopieer JSON Config</span>
+                  </Button>
+                </div>
+                <pre className="rounded-xl bg-background/90 p-3 text-[11px] font-mono text-foreground border overflow-x-auto">
+{`{
+  "mcpServers": {
+    "mapbox": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-mapbox"],
+      "env": {
+        "MAPBOX_ACCESS_TOKEN": "${mapboxConfig.publicToken || '<JOUW_MAPBOX_PUBLIC_TOKEN>'}"
+      }
+    }
+  }
+}`}
+                </pre>
+              </div>
+
+              <div className="space-y-1.5 pt-1 text-xs">
+                <p className="font-semibold text-foreground">Beschikbare AI MCP Kaarttools:</p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div className="p-2.5 rounded-xl bg-muted/40 border border-border/40 space-y-1">
+                    <span className="font-mono font-bold text-cyan-600 dark:text-cyan-400">mapbox__geocoding</span>
+                    <p className="text-muted-foreground text-[10px]">Zet Nederlandse postcodes, straten en huisnummers om in exacte coördinaten.</p>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-muted/40 border border-border/40 space-y-1">
+                    <span className="font-mono font-bold text-cyan-600 dark:text-cyan-400">mapbox__directions</span>
+                    <p className="text-muted-foreground text-[10px]">Berekent de meest efficiënte looproute van deur tot deur voor veldvertegenwoordigers.</p>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-muted/40 border border-border/40 space-y-1">
+                    <span className="font-mono font-bold text-cyan-600 dark:text-cyan-400">mapbox__isochrone</span>
+                    <p className="text-muted-foreground text-[10px]">Genereert polygooncirkels op basis van maximale loop- of reistijd per rayon.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </Card>
+
+      {/* ===================================================================== */}
+      {/* 3. HUBSPOT LIVE CRM MIGRATION & SYNC BANNER                           */}
       {/* ===================================================================== */}
       <Card className="relative overflow-hidden rounded-3xl border-2 border-orange-500/30 bg-gradient-to-br from-orange-500/10 via-card/90 to-card p-5 sm:p-7 shadow-md">
         <div className="space-y-4">

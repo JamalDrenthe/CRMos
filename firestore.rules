@@ -84,6 +84,16 @@ service cloud.firestore {
       allow read, write: if isAuthenticated();
     }
 
+    // Field Sales: Rayons & Gebieden
+    match /crm_territories/{territoryId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Field Sales: Door-to-Door Pins
+    match /crm_d2d_pins/{pinId} {
+      allow read, write: if isAuthenticated();
+    }
+
     // Integraties (HubSpot / Standalone)
     match /crm_integrations/{integrationId} {
       allow read, write: if isAuthenticated();

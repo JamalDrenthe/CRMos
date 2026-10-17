@@ -154,37 +154,79 @@ const samplePitchFlows: PitchFlow[] = [
   },
 ];
 
-// Sample Territories
+// Sample Territories (Nederlandse D2D & Field Sales Rayons)
 const sampleTerritories: Territory[] = [
   {
-    id: '1',
-    name: 'West Coast',
-    description: 'California, Oregon, Washington',
+    id: 'terr_ams_01',
+    name: 'Amsterdam Centrum & Grachtengordel',
+    description: 'Singel, Herengracht, Keizersgracht & Prinsengracht (Postcodes 1011, 1012, 1016)',
     geometry: {
       type: 'Polygon',
-      coordinates: [[[-125, 42], [-114, 42], [-114, 32], [-125, 32], [-125, 42]]],
+      coordinates: [[[4.880, 52.365], [4.905, 52.365], [4.905, 52.380], [4.880, 52.380], [4.880, 52.365]]],
     },
-    agent_ids: ['user1', 'user2'],
+    agent_ids: ['agent_jamal', 'agent_maria'],
     color: '#3b82f6',
-    postcode_prefixes: ['90', '91', '92', '93', '94', '95', '96', '97', '98', '99'],
-    metrics: { contacts_count: 450, deals_count: 89, revenue: 2500000, last_updated: new Date().toISOString() },
+    postcode_prefixes: ['1011', '1012', '1016'],
+    status: 'active',
+    target_doors: 1200,
+    metrics: { 
+      contacts_count: 520, 
+      deals_count: 94, 
+      revenue: 380000, 
+      total_doors: 1200, 
+      visited_doors: 850, 
+      last_updated: new Date().toISOString() 
+    },
     created_at: new Date(Date.now() - 5184000000).toISOString(),
-    updated_at: new Date(Date.now() - 86400000).toISOString(),
+    updated_at: new Date().toISOString(),
   },
   {
-    id: '2',
-    name: 'East Coast',
-    description: 'New York, New Jersey, Connecticut',
+    id: 'terr_rdam_01',
+    name: 'Rotterdam Centrum & Kop van Zuid',
+    description: 'Coolsingel, Meent, Witte de Withstraat & Wilhelminapier (Postcodes 3011, 3012, 3072)',
     geometry: {
       type: 'Polygon',
-      coordinates: [[[-80, 45], [-70, 45], [-70, 38], [-80, 38], [-80, 45]]],
+      coordinates: [[[4.460, 51.905], [4.495, 51.905], [4.495, 51.930], [4.460, 51.930], [4.460, 51.905]]],
     },
-    agent_ids: ['user3', 'user4'],
+    agent_ids: ['agent_alex'],
     color: '#22c55e',
-    postcode_prefixes: ['10', '11', '06', '07'],
-    metrics: { contacts_count: 380, deals_count: 72, revenue: 2100000, last_updated: new Date().toISOString() },
+    postcode_prefixes: ['3011', '3012', '3072'],
+    status: 'active',
+    target_doors: 980,
+    metrics: { 
+      contacts_count: 410, 
+      deals_count: 76, 
+      revenue: 290000, 
+      total_doors: 980, 
+      visited_doors: 620, 
+      last_updated: new Date().toISOString() 
+    },
     created_at: new Date(Date.now() - 5184000000).toISOString(),
-    updated_at: new Date(Date.now() - 86400000).toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: 'terr_utr_01',
+    name: 'Utrecht Binnenstad & Stationskwartier',
+    description: 'Oudegracht, Neude, Vredenburg & Singel (Postcodes 3511, 3512)',
+    geometry: {
+      type: 'Polygon',
+      coordinates: [[[5.105, 52.080], [5.135, 52.080], [5.135, 52.100], [5.105, 52.100], [5.105, 52.080]]],
+    },
+    agent_ids: ['agent_jamal'],
+    color: '#f59e0b',
+    postcode_prefixes: ['3511', '3512'],
+    status: 'active',
+    target_doors: 850,
+    metrics: { 
+      contacts_count: 340, 
+      deals_count: 58, 
+      revenue: 215000, 
+      total_doors: 850, 
+      visited_doors: 490, 
+      last_updated: new Date().toISOString() 
+    },
+    created_at: new Date(Date.now() - 5184000000).toISOString(),
+    updated_at: new Date().toISOString(),
   },
 ];
 
