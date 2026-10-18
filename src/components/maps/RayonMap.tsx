@@ -26,7 +26,6 @@ import {
 } from '@/services/openMapService';
 import { useAuthStore } from '@/stores/authStore';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import {
   Compass,
   Layers,
@@ -43,6 +42,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { FieldBuildingPopup } from '@/components/d2d/FieldBuildingPopup';
+import { SalesdockSaleModal } from '@/components/d2d/SalesdockSaleModal';
 
 interface RayonMapProps {
   territory?: Territory | null;
@@ -68,7 +69,7 @@ export function RayonMap({
   const markersRef = useRef<maplibregl.Marker[]>([]);
   const userMarkerRef = useRef<maplibregl.Marker | null>(null);
 
-  const { pins: storePins, logVisit } = useD2DStore();
+  const { pins: storePins } = useD2DStore();
   const { organization, user } = useAuthStore();
   const orgId = organization?.id || user?.org_id || 'default_org';
 
@@ -80,6 +81,7 @@ export function RayonMap({
   const [nearbyPOIs, setNearbyPOIs] = useState<Array<{ id: number; name?: string; tags: Record<string, string> }>>([]);
   const [isLoadingPOIs, setIsLoadingPOIs] = useState(false);
   const [routeInfo, setRouteInfo] = useState<{ distanceMeters: number; durationSeconds: number } | null>(null);
+  const [isSalesdockModalOpen, setIsSalesdockModalOpen] = useState(false);
 
   // Toon zowel B2B bedrijfspanden (is_commercial) als daadwerkelijk bezochte deuren op de kaart (negeer reguliere woonhuizen)
   const activePins = useMemo(() => {
@@ -107,17 +109,6 @@ export function RayonMap({
       default:
         if (isCommercial) return '#0284c7'; // Zakelijk Blauw voor B2B bedrijfspand
         return '#64748b';
-    }
-  };
-
-  const getStatusLabel = (status: D2DPinStatus, isCommercial?: boolean) => {
-    switch (status) {
-      case 'deal_closed': return 'Deal Gesloten 🟢';
-      case 'not_home': return 'Niet Aanwezig 🟡';
-      case 'no_interest': return 'Geen Interesse 🔴';
-      case 'appointment': return 'Afspraak Gemaakt 🟣';
-      case 'do_not_knock': return 'Niet Aanbellen ⛔';
-      default: return isCommercial ? 'B2B Bedrijfspand (Te Bezoeken) 🏢' : 'Onbezocht Pand ⚪';
     }
   };
 
@@ -487,163 +478,28 @@ export function RayonMap({
         ))}
       </div>
 
-      {/* Pin Quick Status Inspector Card */}
+      {/* Salesdock-Style Building Pop-up Drawer */}
       {activePin && (
-        <div className="absolute bottom-3 left-3 right-3 sm:left-auto sm:right-3 sm:w-92 z-20 p-3.5 rounded-2xl bg-card/95 border border-border/80 shadow-2xl backdrop-blur-md space-y-2.5 animate-in fade-in slide-in-from-bottom-2 duration-200">
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              {activePin.business_name && (
-                <p className="font-extrabold text-sm text-sky-600 dark:text-sky-400 flex items-center gap-1.5">
-                  <Building2 className="h-3.5 w-3.5 shrink-0" />
-                  <span>{activePin.business_name}</span>
-                </p>
-              )}
-              <p className="font-bold text-sm text-foreground">
-                {activePin.street} {activePin.house_number}{activePin.house_number_addition || ''}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {activePin.postal_code} {activePin.city}
-              </p>
-            </div>
-            <button
-              onClick={() => setActivePin(null)}
-              className="text-xs text-muted-foreground hover:text-foreground font-semibold px-1"
-            >
-              ✕
-            </button>
-          </div>
-
-          {/* B2B Bedrijfspand Verrijking */}
-          {(activePin.is_commercial || activePin.branch || activePin.surface_area_m2 || activePin.opening_hours) && (
-            <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-              {activePin.branch && (
-                <Badge variant="secondary" className="text-[10px] font-semibold bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30">
-                  {activePin.branch}
-                </Badge>
-              )}
-              {activePin.surface_area_m2 ? (
-                <Badge variant="outline" className="text-[10px] font-mono">
-                  {activePin.surface_area_m2} m²
-                </Badge>
-              ) : null}
-              {activePin.build_year ? (
-                <Badge variant="outline" className="text-[10px] font-mono">
-                  Bouwjaar {activePin.build_year}
-                </Badge>
-              ) : null}
-              {activePin.opening_hours && (
-                <span className="text-[10px] text-muted-foreground w-full truncate" title={activePin.opening_hours}>
-                  🕒 {activePin.opening_hours}
-                </span>
-              )}
-            </div>
-          )}
-
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] text-muted-foreground">Status:</span>
-              <Badge
-                className="text-[10px] font-semibold text-white"
-                style={{
-                  backgroundColor: getStatusColor(
-                    activePin.current_status,
-                    activePin.is_commercial
-                  ),
-                }}
-              >
-                {getStatusLabel(activePin.current_status, activePin.is_commercial)}
-              </Badge>
-            </div>
-            <span className="text-[10px] text-muted-foreground font-mono">
-              {activePin.latitude.toFixed(4)}, {activePin.longitude.toFixed(4)}
-            </span>
-          </div>
-
-          {/* Quick Door Logging Buttons for Rep (Slaat pas op in database bij klik!) */}
-          <div className="grid grid-cols-3 gap-1.5 pt-0.5">
-            <button
-              type="button"
-              onClick={() => {
-                const saved = logVisit(activePin.id, 'deal_closed', 'Deal gesloten', undefined, undefined, undefined, activePin);
-                setActivePin(saved || { ...activePin, current_status: 'deal_closed' });
-              }}
-              className="p-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-600 dark:text-emerald-400 text-[10px] font-semibold text-center border border-emerald-500/30"
-            >
-              🟢 Deal
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                const saved = logVisit(activePin.id, 'not_home', 'Niet thuis', undefined, undefined, undefined, activePin);
-                setActivePin(saved || { ...activePin, current_status: 'not_home' });
-              }}
-              className="p-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 dark:text-amber-400 text-[10px] font-semibold text-center border border-amber-500/30"
-            >
-              🟡 Niet Thuis
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                const saved = logVisit(activePin.id, 'no_interest', 'Geen interesse', undefined, undefined, undefined, activePin);
-                setActivePin(saved || { ...activePin, current_status: 'no_interest' });
-              }}
-              className="p-1.5 rounded-lg bg-red-500/15 hover:bg-red-500/25 text-red-600 dark:text-red-400 text-[10px] font-semibold text-center border border-red-500/30"
-            >
-              🔴 Geen Int.
-            </button>
-          </div>
-          <div className="grid grid-cols-2 gap-1.5">
-            <button
-              type="button"
-              onClick={() => {
-                const saved = logVisit(activePin.id, 'appointment', 'Afspraak ingepland', undefined, undefined, undefined, activePin);
-                setActivePin(saved || { ...activePin, current_status: 'appointment' });
-              }}
-              className="p-1.5 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 text-purple-600 dark:text-purple-400 text-[10px] font-semibold text-center border border-purple-500/30"
-            >
-              🟣 Afspraak
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                const saved = logVisit(activePin.id, 'do_not_knock', 'Niet aanbellen / Sticker', undefined, undefined, undefined, activePin);
-                setActivePin(saved || { ...activePin, current_status: 'do_not_knock' });
-              }}
-              className="p-1.5 rounded-lg bg-slate-500/15 hover:bg-slate-500/25 text-slate-700 dark:text-slate-300 text-[10px] font-semibold text-center border border-slate-500/30"
-            >
-              ⛔ Niet Bellen
-            </button>
-          </div>
-
-          {/* Actions: OpenStreetMap Inspect & OSRM Walk Route */}
-          <div className="grid grid-cols-2 gap-1.5 pt-1 border-t border-border/50">
-            <button
-              type="button"
-              onClick={() => setShowInspectionModal(true)}
-              className="py-1.5 px-2 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary text-xs font-semibold flex items-center justify-center gap-1 border border-primary/20 transition-colors"
-            >
-              <Building2 className="h-3.5 w-3.5" />
-              <span>Pand & Omgeving</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleCalculateRoute}
-              className="py-1.5 px-2 rounded-xl bg-sky-500/10 hover:bg-sky-500/20 text-sky-600 dark:text-sky-400 text-xs font-semibold flex items-center justify-center gap-1 border border-sky-500/20 transition-colors"
-            >
-              <Navigation className="h-3.5 w-3.5" />
-              <span>OSRM Looproute</span>
-            </button>
-          </div>
-
-          {routeInfo && (
-            <div className="p-2 rounded-xl bg-sky-500/10 border border-sky-500/20 text-xs text-sky-700 dark:text-sky-300 flex items-center justify-between">
-              <span>Loopafstand: <strong>{(routeInfo.distanceMeters / 1000).toFixed(2)} km</strong></span>
-              <span>Reistijd: <strong>{Math.round(routeInfo.durationSeconds / 60)} min</strong> te voet</span>
-            </div>
-          )}
-        </div>
+        <FieldBuildingPopup
+          pin={activePin}
+          onClose={() => setActivePin(null)}
+          onOpenSaleModal={() => setIsSalesdockModalOpen(true)}
+          onCalculateRoute={handleCalculateRoute}
+          routeInfo={routeInfo}
+          onOpenInspectionModal={() => setShowInspectionModal(true)}
+        />
       )}
+
+      {/* Salesdock Comprehensive Order Intake & Sale Modal */}
+      <SalesdockSaleModal
+        isOpen={isSalesdockModalOpen}
+        onClose={() => setIsSalesdockModalOpen(false)}
+        pin={activePin}
+        onSaleCompleted={(updatedPin) => {
+          setActivePin(updatedPin);
+          onSelectPin?.(updatedPin);
+        }}
+      />
 
       {/* Open-Source Pand & Omgeving Inspectie Modal */}
       <Dialog open={showInspectionModal} onOpenChange={setShowInspectionModal}>
