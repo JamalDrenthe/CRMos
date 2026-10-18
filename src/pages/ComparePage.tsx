@@ -24,7 +24,7 @@ export function ComparePage() {
       badge: 'Volledige Vergelijking',
       headline: 'Waarom 3 losse tools vervangen door CRMos?',
       summary:
-        'In plaats van Salesdock voor field sales, LeadDesk voor je belteams en Recruit CRM voor werving, combineert CRMos alle drie in één naadloze workflow.',
+        'In plaats van Salesdock voor buitendienst, LeadDesk voor belteams en Recruit CRM voor werving, brengt CRMos alle disciplines samen in één centrale database.',
     },
     {
       id: 'salesdock',
@@ -130,7 +130,7 @@ export function ComparePage() {
               <CRMosLogo size="xs" showText={false} />
               <span>Vergelijk CRMos</span>
               <span className="text-muted-foreground">•</span>
-              <span className="text-primary">Slimmer, Sneller, Samenhangend</span>
+              <span className="text-primary">Buitendienst, Binnendienst en Werving Verenigd</span>
             </div>
 
             <h1 className="text-4xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-foreground max-w-4xl mx-auto leading-[1.08]">
@@ -177,7 +177,7 @@ export function ComparePage() {
                   <span>Tot 60% kostenbesparing op softwarelicenties</span>
                 </div>
                 <h3 className="text-xl sm:text-2xl font-bold text-foreground">
-                  3 losse abonnementen (€320+/mnd) vs. CRMos (vanaf €50/mnd)
+                  3 losse abonnementen (€320+/mnd) vs. CRMos (vanaf €39/mnd)
                 </h3>
                 <p className="text-xs sm:text-sm text-muted-foreground max-w-xl">
                   Naast licentiekosten bespaar je honderden uren op dubbele data-invoer, API-connectors en IT-onderhoud.

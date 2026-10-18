@@ -147,7 +147,7 @@ export function DataIntelligencePage() {
           <div className="relative mx-auto max-w-4xl space-y-6">
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wider bg-primary/10 text-primary border border-primary/20 shadow-xs">
               <Sparkles className="h-3.5 w-3.5 text-primary" />
-              <span>CRMos Proprietary Data Intelligence</span>
+              <span>Kadaster BAG &amp; Open Geodata Engine</span>
             </div>
 
             <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight text-foreground text-balance">
@@ -249,9 +249,9 @@ export function DataIntelligencePage() {
                 <div className="h-10 w-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
                   <CheckCircle2 className="h-5 w-5" />
                 </div>
-                <h3 className="font-bold text-foreground text-base">De CRMos Data Revolutie</h3>
+                <h3 className="font-bold text-foreground text-base">De CRMos Aanpak</h3>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  Door officiële open overheidsregistraties (BAG) te combineren met wereldwijde open geodata, filteren we woonhuizen 100% uit. U krijgt actuele B2B-leads direct op de kaart, zonder extra facturen.
+                  Door officiële open overheidsregistraties (BAG) te combineren met open geodata, filteren we particuliere woonhuizen 100% uit. Je buitendienst ziet direct actuele B2B-leads op de kaart, zonder extra facturen per adres.
                 </p>
               </div>
             </div>
@@ -426,7 +426,7 @@ export function DataIntelligencePage() {
               </div>
               <div>
                 <h3 className="text-xl sm:text-2xl font-bold text-foreground">
-                  100% AVG / GDPR &amp; Ethiek ("Privacy-First by Design")
+                  100% AVG-conform &amp; Privacy by Design
                 </h3>
                 <p className="text-xs sm:text-sm text-muted-foreground">
                   Gefundeerd op officiële overheidsregistraties en open geografische standaarden

@@ -40,24 +40,24 @@ export function SolutionsPage() {
       id: 'field-sales',
       title: 'Field Sales & Deur-tot-Deur',
       shortTitle: 'Field Sales',
-      subtitle: 'Geïnspireerd door het beste van Salesdock',
+      subtitle: 'Postcode rayontoewijzing & mobiele orderintake',
       icon: MapPin,
       badge: 'Buitendienst & D2D',
       color: 'from-blue-600 to-indigo-600',
       description:
-        'Volledig beheer van buitendienstteams, rayonverdeling op postcodeniveau, realtime tablet-verkoopflows en directe orderregistratie aan de deur.',
+        'Volledig overzicht over buitendienstteams, rayonverdeling op postcodeniveau, snelle mobiele verkoopflows en directe orderregistratie aan de deur met digitale handtekening.',
       features: [
         {
           name: 'Rayon- & Postcodeverdeling',
           desc: 'Wijs wijken en straten visueel toe aan vertegenwoordigers en voorkom overlap of conflicten.',
         },
         {
-          name: 'Directe Deur-tot-Deur Verkoopflows',
-          desc: 'Gestroomlijnde formulieren geoptimaliseerd voor mobiel en iPad met directe digitale handtekening.',
+          name: 'Mobiele Deur-tot-Deur Verkoopflows',
+          desc: 'Overzichtelijke intakeformulieren voor iPad en mobiel met directe digitale handtekening en SEPA-validatie.',
         },
         {
-          name: 'Live Bezoek- & Statusregistratie',
-          desc: 'Registreer direct "Niet thuis", "Geen interesse" of "Sale gesloten" met GPS-tijdstempels.',
+          name: 'Directe Bezoekregistratie',
+          desc: 'Leg direct statussen vast zoals "Niet thuis", "Geen interesse" of "Sale gesloten" met GPS-tijdstempels.',
         },
         {
           name: 'Commissies & Prestatierapporten',
@@ -65,145 +65,145 @@ export function SolutionsPage() {
         },
       ],
       advantages:
-        'Verkoopactiviteiten kunnen worden georganiseerd en gevolgd vanaf de allereerste lead tot de getekende overeenkomst.',
+        'Elk bezoek aan de deur wordt direct vastgelegd. Niet-thuis adressen stromen automatisch door naar het belteam.',
       benefits:
-        'Meer grip op dagelijkse activiteiten, betere opvolging van potentiële klanten en direct inzicht in commerciële prestaties per rayon.',
+        'Geen administratieve rompslomp aan het eind van de dag. Je weet direct welke straten zijn bezocht en welke deals zijn getekend.',
       searchKeywords: ['Door to door sales software', 'Field sales software', 'Deur tot deur CRM'],
     },
     {
       id: 'callcenter',
       title: 'Callcenter & Telemarketing',
       shortTitle: 'Callcenter',
-      subtitle: 'Geïnspireerd door het beste van LeadDesk',
+      subtitle: 'Belcampagnes, interactieve belscripts en agentbeheer',
       icon: PhoneCall,
       badge: 'Contact Center & Bellen',
       color: 'from-emerald-600 to-teal-600',
       description:
-        'Campagnebeheer, dynamische belscripts met bezwaarafhandeling, realtime agent-monitoring en naadloze telefonie-integratie.',
+        'Campagnebeheer, interactieve belscripts met bezwaarafhandeling, realtime agent-monitoring en directe koppeling naar buitendienstnotities.',
       features: [
         {
-          name: 'Campagne- & Belijstenbeheer',
+          name: 'Campagnes & Belijsten',
           desc: 'Importeer leads, filter op doelgroep en wijs batches automatisch toe aan beschikbare telemarketeers.',
         },
         {
-          name: 'Interactieve Pitch Flows (Belscripts)',
-          desc: 'Dynamische scripts met live doorklik-scenario’s en automatische bezwaarafhandeling tijdens het gesprek.',
+          name: 'Interactieve Belscripts (Pitch Flows)',
+          desc: 'Dynamische scripts met doorklik-scenario’s en gerichte bezwaarafhandeling tijdens het telefoongesprek.',
         },
         {
-          name: 'Gespreksregistratie & Terugbelacties',
-          desc: 'One-click call dispositions, geplande terugbelherinneringen en directe notities bij het contactprofiel.',
+          name: 'Gespreksnotities & Terugbelacties',
+          desc: 'Eenvoudige gespreksstatussen, geplande terugbelherinneringen en directe notities bij het contactprofiel.',
         },
         {
-          name: 'Agent- & Campagne-analytics',
-          desc: 'Meet gespreksduur, connectieratio’s, conversiepercentages en productiviteit per beller in realtime.',
+          name: 'Prestatie-analytics per Agent',
+          desc: 'Volg gespreksduur, bereikratio’s, conversiepercentages en productiviteit per medewerker.',
         },
       ],
       advantages:
-        'Telefonische activiteiten en commerciële opvolging worden georganiseerd binnen exact dezelfde centrale klantcontext.',
+        'Telefonische acquisitie en buitendienstcommunicatie delen exact hetzelfde klant- en contactdossier.',
       benefits:
-        'Efficiëntere werkprocessen, waterdichte contacthistorie en scherp inzicht in prestaties van agents, teams en belcampagnes.',
+        'Telemarketeers weten exact wat er aan de deur is besproken, wat leidt tot betere gesprekken en een hogere conversie.',
       searchKeywords: ['Callcenter software', 'Telemarketing software', 'Belscript software'],
     },
     {
       id: 'recruitment',
       title: 'Recruitment & Talent Management',
       shortTitle: 'Recruitment ATS',
-      subtitle: 'Geïnspireerd door het beste van Recruit CRM',
+      subtitle: 'Werving, kandidaatpijplijnen en snelle doorstroom',
       icon: UserCheck,
       badge: 'Werving & Selectie',
       color: 'from-purple-600 to-pink-600',
       description:
-        'Kandidaatpijplijnen van sourcing tot plaatsing, cv-beheer, vacatures en naadloze koppeling naar je commerciële teams.',
+        'Kandidaatpijplijnen van eerste sollicitatie tot plaatsing, cv-beheer, vacatures en directe doorstroom naar actieve verkoopteams.',
       features: [
         {
           name: 'Kandidaatpijplijnen & Kanban',
-          desc: 'Sleep kandidaten visueel door fasen: Sourcing, Screening, Interview, Aanbod en Aangenomen.',
+          desc: 'Verplaats kandidaten overzichtelijk door fasen: Sourcing, Screening, Gesprek, Aanbod en Aangenomen.',
         },
         {
           name: 'CV- & Profielbeheer',
-          desc: 'Gecentraliseerde opslag van vaardigheden, gewenst salaris, ervaring en documenten.',
+          desc: 'Centrale opslag van vaardigheden, gewenst salaris, ervaring en documenten.',
         },
         {
           name: 'Vacatures & Opdrachtgevers',
-          desc: 'Koppel vacatures rechtstreeks aan opdrachtgevers en match kandidaten op basis van competenties.',
+          desc: 'Koppel vacatures aan opdrachtgevers en match kandidaten op basis van relevante verkoopvaardigheden.',
         },
         {
-          name: 'Interne Doorstroom naar Sales & Support',
-          desc: 'Zet een aangenomen kandidaat met één klik om naar een actieve sales agent of callcenter medewerker.',
+          name: 'Directe Doorstroom naar Sales',
+          desc: 'Zet een aangenomen sollicitant met één klik om naar een actieve account met bel- of rayonrechten.',
         },
       ],
       advantages:
-        'Het volledige wervingsproces wordt beheerd vanuit één intuïtieve omgeving, van eerste sollicitatie tot plaatsing.',
+        'Het volledige sollicitatieproces verloopt binnen dezelfde werkomgeving als de dagelijkse salesoperatie.',
       benefits:
-        'Minder administratieve rompslomp, snellere plaatsingen en direct overzicht over je talentenpool en personeelscapaciteit.',
+        'Nieuw aangenomen vertegenwoordigers en telemarketeers kunnen binnen een uur aan de slag op hun campagne.',
       searchKeywords: ['Recruitment CRM', 'ATS software', 'Personeelswerving CRM'],
     },
     {
       id: 'revenue',
       title: 'Recruitment to Revenue Chain',
       shortTitle: 'Recruitment to Revenue',
-      subtitle: 'De unieke kracht van CRMos',
+      subtitle: 'Van werving tot gerealiseerde verkoopmarge',
       icon: TrendingUp,
       badge: 'Unieke Formule',
       color: 'from-amber-600 to-orange-600',
       description:
-        'De keten die niemand anders heeft: Van geworven kandidaat naar opgeleide agent, actieve salescampagne tot getekende deals en gegenereerde omzet.',
+        'De directe link tussen personeel en omzet: van sollicitant naar opgeleide agent, actieve campagne-inzet tot getekende contracten en gerealiseerde marge.',
       features: [
         {
-          name: 'Kandidaat Onboarding naar Agent',
-          desc: 'Zodra iemand is aangenomen, worden loginrechten, belprofiel en rayon direct geconfigureerd.',
+          name: 'Kandidaat Activeren als Agent',
+          desc: 'Zodra iemand is aangenomen, worden inlogrechten, belprofiel en rayon direct geactiveerd.',
         },
         {
-          name: 'Campagnetoewijzing & Targetkoppeling',
-          desc: 'Wijs de agent toe aan een D2D- of callcentercampagne met gekoppelde verkoopdoelen en provisieschalen.',
+          name: 'Campagnetoewijzing & Targets',
+          desc: 'Wijs de agent toe aan een buitendienst- of callcentercampagne met gekoppelde verkoopdoelen.',
         },
         {
-          name: 'Commerciële Prestaties & Deals',
-          desc: 'Elke gesloten sale wordt direct gekoppeld aan zowel de klant, het team als de wervingsbron van de agent.',
+          name: 'Prestaties & Gesloten Deals',
+          desc: 'Elke gesloten deal wordt direct geregistreerd onder de verkoper en zijn wervingsbron.',
         },
         {
-          name: 'Capaciteit versus Omzet Inzicht',
-          desc: 'Weet exact wat een geworven medewerker kost versus de totale brutomarge die hij of zij binnenbrengt.',
+          name: 'Kosten versus Opbrengst',
+          desc: 'Zie exact wat een nieuwe medewerker aan werving kostte versus de omzet die hij maandelijks genereert.',
         },
       ],
       advantages:
-        'Personeelswerving en commerciële uitvoering worden als onderdelen van exact dezelfde operationele keten bestuurd.',
+        'Werving en commerciële uitvoering zijn direct met elkaar verbonden in plaats van twee gescheiden werelden.',
       benefits:
-        'Nooit meer afstemmingsverlies tussen HR en Sales. Direct inzicht in ROI van recruitment op uiteindelijke verkoopresultaten.',
+        'Inzicht in welke recruiters of wervingskanalen de meest productieve en winstgevende verkopers aanleveren.',
       searchKeywords: ['Recruitment en sales combineren', 'From People to Performance', 'Commerciële keten software'],
     },
     {
       id: 'automation',
-      title: 'Sales Automation & Connected Workflows',
+      title: 'Workflows & Automatisering',
       shortTitle: 'Automations',
-      subtitle: 'Minder handwerk, maximale snelheid',
+      subtitle: 'Minder handwerk, snellere opvolging',
       icon: Workflow,
       badge: 'Automatisering',
       color: 'from-cyan-600 to-blue-600',
       description:
-        'Geautomatiseerde statusovergangen, slimme herinneringen, lead scoring en naadloze koppelingen via webhooks en REST API’s.',
+        'Geautomatiseerde statusovergangen, taken, herinneringen en directe data-uitwisseling via webhooks en REST API’s.',
       features: [
         {
           name: 'Trigger-gebaseerde Acties',
-          desc: 'Stuur automatisch een bevestiging na een positief telefoongesprek of maak een follow-up taak aan.',
+          desc: 'Stuur automatisch een bevestiging na een positief verkoopgesprek of maak een follow-up taak aan.',
         },
         {
-          name: 'Geautomatiseerde Lead Distributie',
-          desc: 'Verdeel inkomende leads direct op basis van postcode, beschikbaarheid of prestatiescore van agents.',
+          name: 'Slimme Lead Distributie',
+          desc: 'Verdeel binnengekomen leads automatisch op basis van postcodegebied of beschikbaarheid van agents.',
         },
         {
           name: 'Statusovergangen & Notificaties',
-          desc: 'Houd managers en teamleden realtime op de hoogte bij het bereiken van mijlpalen of deals.',
+          desc: 'Houd teamleiders direct op de hoogte bij grote deals of behaalde weektargets.',
         },
         {
           name: 'Open API & Webhooks',
-          desc: 'Koppel eenvoudig met je boekhoudsoftware, VOIP-telefooncentrale of e-mailmarketingtools.',
+          desc: 'Koppel eenvoudig met je boekhoudpakket, VOIP-centrale of e-mailsoftware.',
         },
       ],
       advantages:
-        'Terugkerende werkzaamheden worden automatisch uitgevoerd wanneer aan vooraf gedefinieerde voorwaarden wordt voldaan.',
+        'Terugkerende administratieve handelingen worden automatisch uitgevoerd op de achtergrond.',
       benefits:
-        'Minder handmatige overdrachten, drastisch minder fouten en meer tijd voor activiteiten die direct omzet opleveren.',
+        'Geen vertraging tussen buitendienst en binnendienst, minder menselijke fouten en meer tijd voor verkopen.',
       searchKeywords: ['Sales automation', 'Lead management software', 'Workflow automation CRM'],
     },
   ];
@@ -227,7 +227,7 @@ export function SolutionsPage() {
               <CRMosLogo size="xs" showText={false} />
               <span>Oplossingen &amp; Disciplines</span>
               <span className="text-muted-foreground">•</span>
-              <span className="text-primary">One Connected Workflow</span>
+              <span className="text-primary">Eén verbonden werkomgeving</span>
             </div>
 
             <h1 className="text-4xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-foreground max-w-4xl mx-auto leading-[1.08]">
@@ -313,7 +313,7 @@ export function SolutionsPage() {
                 <div className="rounded-2xl border border-border/80 bg-muted/30 p-6 space-y-4">
                   <div>
                     <span className="text-xs font-bold uppercase tracking-wider text-primary">
-                      Het Voordeel (Advantage)
+                      Wat dit brengt in de praktijk
                     </span>
                     <p className="text-sm text-foreground/90 mt-1 leading-relaxed">
                       {currentDiscipline.advantages}
@@ -321,7 +321,7 @@ export function SolutionsPage() {
                   </div>
                   <div className="border-t border-border/40 pt-3">
                     <span className="text-xs font-bold uppercase tracking-wider text-emerald-500">
-                      Het Rendement (Benefit)
+                      Direct resultaat voor het team
                     </span>
                     <p className="text-sm text-foreground/90 mt-1 leading-relaxed">
                       {currentDiscipline.benefits}
@@ -599,7 +599,7 @@ export function SolutionsPage() {
               Ontwikkeld voor commerciële organisaties
             </h2>
             <p className="text-sm sm:text-base text-muted-foreground">
-              Het platform sluit naadloos aan op bedrijven die werken met commerciële teams en grote aantallen contacten.
+              Ontwikkeld voor bedrijven met actieve buitendienstlopers, telefonische acquisitie en continue werving.
             </p>
           </div>
 

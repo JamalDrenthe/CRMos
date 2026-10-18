@@ -59,7 +59,7 @@ export function Footer() {
               <CRMosLogo size="sm" showTagline={true} />
             </Link>
             <p className="text-muted-foreground leading-relaxed max-w-sm">
-              {t('The complete operational operating system for modern business: Sales Pipelines, Omnichannel Contact Center, Talent ATS, and Gamification. Crafted for unprecedented speed and clarity.')}
+              {t('The complete operational platform for Field Sales, Contact Centers and Recruitment.')}
             </p>
             <div className="inline-flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground/90">
               <Shield className="h-3.5 w-3.5 text-emerald-500" />
@@ -122,13 +122,13 @@ export function Footer() {
             <h4 className="font-semibold tracking-wider text-foreground uppercase text-[11px]">Prijzen &amp; Contact</h4>
             <ul className="mt-3.5 space-y-2 text-muted-foreground">
               <li>
-                <Link to="/pricing" className="hover:text-foreground transition-colors">Starter (€200)</Link>
+                <Link to="/pricing" className="hover:text-foreground transition-colors">Starter (vanaf €39/mnd)</Link>
               </li>
               <li>
-                <Link to="/pricing" className="hover:text-foreground transition-colors">Professional (€100)</Link>
+                <Link to="/pricing" className="hover:text-foreground transition-colors">Professional (vanaf €95/mnd)</Link>
               </li>
               <li>
-                <Link to="/pricing" className="hover:text-foreground transition-colors">Enterprise (€50)</Link>
+                <Link to="/pricing" className="hover:text-foreground transition-colors">Enterprise (vanaf €199/mnd)</Link>
               </li>
               <li>
                 <Link to="/login" className="hover:text-foreground transition-colors">{t('Log in')}</Link>

@@ -74,7 +74,7 @@ export function PricingPage() {
       description: t('For large organizations, call centers and multi-branch agencies needing full control.'),
       priceMonthly: 249,
       priceAnnual: 199,
-      badge: t('Ultimate Power'),
+      badge: 'Alles Inbegrepen',
       popular: false,
       features: [
         t('Unlimited team members & seats'),
@@ -317,9 +317,9 @@ export function PricingPage() {
                 <thead>
                   <tr className="border-b border-border/50 bg-muted/40">
                     <th className="py-4 px-6 text-sm font-semibold text-foreground">{t('Features')}</th>
-                    <th className="py-4 px-6 text-sm font-semibold text-center text-foreground">{t('Starter (€200)')}</th>
-                    <th className="py-4 px-6 text-sm font-semibold text-center text-foreground bg-primary/5">{t('Professional (€100)')}</th>
-                    <th className="py-4 px-6 text-sm font-semibold text-center text-foreground">{t('Enterprise (€50)')}</th>
+                    <th className="py-4 px-6 text-sm font-semibold text-center text-foreground">Starter (€39/mnd)</th>
+                    <th className="py-4 px-6 text-sm font-semibold text-center text-foreground bg-primary/5">Professional (€95/mnd)</th>
+                    <th className="py-4 px-6 text-sm font-semibold text-center text-foreground">Enterprise (€199/mnd)</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/30 text-xs sm:text-sm">

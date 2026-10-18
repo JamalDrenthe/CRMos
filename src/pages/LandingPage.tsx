@@ -28,123 +28,123 @@ export function LandingPage() {
 
   const testimonials = [
     {
-      name: 'Mark van Dijk',
-      role: 'Commercieel Directeur',
-      company: 'Apex Direct Sales Group',
+      name: 'Sander de Jong',
+      role: 'Operationeel Directeur',
+      company: 'Direct Field Marketing Nederland',
       content:
-        'Voorheen gebruikten we Salesdock voor onze deurlopers en een losse tool voor nabellen. Met CRMos is alles gekoppeld: de buitendienst, het callcenter en zelfs onze recruiter. Onze dealcyclus is met 35% verkort.',
+        'We sturen dagelijks tientallen deurlopers op pad voor telecom- en energiecontracten. Vroeger liepen we met Salesdock en moesten niet-thuis adressen handmatig naar Excel om te laten nabellen. In CRMos klikt de loper op Niet Thuis en staat het adres binnen een seconde in het belscript van ons callcenter. Dat bespaart ons uren per week.',
       rating: 5,
     },
     {
-      name: 'Laura Hermans',
-      role: 'Lead Recruiter & Partner',
-      company: 'TalentSource & Commercials',
+      name: 'Femke Bakker',
+      role: 'Head of Talent & Recruitment',
+      company: 'SalesForce Recruitment',
       content:
-        'De "Recruitment to Revenue" flow is goud waard. We werven verkopers en telemarketeers via de ATS module en zien binnen dagen precies hoeveel omzet ze per campagne binnenbrengen. Geen spreadsheets meer.',
+        'In direct sales en telemarketing is snelheid bij werving cruciaal. Sollicitanten komen binnen via onze vacatures, worden direct gescreend en met één klik omgezet naar een actieve account met rayon- of belrechten. Geen handmatige accounts meer aanmaken in drie losse applicaties.',
       rating: 5,
     },
     {
       name: 'Daan Oosterhout',
-      role: 'Operations & Callcenter Manager',
-      company: 'ConnectPlus B.V.',
+      role: 'Callcenter Manager',
+      company: 'B2B TeleConnect',
       content:
-        'De interactieve Pitch Flows en directe gespreksregistratie hebben onze onboardingstijd voor nieuwe telemarketeers gehalveerd. LeadDesk vervangen door CRMos scheelt ons bovendien duizenden euro’s per jaar.',
+        'Onze telefonische adviseurs werken met dynamische belscripts waarin bezwaren direct worden opgevangen. Doordat we LeadDesk en losse ATS-software hebben vervangen door CRMos, hebben we alle klantcontacten in één scherm én besparen we aanzienlijk op maandelijkse licenties.',
       rating: 5,
     },
   ];
 
   const faqs = [
     {
-      question: 'Wat maakt CRMos uniek vergeleken met traditionele CRM-systemen?',
+      question: 'Wat maakt CRMos anders dan een standaard CRM?',
       answer:
-        'CRMos is het enige hybride platform dat drie essentiële commerciële disciplines samenbrengt in één connected workflow: Field Sales (deur-tot-deur en buitendienst), Callcenter & Telemarketing, en Recruitment (ATS). In plaats van 3 losse softwarepakketten heb je één centraal systeem van werving tot omzet.',
+        'Standaard CRM-systemen zijn gebouwd voor e-mail en kantoorsales. CRMos is specifiek ingericht voor commerciële organisaties met een actieve buitendienst (deur-tot-deur rayonbeheer en tabletverkoop), een telefonische binnendienst (callcenter met dynamische belscripts) en doorlopende werving (ingebouwd ATS). Alles werkt samen vanuit één centrale database.',
     },
     {
-      question: 'Hoe snel kan ons team starten met CRMos?',
+      question: 'Hoe snel kan ons salesteam live zijn?',
       answer:
-        'Binnen 2 minuten! Registreer een gratis account met je Google account of e-mailadres en je kunt direct beginnen. Er is geen ingewikkelde installatie of maandenlange training vereist. Je kunt bovendien direct voorbeelddata inladen.',
+        'Binnen enkele minuten. Maak een proefaccount aan, nodig je teamleden uit of importeer direct een postcodegebied met zakelijke panden via de ingebouwde Kadaster BAG-verrijking. Je kunt meteen aan de slag.',
     },
     {
-      question: 'Wat is de "Recruitment to Revenue" keten?',
+      question: 'Wat houdt de "Recruitment to Revenue" keten in?',
       answer:
-        'Dit is de unieke formule van CRMos: je werft een kandidaat via de ingebouwde ATS module, zet deze met één klik om naar een actieve agent, wijst deze toe aan een belcampagne of postcode-rayon, en ziet realtime hoeveel omzet deze persoon realiseert.',
+        'Dit is de directe koppeling tussen werving en omzet: je werft een verkoopmedewerker in de ATS-module, zet deze met één druk op de knop om naar een actieve agent, kent een looprayon of belcampagne toe en ziet in het dashboard exact welke omzet deze persoon realiseert.',
     },
     {
-      question: 'Kan CRMos bestaande tools zoals Salesdock, LeadDesk of Recruit CRM vervangen?',
+      question: 'Kan CRMos Salesdock, LeadDesk en recruitmenttools vervangen?',
       answer:
-        'Ja, CRMos is specifiek ontworpen om deze losse tools te consolideren. Zo bespaar je tot wel 60% op softwarekosten en voorkom je dataversnippering en handmatige import/export koppelingen.',
+        'Ja. CRMos combineert de kaart- en orderintake van Salesdock, de belscripts en campagnes van LeadDesk en het kandidaatbeheer van een modern ATS. Hierdoor heb je geen losse abonnementen en API-koppelingen meer nodig.',
     },
     {
-      question: 'Is er een gratis proefperiode en zijn er verplichtingen?',
+      question: 'Zit ik ergens aan vast bij het starten van een proefperiode?',
       answer:
-        'Jazeker! Je kunt 14 dagen lang gratis en vrijblijvend gebruikmaken van alle functionaliteiten van het platform. Geen creditcard vereist en je zit nergens aan vast.',
+        'Nee, je start 14 dagen gratis en vrijblijvend. We vragen geen creditcard of betaalgegevens. Na de proefperiode kies je zelf het pakket dat bij je team past.',
     },
   ];
 
   const pillars = [
     {
       number: '01',
-      title: 'Unified CRM',
-      subtitle: 'Centraal beheer van relaties en operatie',
-      desc: 'Centraal beheer van leads, klanten, kandidaten, medewerkers, opdrachtgevers, teams en volledige contactgeschiedenis.',
-      advantage: 'Alle relevante informatie is logisch verbonden en toegankelijk vanuit één systeem op basis van gebruikersrechten.',
-      benefit: 'Minder dubbel werk, minder versnipperde gegevens en compleet overzicht over relaties en activiteiten.',
+      title: 'Centraal Relatiebeheer',
+      subtitle: 'Alle klantinteracties op één plek',
+      desc: 'Beheer leads, zakelijke klanten, contactpersonen en de complete communicatiehistorie zonder versnippering.',
+      advantage: 'Geen verspreide notities of losse spreadsheets: elk contactmoment is direct inzichtelijk.',
+      benefit: 'Je team beschikt altijd over de meest actuele context vóórdat ze aanbellen of bellen.',
     },
     {
       number: '02',
-      title: 'Field Sales Management',
-      subtitle: 'Geïnspireerd door de kracht van Salesdock',
-      desc: 'Leadverdeling, campagnebeheer, bezoekregistratie, verkoopflows, taakbeheer en prestatierapportages voor deur tot deur en buitendienst.',
-      advantage: 'Verkoopactiviteiten kunnen worden georganiseerd en gevolgd vanaf de eerste lead tot de geregistreerde verkoop.',
-      benefit: 'Meer grip op dagelijkse activiteiten, betere opvolging en duidelijker inzicht in commerciële prestaties.',
+      title: 'Field Sales & Deur-tot-Deur',
+      subtitle: 'Rayonkaarten & mobiele orderintake',
+      desc: 'Wijs postcodes toe aan vertegenwoordigers, navigeer op de loopkaart en leg getekende orders met SEPA vast.',
+      advantage: 'Volledige buitendienstregistratie met GPS-validatie en digitale handtekening op tablet of mobiel.',
+      benefit: 'Geen papierwerk meer: orders zijn direct gevalideerd en klaar voor facturatie of oplevering.',
     },
     {
       number: '03',
-      title: 'Callcenter Operations',
-      subtitle: 'Geïnspireerd door het beste van LeadDesk',
-      desc: 'Campagnebeheer, contactlijsten, gespreksregistratie, terugbelacties, agenttoewijzing en dynamische belscripts.',
-      advantage: 'Telefonische activiteiten en commerciële opvolging worden binnen dezelfde klantcontext georganiseerd.',
-      benefit: 'Efficiëntere werkprocessen, betere contacthistorie en meer inzicht in prestaties van agents en campagnes.',
+      title: 'Callcenter & Telemarketing',
+      subtitle: 'Dynamische belscripts & campagnes',
+      desc: 'Organiseer belcampagnes, volg niet-thuis adressen telefonisch op en navigeer soepel door bezwaarafhandeling.',
+      advantage: 'Bellers zien exact welke notities de buitendienst heeft gemaakt en handelen direct in dezelfde flow.',
+      benefit: 'Hogere bereikbaarheid en directe opvolging van prospects die aan de deur werden gemist.',
     },
     {
       number: '04',
-      title: 'Recruitment & Talent Management',
-      subtitle: 'Geïnspireerd door het beste van Recruit CRM',
-      desc: 'Kandidaatprofielen, CV-beheer, vacatures, kandidaatpijplijnen, opdrachtgeversbeheer, matching en plaatsingsregistratie.',
-      advantage: 'Het volledige recruitmentproces kan vanuit één omgeving worden beheerd, van sourcing tot plaatsing.',
-      benefit: 'Minder administratieve rompslomp, betere opvolging van talent en meer grip op personeelscapaciteit.',
+      title: 'Recruitment & ATS',
+      subtitle: 'Werving en selectie van commercieel talent',
+      desc: 'Beheer vacatures, behandel sollicitaties via kanban-fasen en bouw een actieve talentpool op.',
+      advantage: 'Aangenomen kandidaten stromen direct door als actieve agent zonder handmatige accountcreatie.',
+      benefit: 'Snellere onboarding en direct inzetbare verkopers voor je actieve campagnes.',
     },
     {
       number: '05',
-      title: 'Connected Workflows',
-      subtitle: 'Geautomatiseerde samenhang tussen processen',
-      desc: 'Automatische acties, trigger-gebaseerde statusovergangen, herinneringen en integraties tussen afdelingen.',
-      advantage: 'Terugkerende werkzaamheden worden automatisch uitgevoerd wanneer aan vooraf bepaalde voorwaarden is voldaan.',
-      benefit: 'Minder handmatige overdrachten, snellere processen en meer tijd voor activiteiten die waarde opleveren.',
+      title: 'Geautomatiseerde Triggers',
+      subtitle: 'Automatische acties tussen afdelingen',
+      desc: 'Stel slimme triggers in: een gesloten deal stuurt direct een bevestiging en wijst follow-up taken toe.',
+      advantage: 'Geen vergeten follow-ups of administratieve vertraging tussen de buitendienst en binnendienst.',
+      benefit: 'Consistente opvolging van elke prospect zonder extra handmatige administratie.',
     },
     {
       number: '06',
       title: 'Recruitment to Revenue',
-      subtitle: 'Van kandidaat tot gerealiseerde omzet',
-      desc: 'Directe verbinding tussen kandidaten, onboarding, medewerkers, salescampagnes en commerciële resultaten.',
-      advantage: 'Personeelswerving en commerciële uitvoering kunnen als onderdelen van dezelfde operationele keten worden beheerd.',
-      benefit: 'Organisaties krijgen direct inzicht in de relatie tussen personeelscapaciteit, inzetbaarheid en omzetresultaten.',
+      subtitle: 'Van aanname tot gerealiseerde marge',
+      desc: 'Koppel personeelskosten direct aan de behaalde omzet per agent, campagne en verkoopregio.',
+      advantage: 'Inzicht in de volledige levenscyclus: wervingskosten versus daadwerkelijk gerealiseerde marge.',
+      benefit: 'Stuur gericht op winstgevendheid per medewerker en ontdek welke wervingskanalen het beste presteren.',
     },
     {
       number: '07',
-      title: 'Performance Analytics',
-      subtitle: 'Data-gedreven besluitvorming',
-      desc: 'Rapportages over leads, conversies, contactactiviteiten, agentprestaties, recruitmentfunnels en plaatsingen.',
-      advantage: 'Gegevens uit verschillende disciplines worden gecombineerd om prestaties en knelpunten te analyseren.',
-      benefit: 'Beter onderbouwde beslissingen, gerichtere coaching en direct zicht op verbetermogelijkheden.',
+      title: 'Prestatie-inzichten & Gamificatie',
+      subtitle: 'Realtime dashboards en motivatie',
+      desc: 'Motiveer je teams met ranglijsten, ervaringspunten (XP) en inzichtelijke conversie-statistieken.',
+      advantage: 'Commerciële targets en dagelijkse resultaten zijn realtime zichtbaar voor agenten en managers.',
+      benefit: 'Gezonde teamcompetitie, hogere motivatie en direct zicht op coachingbehoeften.',
     },
     {
       number: '08',
-      title: 'Flexible Integrations',
-      subtitle: 'Koppelingen met je ecosysteem',
-      desc: 'Koppelingen met externe systemen via API’s, webhooks, Google Cloud Firestore en moderne integraties.',
-      advantage: 'CRMos werkt naadloos samen met bestaande telefonie, communicatie en administratieve software.',
-      benefit: 'Een flexibele softwareomgeving die meegroeit met de organisatie en dure systeemvervanging voorkomt.',
+      title: 'Open Data & Kadaster Integratie',
+      subtitle: '2.5M+ zakelijke panden zonder datakosten',
+      desc: 'Ontsluit fysieke bedrijfspanden via Kadaster BAG en OpenStreetMap zonder dure externe data-abonnementen.',
+      advantage: 'Filtert particuliere woningen 100% uit zodat deurlopers alleen bij echte bedrijven aanbellen.',
+      benefit: 'Geen verspilde wandelroutes en geen hoge kosten per gekochte adressenlijst.',
     },
   ];
 
@@ -292,7 +292,7 @@ export function LandingPage() {
                 </div>
                 <h4 className="font-bold text-base text-foreground">Recruitment &amp; ATS</h4>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  Kandidaatpijplijnen, CV-beheer, vacatures en naadloze onboarding naar actieve verkoopteams.
+                  Kandidaatpijplijnen, CV-beheer, vacatures en directe doorstroom naar actieve verkoopteams.
                 </p>
               </div>
 
@@ -700,8 +700,8 @@ export function LandingPage() {
                 Recruitment to Revenue Chain
               </h2>
               <p className="text-base sm:text-lg text-muted-foreground leading-relaxed">
-                Van kandidaat tot omzet. Bekijk hoe personeelswerving en commerciële uitvoering naadloos samenkomen
-                in één operationele keten.
+                Van vacature tot gerealiseerde verkoop. Bekijk hoe personeelswerving en commerciële uitvoering
+                direct op elkaar aansluiten in één overzichtelijke keten.
               </p>
             </div>
 
@@ -830,11 +830,10 @@ export function LandingPage() {
                 <span>Pijlers &amp; Voordelen</span>
               </span>
               <h2 className="text-3xl sm:text-5xl font-bold tracking-tight text-foreground text-balance">
-                Acht krachtige pijlers. Ongekend rendement.
+                Acht kernmodules. Gebouwd voor commerciële grip.
               </h2>
               <p className="text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-                Elke module van CRMos is ontworpen om zowel operationele voordelen (Advantages) als direct meetbaar
-                rendement (Benefits) te leveren.
+                Elke module pakt een concreet knelpunt aan in het veldwerk, belwerk of wervingsproces van je commerciële organisatie.
               </p>
             </div>
 
@@ -861,11 +860,11 @@ export function LandingPage() {
 
                   <div className="border-t border-border/40 pt-3 space-y-2 text-[11px]">
                     <div>
-                      <span className="font-bold text-foreground">Voordeel:</span>{' '}
+                      <span className="font-bold text-foreground">In de praktijk:</span>{' '}
                       <span className="text-muted-foreground">{pillar.advantage}</span>
                     </div>
                     <div>
-                      <span className="font-bold text-emerald-500">Rendement:</span>{' '}
+                      <span className="font-bold text-emerald-500">Resultaat:</span>{' '}
                       <span className="text-foreground/90 font-medium">{pillar.benefit}</span>
                     </div>
                   </div>
@@ -882,20 +881,20 @@ export function LandingPage() {
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-8 text-center">
               <div>
-                <p className="text-4xl sm:text-5xl font-bold tracking-tight text-foreground">+48%</p>
-                <p className="mt-2 text-xs sm:text-sm text-muted-foreground">Hogere dealconversie</p>
+                <p className="text-4xl sm:text-5xl font-bold tracking-tight text-foreground">2.5M+</p>
+                <p className="mt-2 text-xs sm:text-sm text-muted-foreground">Zakelijke panden in Nederland</p>
               </div>
               <div>
-                <p className="text-4xl sm:text-5xl font-bold tracking-tight text-foreground">3.5x</p>
-                <p className="mt-2 text-xs sm:text-sm text-muted-foreground">Snellere onboarding van agents</p>
+                <p className="text-4xl sm:text-5xl font-bold tracking-tight text-foreground">0%</p>
+                <p className="mt-2 text-xs sm:text-sm text-muted-foreground">Woonhuizen (Kadaster BAG filter)</p>
               </div>
               <div>
-                <p className="text-4xl sm:text-5xl font-bold tracking-tight text-emerald-500">24/7</p>
-                <p className="mt-2 text-xs sm:text-sm text-muted-foreground">Google Cloud Firestore Sync</p>
+                <p className="text-4xl sm:text-5xl font-bold tracking-tight text-emerald-500">100%</p>
+                <p className="mt-2 text-xs sm:text-sm text-muted-foreground">Digitaal getekend aan de deur</p>
               </div>
               <div>
-                <p className="text-4xl sm:text-5xl font-bold tracking-tight text-foreground">&lt; 60%</p>
-                <p className="mt-2 text-xs sm:text-sm text-muted-foreground">Lagere softwarelicentiekosten</p>
+                <p className="text-4xl sm:text-5xl font-bold tracking-tight text-foreground">3-in-1</p>
+                <p className="mt-2 text-xs sm:text-sm text-muted-foreground">Field, Callcenter &amp; ATS verenigd</p>
               </div>
             </div>
           </div>
@@ -911,7 +910,7 @@ export function LandingPage() {
                 {t('Customer Experiences')}
               </span>
               <h2 className="text-3xl sm:text-5xl font-bold tracking-tight text-foreground text-balance">
-                Vertrouwd door toonaangevende commerciële teams.
+                Praktijkervaringen van commerciële teams.
               </h2>
             </div>
 
@@ -955,8 +954,8 @@ export function LandingPage() {
               Geen verborgen seat-kosten. Eerlijk en schaalbaar.
             </h2>
             <p className="text-sm sm:text-base text-muted-foreground max-w-xl mx-auto">
-              Starter voor €200/mnd, Professional voor €100/mnd en Enterprise voor €50/mnd.
-              Inclusief alle functionaliteiten van sales, callcenter en recruitment.
+              Starter vanaf €39/mnd, Professional vanaf €95/mnd en Enterprise vanaf €199/mnd.
+              Inclusief alle modules voor verkoop, callcenter en recruitment.
             </p>
             <div className="flex flex-wrap items-center justify-center gap-4 pt-2">
               <Button
