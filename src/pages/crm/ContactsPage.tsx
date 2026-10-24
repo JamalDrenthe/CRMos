@@ -14,6 +14,7 @@ import { useEnhancedStore } from '@/stores/enhancedStore';
 import { filterRecordsForUser, isCoreEcosystemCompany } from '@/lib/companyAccess';
 import { formatDistanceToNow } from 'date-fns';
 import type { Contact } from '@/types';
+import { getVvcTag, getVvcTagStats } from '@/services/vvcTagService';
 import {
   Plus,
   Search,
@@ -29,6 +30,9 @@ import {
   ChevronsLeft,
   ChevronsRight,
   UserCheck,
+  Tag,
+  Copy,
+  RefreshCw,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -50,7 +54,7 @@ import { toast } from 'sonner';
 export function ContactsPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { contacts, companies, addContact, deleteContact } = useCRMStore();
+  const { contacts, companies, addContact, deleteContact, ensureVvcTagsOnAllContacts } = useCRMStore();
   const { user, organization, adminCompanyFilter } = useAuthStore();
   const { addAuditLog } = useEnhancedStore();
 
@@ -95,6 +99,20 @@ export function ContactsPage() {
     return filterRecordsForUser(user, contacts, adminCompanyFilter);
   }, [user, contacts, adminCompanyFilter]);
 
+  // VVC Tag Stats for accessible contacts
+  const vvcStats = useMemo(() => {
+    return getVvcTagStats(accessibleContacts);
+  }, [accessibleContacts]);
+
+  const handleSyncVvcTags = useCallback(() => {
+    const updated = ensureVvcTagsOnAllContacts();
+    if (updated > 0) {
+      toast.success(`${updated} contact(en) succesvol voorzien van een unieke VVC communicatie tag!`);
+    } else {
+      toast.info('Alle contacten hebben al een unieke VVC communicatie tag.');
+    }
+  }, [ensureVvcTagsOnAllContacts]);
+
   // Search filtering (Memoized)
   const filteredContacts = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -105,7 +123,8 @@ export function ContactsPage() {
         contact.last_name.toLowerCase().includes(query) ||
         contact.email.toLowerCase().includes(query) ||
         contact.company?.toLowerCase().includes(query) ||
-        contact.phone?.toLowerCase().includes(query)
+        contact.phone?.toLowerCase().includes(query) ||
+        contact.tags?.some((t) => t.toLowerCase().includes(query))
     );
   }, [accessibleContacts, searchQuery]);
 
@@ -236,6 +255,32 @@ export function ContactsPage() {
           <span className="text-xs text-muted-foreground">-</span>
         )
       ),
+    },
+    {
+      accessorKey: 'vvc_tag',
+      header: 'VVC API Tag',
+      cell: ({ row }: { row: { original: Contact } }) => {
+        const vvcTag = getVvcTag(row.original);
+        if (!vvcTag) {
+          return <span className="text-[11px] text-muted-foreground italic">Niet gekoppeld</span>;
+        }
+        return (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              navigator.clipboard.writeText(vvcTag);
+              toast.success(`VVC communicatie tag gekopieerd: ${vvcTag}`);
+            }}
+            title="Klik om unieke VVC communicatie tag te kopiëren"
+            className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md font-mono text-[11px] font-medium bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/25 hover:bg-amber-500/20 transition-all cursor-pointer group"
+          >
+            <Tag className="h-3 w-3 shrink-0 text-amber-500" />
+            <span>{vvcTag}</span>
+            <Copy className="h-2.5 w-2.5 opacity-50 group-hover:opacity-100 transition-opacity" />
+          </button>
+        );
+      },
     },
     {
       accessorKey: 'status',
@@ -452,6 +497,15 @@ export function ContactsPage() {
                   className="text-xs h-9"
                 />
               </div>
+              <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-800 dark:text-amber-300 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Tag className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                  <span>Unieke VVC communicatie tag wordt toegekend</span>
+                </div>
+                <Badge variant="outline" className="text-[10px] bg-background border-amber-500/30 text-amber-700 dark:text-amber-400 font-mono">
+                  vvc-auto
+                </Badge>
+              </div>
               <Button onClick={handleAddContact} className="mt-2 rounded-xl h-10 font-semibold">
                 Contact Opslaan
               </Button>
@@ -499,6 +553,27 @@ export function ContactsPage() {
                 : `Strikte data-isolatie actief: Deze contacten zijn uitsluitend zichtbaar voor medewerkers van ${userCompanyName}.`}
             </p>
           </div>
+        </div>
+
+        {/* VVC API Link Status & Sync Action */}
+        <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-xs">
+            <Tag className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+            <span className="font-semibold text-amber-700 dark:text-amber-400">
+              VVC API Link: {vvcStats.taggedCount}/{vvcStats.total} ({vvcStats.percentage}%)
+            </span>
+          </div>
+          {vvcStats.percentage < 100 && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleSyncVvcTags}
+              className="h-8 rounded-xl text-xs gap-1.5 border-amber-500/30 text-amber-700 dark:text-amber-400 hover:bg-amber-500/10 shadow-xs"
+            >
+              <RefreshCw className="h-3 w-3" />
+              <span>Koppel Alle Tags</span>
+            </Button>
+          )}
         </div>
       </div>
 

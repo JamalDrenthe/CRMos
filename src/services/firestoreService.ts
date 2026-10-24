@@ -607,7 +607,7 @@ export async function seedDemoDataToFirestore(orgId: string): Promise<{ success:
   try {
     let count = 0;
 
-    // 1. Sample Contacts (D2D & Inbound Leads)
+    // 1. Sample Contacts (D2D & Inbound Leads with unique VVC communication tags)
     const demoContacts: Contact[] = [
       {
         id: `demo_c1_${Date.now()}`,
@@ -622,7 +622,7 @@ export async function seedDemoDataToFirestore(orgId: string): Promise<{ success:
         status: 'customer',
         source: 'Deur-tot-deur Buitendienst',
         assigned_to: 'agent_jamal',
-        tags: ['d2d-gesloten', 'contract-getekend', 'amsterdam-1012'],
+        tags: ['vvc-demo-c1', 'd2d-gesloten', 'contract-getekend', 'amsterdam-1012'],
         address: { street: 'Singel 240', city: 'Amsterdam', postal_code: '1012 DH', country: 'Nederland' },
         custom_fields: { rayon: 'Amsterdam Centrum', deal_cycle: '3 dagen' },
         created_at: new Date().toISOString(),
@@ -640,7 +640,7 @@ export async function seedDemoDataToFirestore(orgId: string): Promise<{ success:
         status: 'prospect',
         source: 'Callcenter Campagne',
         assigned_to: 'agent_maria',
-        tags: ['terugbellen', 'warm-lead'],
+        tags: ['vvc-demo-c2', 'terugbellen', 'warm-lead'],
         address: { street: 'Maasboulevard 100', city: 'Rotterdam', postal_code: '3063 NS', country: 'Nederland' },
         custom_fields: { rayon: 'Rotterdam Haven', beller: 'Maria Garcia' },
         created_at: new Date().toISOString(),

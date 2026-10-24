@@ -28,6 +28,7 @@ import {
 import { useCRMStore } from '@/stores/crmStore';
 import { useContactCenterStore } from '@/stores/contactCenterStore';
 import { useAuthStore } from '@/stores/authStore';
+import { getVvcTag } from '@/services/vvcTagService';
 import { TwilioDialerModal } from '@/components/telephony/TwilioDialerModal';
 import { formatDistanceToNow, format } from 'date-fns';
 import { toast } from 'sonner';
@@ -53,6 +54,8 @@ import {
   Trash2,
   Briefcase,
   CheckCircle2,
+  Tag,
+  Copy,
 } from 'lucide-react';
 
 interface Contact360ViewProps {
@@ -97,6 +100,10 @@ export function Contact360View({ contactId, isOpen, onClose }: Contact360ViewPro
   const contact = useMemo(() => {
     return contactId ? getContact360(contactId) : null;
   }, [contactId, getContact360]);
+
+  const vvcTag = useMemo(() => {
+    return contact ? getVvcTag(contact) : undefined;
+  }, [contact]);
 
   // Edit contact form state initialized when contact loads
   const [editFirstName, setEditFirstName] = useState('');
@@ -339,6 +346,22 @@ export function Contact360View({ contactId, isOpen, onClose }: Contact360ViewPro
                       <span className="font-semibold text-foreground">{contact.score}</span>
                       <span className="text-[10px]">/ 100</span>
                     </div>
+
+                    {vvcTag && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(vvcTag);
+                          toast.success(`VVC tag gekopieerd: ${vvcTag}`);
+                        }}
+                        title="Klik om unieke VVC communicatie tag te kopiëren"
+                        className="flex items-center gap-1 text-[11px] font-mono font-medium text-amber-700 dark:text-amber-400 bg-amber-500/10 border border-amber-500/25 px-2 py-0.5 rounded-full hover:bg-amber-500/20 transition-colors cursor-pointer group"
+                      >
+                        <Tag className="h-3 w-3 text-amber-500" />
+                        <span>{vvcTag}</span>
+                        <Copy className="h-2.5 w-2.5 opacity-50 group-hover:opacity-100 transition-opacity" />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -536,6 +559,50 @@ export function Contact360View({ contactId, isOpen, onClose }: Contact360ViewPro
                         </a>
                       </div>
                     )}
+                  </CardContent>
+                </Card>
+
+                {/* VVC API Ecosystem Card */}
+                <Card className="rounded-2xl border-amber-500/30 bg-amber-500/5 shadow-xs">
+                  <CardHeader className="py-3 px-4 border-b border-amber-500/20 flex flex-row items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                      <CardTitle className="text-xs font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                        VVC API Communicatie
+                      </CardTitle>
+                    </div>
+                    <Badge variant="outline" className="text-[10px] bg-background border-amber-500/30 text-amber-700 dark:text-amber-400">
+                      Verdienende Vrienden Netwerk
+                    </Badge>
+                  </CardHeader>
+                  <CardContent className="p-4 space-y-3 text-xs">
+                    <p className="text-muted-foreground text-[11px] leading-relaxed">
+                      Dit contact is via de CRMos REST API gekoppeld aan het VVC ecosysteem. Met deze unieke communicatietag worden transacties, commissies en referrals synchroon verwerkt.
+                    </p>
+                    <div className="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-background border border-amber-500/25">
+                      <div className="flex items-center gap-2 font-mono text-xs font-semibold text-foreground">
+                        <Tag className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                        <span>{vvcTag || 'Geen unieke tag ingesteld'}</span>
+                      </div>
+                      {vvcTag && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            navigator.clipboard.writeText(vvcTag);
+                            toast.success(`VVC tag gekopieerd: ${vvcTag}`);
+                          }}
+                          className="h-7 text-xs px-2.5 gap-1.5 border-amber-500/30 hover:bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                        >
+                          <Copy className="h-3 w-3" />
+                          <span>Kopieer Tag</span>
+                        </Button>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-0.5">
+                      <span className="font-mono text-[10px]">GET /v1/contacts?tag={vvcTag || 'vvc-id'}</span>
+                      <span className="text-emerald-600 dark:text-emerald-400 font-medium">● Actief Verbonden</span>
+                    </div>
                   </CardContent>
                 </Card>
 

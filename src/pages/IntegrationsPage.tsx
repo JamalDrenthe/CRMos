@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -49,8 +49,10 @@ import {
   Layers,
   ArrowUpRight,
   Navigation,
+  Tag,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { getVvcTagStats } from '@/services/vvcTagService';
 import {
   syncAllDataFromHubSpot,
   loadHubSpotConfigFromFirestore,
@@ -146,13 +148,13 @@ export const INITIAL_INTEGRATIONS: Integration[] = [
     tagline: 'Community Referral Netwerk & Affiliate Tracking',
     category: 'Community & Rewards',
     description:
-      'Koppel je salescampagnes aan het exclusieve VVC netwerk. Automatische provisiematching, vrienden-verwijzingen en realtime registratie van community deals.',
+      'Koppel je salescampagnes aan het exclusieve VVC netwerk. Automatische provisiematching, vrienden-verwijzingen en realtime registratie van community deals via de CRMos API.',
     icon: Users2,
     gradient: 'from-amber-500 to-orange-600',
     badgeColor: 'bg-amber-500/10 text-amber-600 border-amber-500/20',
     website: 'https://verdienendevriendenclub.nl',
     status: 'connected',
-    features: ['Affiliate commissie tracking', 'Community lead sync', 'Geautomatiseerde bonus payout'],
+    features: ['Unieke VVC Contact Tags (100% Sync)', 'CRMos REST API koppeling', 'Affiliate commissie tracking', 'Geautomatiseerde bonus payout'],
     apiKeyPlaceholder: 'vvc_partner_token_34x...',
   },
   {
@@ -265,9 +267,20 @@ export const INITIAL_INTEGRATIONS: Integration[] = [
 export function IntegrationsPage() {
   const { organization, user } = useAuthStore();
   const orgId = organization?.id || user?.org_id || 'default_org';
-  const { setContacts, setCompanies, setDeals, setActivities, clearLocalStore: clearCRM } = useCRMStore();
+  const { contacts, setContacts, setCompanies, setDeals, setActivities, clearLocalStore: clearCRM, ensureVvcTagsOnAllContacts } = useCRMStore();
   const { clearLocalStore: clearRec } = useRecruitmentStore();
   const { setCalls, clearLocalStore: clearCC } = useContactCenterStore();
+
+  const vvcStats = useMemo(() => getVvcTagStats(contacts), [contacts]);
+
+  const handleSyncVvcTags = () => {
+    const updated = ensureVvcTagsOnAllContacts();
+    if (updated > 0) {
+      toast.success(`${updated} contact(en) voorzien van unieke VVC communicatie tags!`);
+    } else {
+      toast.info('Alle contacten hebben al een unieke VVC communicatie tag.');
+    }
+  };
 
   const [integrations, setIntegrations] = useState<Integration[]>(INITIAL_INTEGRATIONS);
   const [searchQuery, setSearchQuery] = useState('');
@@ -1361,6 +1374,40 @@ export function IntegrationsPage() {
                 </div>
                 <Switch checked={syncEnabled} onCheckedChange={setSyncEnabled} />
               </div>
+
+              {configIntegration.id === 'vvc' && (
+                <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/25 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Tag className="h-4 w-4 text-amber-500" />
+                      <span className="font-semibold text-xs text-amber-800 dark:text-amber-300">
+                        VVC Contact Communicatie Tags
+                      </span>
+                    </div>
+                    <Badge variant="outline" className="text-[10px] bg-background border-amber-500/30 text-amber-700 dark:text-amber-400">
+                      {vvcStats.taggedCount} / {vvcStats.total} ({vvcStats.percentage}%)
+                    </Badge>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    CRMos kent aan ieder contact automatisch een unieke identificatietag toe (<code>vvc-xxx</code>). 
+                    Hiermee kan het VVC Referral Netwerk gericht communiceren via de CRMos API.
+                  </p>
+                  <div className="flex items-center justify-between gap-2 pt-1">
+                    <div className="text-[11px] font-mono text-muted-foreground truncate">
+                      <code>GET /v1/contacts?tag=vvc-xxx</code>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleSyncVvcTags}
+                      className="h-7 text-xs px-3 gap-1.5 border-amber-500/30 text-amber-700 dark:text-amber-400 hover:bg-amber-500/10 shrink-0"
+                    >
+                      <RefreshCw className="h-3 w-3" />
+                      <span>Synchroniseer Tags</span>
+                    </Button>
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-1.5">
                 <Label className="text-xs font-semibold flex items-center gap-1.5">

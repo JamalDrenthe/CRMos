@@ -17,6 +17,11 @@ import {
 } from '@/services/firestoreService';
 import { useAuthStore } from '@/stores/authStore';
 import { isFirebaseConfigured } from '@/lib/firebase';
+import {
+  ensureContactVvcTag,
+  ensureAllContactsHaveVvcTags,
+  getVvcTag,
+} from '@/services/vvcTagService';
 
 // Clean up legacy mock localStorage key on load
 if (typeof window !== 'undefined') {
@@ -90,6 +95,9 @@ interface CRMState {
   searchCompanies: (query: string) => Company[];
   searchDeals: (query: string) => Deal[];
 
+  // VVC API Tag Sync
+  ensureVvcTagsOnAllContacts: () => number;
+
   // Firestore Sync
   isFirestoreSynced: boolean;
   syncStatus: 'idle' | 'syncing' | 'synced' | 'offline';
@@ -131,7 +139,13 @@ export const useCRMStore = create<CRMState>()(
         const orgId = authUser?.org_id || useAuthStore.getState().organization?.id || 'default_org';
         const userCompanyName = authUser?.company_name || '';
 
-        const newContact: Contact = {
+        const existingVvcTags = new Set(
+          get()
+            .contacts.map((c) => getVvcTag(c)?.toLowerCase())
+            .filter(Boolean) as string[]
+        );
+
+        const baseContact: Contact = {
           org_id: orgId,
           company_name: userCompanyName,
           ...contactData,
@@ -139,6 +153,9 @@ export const useCRMStore = create<CRMState>()(
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
+
+        const newContact = ensureContactVvcTag(baseContact, existingVvcTags);
+
         set((state) => ({ contacts: [...state.contacts, newContact] }));
         saveContactToFirestore(newContact, orgId);
         return newContact;
@@ -329,13 +346,25 @@ export const useCRMStore = create<CRMState>()(
 
         const unsubs: (() => void)[] = [];
 
-        // Contacts subscription (replace state directly with real Firestore records)
+        // Contacts subscription (replace state directly with real Firestore records, guaranteeing VVC tags)
         const unsubContacts = subscribeToContacts(orgId, (firestoreContacts) => {
+          const rawContacts = firestoreContacts || [];
+          const { updatedContacts, changedCount } = ensureAllContactsHaveVvcTags(rawContacts);
           set({
-            contacts: firestoreContacts || [],
+            contacts: updatedContacts,
             syncStatus: 'synced',
             isFirestoreSynced: true,
           });
+
+          // Als er contacten waren die nog geen unieke VVC communicatie tag hadden, sla deze direct op in Firestore
+          if (changedCount > 0 && isFirebaseConfigured()) {
+            updatedContacts.forEach((contact) => {
+              const original = rawContacts.find((c) => c.id === contact.id);
+              if (original !== contact) {
+                saveContactToFirestore(contact, orgId);
+              }
+            });
+          }
         });
         unsubs.push(unsubContacts);
 
@@ -439,6 +468,27 @@ export const useCRMStore = create<CRMState>()(
         );
       },
 
+      ensureVvcTagsOnAllContacts: () => {
+        const { contacts } = get();
+        const { updatedContacts, changedCount } = ensureAllContactsHaveVvcTags(contacts);
+        if (changedCount > 0) {
+          const authUser = useAuthStore.getState().user;
+          const orgId = authUser?.org_id || useAuthStore.getState().organization?.id || 'default_org';
+
+          set({ contacts: updatedContacts });
+
+          if (isFirebaseConfigured()) {
+            updatedContacts.forEach((contact) => {
+              const oldContact = contacts.find((c) => c.id === contact.id);
+              if (oldContact !== contact) {
+                saveContactToFirestore(contact, orgId);
+              }
+            });
+          }
+        }
+        return changedCount;
+      },
+
       searchContacts: (query) => {
         const lowerQuery = query.toLowerCase();
         return get().contacts.filter(
@@ -446,7 +496,8 @@ export const useCRMStore = create<CRMState>()(
             c.first_name.toLowerCase().includes(lowerQuery) ||
             c.last_name.toLowerCase().includes(lowerQuery) ||
             c.email.toLowerCase().includes(lowerQuery) ||
-            c.company?.toLowerCase().includes(lowerQuery)
+            c.company?.toLowerCase().includes(lowerQuery) ||
+            c.tags?.some((t) => t.toLowerCase().includes(lowerQuery))
         );
       },
 
