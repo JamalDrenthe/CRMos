@@ -24,6 +24,7 @@ import { useRecruitmentStore } from '@/stores/recruitmentStore';
 import { useContactCenterStore } from '@/stores/contactCenterStore';
 import { useEnhancedStore } from '@/stores/enhancedStore';
 import { useAuthStore } from '@/stores/authStore';
+import { useD2DStore } from '@/stores/d2dStore';
 import { filterRecordsForUser } from '@/lib/companyAccess';
 import { isCoreEcosystemCompany, type Candidate, type Deal, type Contact, type Activity as ActivityType, type Job } from '@/types';
 import { formatDistanceToNow } from 'date-fns';
@@ -42,6 +43,8 @@ import {
   Clock,
   ShieldCheck,
   Layers,
+  MapPin,
+  CheckCircle2,
 } from 'lucide-react';
 
 interface StatCardProps {
@@ -345,6 +348,95 @@ function ContactCenterStats() {
         icon={TrendingUp}
         iconColor="text-purple-500"
       />
+    </div>
+  );
+}
+
+function FieldSalesStats() {
+  const { pins } = useD2DStore();
+  const totalPins = pins.length;
+  const closedDeals = pins.filter((p) => p.current_status === 'deal_closed').length;
+  const appointments = pins.filter((p) => p.current_status === 'appointment').length;
+  const notHome = pins.filter((p) => p.current_status === 'not_home').length;
+
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-4 md:grid-cols-4">
+        <StatCard
+          title="Totaal Panden (BAG)"
+          value={totalPins}
+          description="In beheer in rayons"
+          icon={MapPin}
+          iconColor="text-blue-500"
+        />
+        <StatCard
+          title="Gesloten Deals (D2D)"
+          value={closedDeals}
+          description="Contracten getekend"
+          icon={CheckCircle2}
+          iconColor="text-emerald-500"
+        />
+        <StatCard
+          title="Afspraak Gemaakt"
+          value={appointments}
+          description="Vervolgafspraken ingepland"
+          icon={Clock}
+          iconColor="text-amber-500"
+        />
+        <StatCard
+          title="Niet Thuis"
+          value={notHome}
+          description="Opnieuw bezoeken"
+          icon={Target}
+          iconColor="text-purple-500"
+        />
+      </div>
+      <Card className="rounded-2xl border-border/60">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Recente Veldbezoeken & Adres-statussen</CardTitle>
+              <CardDescription>Laatste deur-tot-deur updates door buitendienst verkopers</CardDescription>
+            </div>
+            <Button variant="outline" size="sm" asChild className="rounded-full text-xs">
+              <a href="/enhanced/territories">Open Rayonkaarten &rarr;</a>
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            {pins.slice(0, 6).map((pin) => (
+              <div key={pin.id} className="flex items-center justify-between p-3 rounded-xl border bg-muted/20">
+                <div className="flex items-center gap-3">
+                  <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center text-primary font-bold text-xs">
+                    <MapPin className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-xs text-foreground">
+                      {pin.business_name || `${pin.street} ${pin.house_number}`}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {pin.postal_code} {pin.city} {pin.assigned_agent_name ? `• ${pin.assigned_agent_name}` : ''}
+                    </p>
+                  </div>
+                </div>
+                <Badge
+                  variant={
+                    pin.current_status === 'deal_closed'
+                      ? 'default'
+                      : pin.current_status === 'appointment'
+                      ? 'secondary'
+                      : 'outline'
+                  }
+                  className="capitalize text-[10px]"
+                >
+                  {pin.current_status.replace('_', ' ')}
+                </Badge>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -659,6 +751,7 @@ export function Dashboard() {
       <Tabs defaultValue="sales" className="space-y-4">
         <TabsList>
           <TabsTrigger value="sales">Sales &amp; Deals</TabsTrigger>
+          <TabsTrigger value="field-sales">Field Sales (D2D)</TabsTrigger>
           <TabsTrigger value="recruitment">Recruitment</TabsTrigger>
           <TabsTrigger value="contact-center">Contact Center</TabsTrigger>
         </TabsList>
@@ -887,6 +980,10 @@ export function Dashboard() {
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        <TabsContent value="field-sales" className="space-y-4">
+          <FieldSalesStats />
         </TabsContent>
       </Tabs>
 

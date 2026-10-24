@@ -1,5 +1,11 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { useAuthStore } from '@/stores/authStore';
+import { 
+  saveTerritoryToFirestore, 
+  deleteTerritoryFromFirestore,
+  subscribeToTerritories 
+} from '@/services/firestoreService';
 import type { 
   GamificationProfile, 
   LeaderboardEntry, 
@@ -327,6 +333,7 @@ interface EnhancedState {
   assignAgentToTerritory: (territoryId: string, agentId: string) => void;
   removeAgentFromTerritory: (territoryId: string, agentId: string) => void;
   selectTerritory: (territory: Territory | null) => void;
+  syncTerritoriesWithFirestore: (orgId: string) => () => void;
   
   // Actions - Audit Logs
   addAuditLog: (log: Omit<AuditLog, 'id' | 'created_at'>) => void;
@@ -521,51 +528,81 @@ export const useEnhancedStore = create<EnhancedState>()(
 
       // Territory Actions
       addTerritory: (territoryData) => {
+        const orgId = useAuthStore.getState().user?.org_id || useAuthStore.getState().organization?.id || 'default_org';
         const newTerritory: Territory = {
+          org_id: orgId,
           ...territoryData,
           id: generateId(),
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
         set((state) => ({ territories: [...state.territories, newTerritory] }));
+        saveTerritoryToFirestore(newTerritory, orgId);
         return newTerritory;
       },
 
       updateTerritory: (id, updates) => {
-        set((state) => ({
-          territories: state.territories.map((t) =>
+        const orgId = useAuthStore.getState().user?.org_id || useAuthStore.getState().organization?.id || 'default_org';
+        set((state) => {
+          const updatedTerritories = state.territories.map((t) =>
             t.id === id ? { ...t, ...updates, updated_at: new Date().toISOString() } : t
-          ),
-        }));
+          );
+          const updated = updatedTerritories.find((t) => t.id === id);
+          if (updated) {
+            saveTerritoryToFirestore(updated, orgId);
+          }
+          return { territories: updatedTerritories };
+        });
       },
 
       deleteTerritory: (id) => {
         set((state) => ({
           territories: state.territories.filter((t) => t.id !== id),
         }));
+        deleteTerritoryFromFirestore(id);
       },
 
       assignAgentToTerritory: (territoryId, agentId) => {
-        set((state) => ({
-          territories: state.territories.map((t) =>
+        const orgId = useAuthStore.getState().user?.org_id || useAuthStore.getState().organization?.id || 'default_org';
+        set((state) => {
+          const updatedTerritories = state.territories.map((t) =>
             t.id === territoryId && !t.agent_ids.includes(agentId)
               ? { ...t, agent_ids: [...t.agent_ids, agentId], updated_at: new Date().toISOString() }
               : t
-          ),
-        }));
+          );
+          const updated = updatedTerritories.find((t) => t.id === territoryId);
+          if (updated) {
+            saveTerritoryToFirestore(updated, orgId);
+          }
+          return { territories: updatedTerritories };
+        });
       },
 
       removeAgentFromTerritory: (territoryId, agentId) => {
-        set((state) => ({
-          territories: state.territories.map((t) =>
+        const orgId = useAuthStore.getState().user?.org_id || useAuthStore.getState().organization?.id || 'default_org';
+        set((state) => {
+          const updatedTerritories = state.territories.map((t) =>
             t.id === territoryId
               ? { ...t, agent_ids: t.agent_ids.filter((id) => id !== agentId), updated_at: new Date().toISOString() }
               : t
-          ),
-        }));
+          );
+          const updated = updatedTerritories.find((t) => t.id === territoryId);
+          if (updated) {
+            saveTerritoryToFirestore(updated, orgId);
+          }
+          return { territories: updatedTerritories };
+        });
       },
 
       selectTerritory: (territory) => set({ selectedTerritory: territory }),
+
+      syncTerritoriesWithFirestore: (orgId: string) => {
+        return subscribeToTerritories(orgId, (firestoreTerritories) => {
+          if (firestoreTerritories && firestoreTerritories.length > 0) {
+            set({ territories: firestoreTerritories });
+          }
+        });
+      },
 
       // Audit Log Actions
       addAuditLog: (logData) => {

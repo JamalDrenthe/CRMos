@@ -167,10 +167,11 @@ export function CandidatesPage() {
       phone: candidate.phone,
       company: userCompanyName,
       title: 'Sales Agent (Nieuw Aangesteld)',
-      status: 'customer',
+      status: 'internal',
+      contact_type: 'internal',
       source: 'Recruitment Funnel',
-      tags: ['Sales Agent', 'Recruited', ...(candidate.skills || [])],
-      custom_fields: { candidate_id: candidate.id },
+      tags: ['Sales Agent', 'Interne Medewerker', 'Recruited', ...(candidate.skills || [])],
+      custom_fields: { candidate_id: candidate.id, experience_years: candidate.experience_years },
       org_id: organization?.id || 'default_org',
       company_name: userCompanyName,
       allowed_companies: isCorePartner
@@ -179,7 +180,7 @@ export function CandidatesPage() {
     });
     setViewingCandidate(null);
     toast.success(
-      `🎉 ${candidate.first_name} ${candidate.last_name} aangenomen en direct opgenomen in de CRMos salespool!`
+      `🎉 ${candidate.first_name} ${candidate.last_name} aangenomen en direct opgenomen in de CRMos salespool als interne agent!`
     );
   };
 

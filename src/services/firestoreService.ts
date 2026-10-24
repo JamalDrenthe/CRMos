@@ -494,6 +494,31 @@ export async function saveQuoteToFirestore(quote: Quote, orgId: string): Promise
   }
 }
 
+export async function deleteQuoteFromFirestore(quoteId: string): Promise<void> {
+  if (!isFirebaseConfigured()) return;
+  try {
+    await deleteDoc(doc(db, COLLECTIONS.QUOTES, quoteId));
+  } catch (err) {
+    console.error('Fout bij verwijderen van offerte:', err);
+  }
+}
+
+export function subscribeToQuotes(
+  orgId: string,
+  callback: (quotes: Quote[]) => void
+): Unsubscribe {
+  if (!isFirebaseConfigured()) return () => {};
+  const isMasterView = orgId === 'all' || orgId === '*';
+  const q = isMasterView
+    ? query(collection(db, COLLECTIONS.QUOTES))
+    : query(collection(db, COLLECTIONS.QUOTES), where('org_id', '==', orgId));
+
+  return onSnapshot(q, (snap) => {
+    const items = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Quote));
+    callback(items);
+  }, (err) => console.warn('Real-time quotes subscription fout:', err));
+}
+
 export async function saveProductToFirestore(product: Product, orgId: string): Promise<void> {
   if (!isFirebaseConfigured()) return;
   try {

@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useCRMStore } from '@/stores/crmStore';
 import { useD2DStore } from '@/stores/d2dStore';
+import { useQuotesStore } from '@/stores/quotesStore';
 import {
   Building2,
   MapPin,
@@ -27,6 +28,7 @@ interface Company360ViewProps {
 export function Company360View({ companyId, isOpen, onClose, onSelectContact }: Company360ViewProps) {
   const { companies, contacts, deals } = useCRMStore();
   const { pins } = useD2DStore();
+  const { quotes } = useQuotesStore();
   const [activeTab, setActiveTab] = useState<'overview' | 'deals' | 'contacts' | 'specs'>('overview');
 
   const company = useMemo(() => {
@@ -52,6 +54,16 @@ export function Company360View({ companyId, isOpen, onClose, onSelectContact }: 
         (d.company_name && d.company_name.toLowerCase() === company.name.toLowerCase())
     );
   }, [company, deals]);
+
+  // Find linked quotes
+  const linkedQuotes = useMemo(() => {
+    if (!company) return [];
+    return quotes.filter(
+      (q) =>
+        q.company_id === company.id ||
+        (q.customer_name && q.customer_name.toLowerCase() === company.name.toLowerCase())
+    );
+  }, [company, quotes]);
 
   // Total deal pipeline value
   const totalDealValue = useMemo(() => {
@@ -129,20 +141,24 @@ export function Company360View({ companyId, isOpen, onClose, onSelectContact }: 
           </div>
 
           {/* KPI Strip */}
-          <div className="grid grid-cols-3 gap-2.5 pt-2">
-            <div className="p-3 rounded-xl bg-background border shadow-xs text-center">
-              <p className="text-[11px] text-muted-foreground">Pijplijnwaarde</p>
-              <p className="text-base font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
+          <div className="grid grid-cols-4 gap-2 pt-2">
+            <div className="p-2.5 rounded-xl bg-background border shadow-xs text-center">
+              <p className="text-[10px] text-muted-foreground">Pijplijnwaarde</p>
+              <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
                 €{totalDealValue.toLocaleString('nl-NL')}
               </p>
             </div>
-            <div className="p-3 rounded-xl bg-background border shadow-xs text-center">
-              <p className="text-[11px] text-muted-foreground">Deals</p>
-              <p className="text-base font-bold mt-0.5">{linkedDeals.length}</p>
+            <div className="p-2.5 rounded-xl bg-background border shadow-xs text-center">
+              <p className="text-[10px] text-muted-foreground">Deals</p>
+              <p className="text-sm font-bold mt-0.5">{linkedDeals.length}</p>
             </div>
-            <div className="p-3 rounded-xl bg-background border shadow-xs text-center">
-              <p className="text-[11px] text-muted-foreground">Contacten</p>
-              <p className="text-base font-bold mt-0.5">{linkedContacts.length}</p>
+            <div className="p-2.5 rounded-xl bg-background border shadow-xs text-center">
+              <p className="text-[10px] text-muted-foreground">Offertes</p>
+              <p className="text-sm font-bold mt-0.5">{linkedQuotes.length}</p>
+            </div>
+            <div className="p-2.5 rounded-xl bg-background border shadow-xs text-center">
+              <p className="text-[10px] text-muted-foreground">Contacten</p>
+              <p className="text-sm font-bold mt-0.5">{linkedContacts.length}</p>
             </div>
           </div>
         </div>
@@ -275,6 +291,31 @@ export function Company360View({ companyId, isOpen, onClose, onSelectContact }: 
                         <span>{matchedPin.assigned_agent_name}</span>
                       </div>
                     )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Linked Quotes Card */}
+              {linkedQuotes.length > 0 && (
+                <Card className="rounded-2xl border shadow-xs">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-semibold flex items-center justify-between">
+                      <span>Lopende Offertes ({linkedQuotes.length})</span>
+                      <a href="/sales/quotes" className="text-xs text-primary font-normal hover:underline">
+                        Naar Offertes &rarr;
+                      </a>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2 text-xs">
+                    {linkedQuotes.map((q) => (
+                      <div key={q.id} className="flex items-center justify-between p-2 rounded-lg bg-muted/30">
+                        <div>
+                          <p className="font-semibold">{q.quote_number}: {q.title}</p>
+                          <p className="text-[10px] text-muted-foreground capitalize">Status: {q.status}</p>
+                        </div>
+                        <span className="font-bold text-emerald-600">€{q.total?.toLocaleString('nl-NL')}</span>
+                      </div>
+                    ))}
                   </CardContent>
                 </Card>
               )}

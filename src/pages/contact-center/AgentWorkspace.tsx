@@ -1,12 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Progress } from '@/components/ui/progress';
 import { useContactCenterStore } from '@/stores/contactCenterStore';
 import { useCRMStore } from '@/stores/crmStore';
 import { useEnhancedStore } from '@/stores/enhancedStore';
+import { useAuthStore } from '@/stores/authStore';
 import { toast } from 'sonner';
 import {
   Phone,
@@ -33,8 +35,9 @@ const pitchSteps = [
 
 export function AgentWorkspace() {
   const { activeCall, setActiveCall, endCall, todayStats, toggleMute, togglePause, isMuted, isPaused } = useContactCenterStore();
-  const { contacts } = useCRMStore();
+  const { contacts, addActivity } = useCRMStore();
   const { addPoints } = useEnhancedStore();
+  const { user, organization } = useAuthStore();
   
   const [currentStep, setCurrentStep] = useState(0);
   const [callDuration, setCallDuration] = useState(0);
@@ -53,18 +56,25 @@ export function AgentWorkspace() {
     return () => clearInterval(interval);
   }, [activeCall]);
 
-  const handleStartCall = useCallback(() => {
-    const randomContact = contacts[Math.floor(Math.random() * contacts.length)];
+  const handleStartCall = useCallback((target?: typeof contacts[0]) => {
+    if (!contacts || contacts.length === 0) {
+      toast.error('Geen contacten beschikbaar in het CRM. Voeg eerst contacten toe om te kunnen bellen.');
+      return;
+    }
+    const chosenContact = target || contacts[Math.floor(Math.random() * contacts.length)];
+    const activeUserId = user?.id || 'user1';
+    const activeUserName = user?.name || 'Agent';
+
     setActiveCall({
       id: 'call-' + Date.now(),
       direction: 'outbound',
-      from_number: '+15550001111',
-      to_number: randomContact.phone || '+15551234567',
-      contact_id: randomContact.id,
-      contact_name: `${randomContact.first_name} ${randomContact.last_name}`,
+      from_number: '+31208941200',
+      to_number: chosenContact.phone || chosenContact.mobile || '+31612345678',
+      contact_id: chosenContact.id,
+      contact_name: `${chosenContact.first_name} ${chosenContact.last_name}`,
       status: 'in-progress',
-      agent_id: 'user1',
-      agent_name: 'Alex Johnson',
+      agent_id: activeUserId,
+      agent_name: activeUserName,
       campaign_id: '1',
       started_at: new Date().toISOString(),
     });
@@ -72,8 +82,8 @@ export function AgentWorkspace() {
     setCurrentStep(0);
     setShowDisposition(false);
     setNotes('');
-    toast.success('Call started - Press W to end');
-  }, [contacts, setActiveCall]);
+    toast.success(`Gesprek gestart met ${chosenContact.first_name} ${chosenContact.last_name} (Druk op W om af te ronden)`);
+  }, [contacts, setActiveCall, user]);
 
   const handleEndCall = useCallback(() => {
     setShowDisposition(true);
@@ -105,10 +115,31 @@ export function AgentWorkspace() {
 
   const handleDisposition = (disposition: string) => {
     if (activeCall) {
+      const activeUserId = user?.id || 'user1';
       endCall(activeCall.id, notes, disposition, callRating);
-      if (disposition === 'Interested') {
-        addPoints('user1', 50);
-        toast.success('+50 points earned!');
+
+      // Auto-log direct in CRM activities
+      addActivity({
+        type: 'call',
+        title: `Outbound Call (${disposition}): ${activeCall.contact_name}`,
+        description: notes || `Gespreksduur: ${Math.floor(callDuration / 60)}m ${callDuration % 60}s. Beoordeling: ${callRating || '-'}/5 sterren.`,
+        related_to: {
+          type: 'contact',
+          id: activeCall.contact_id || 'general',
+        },
+        status: 'completed',
+        due_date: new Date().toISOString(),
+        completed_at: new Date().toISOString(),
+        assigned_to: activeUserId,
+        org_id: organization?.id || 'default_org',
+        company_name: user?.company_name || 'CRMos',
+      });
+
+      if (disposition === 'Interested' || disposition === 'Afspraak') {
+        addPoints(activeUserId, 50);
+        toast.success('+50 punten toegekend voor succesvolle lead!');
+      } else {
+        addPoints(activeUserId, 10);
       }
     }
     setActiveCall(null);
@@ -185,22 +216,26 @@ export function AgentWorkspace() {
                 <div className="mb-6 rounded-full bg-primary/10 p-6">
                   <Phone className="h-12 w-12 text-primary" />
                 </div>
-                <p className="mb-2 text-lg font-medium">Ready to make calls</p>
-                <p className="mb-6 text-sm text-muted-foreground">Press C or click below to start</p>
-                <Button size="lg" onClick={handleStartCall}>
+                <p className="mb-2 text-lg font-medium">Bellen via Outbound Werkplek</p>
+                <p className="mb-4 text-xs text-muted-foreground">
+                  {contacts.length > 0 
+                    ? `Druk op C of klik hieronder om te bellen (${contacts.length} contacten beschikbaar)`
+                    : 'Geen contacten gevonden. Voeg contacten toe via het CRM menu.'}
+                </p>
+                <Button size="lg" onClick={() => handleStartCall()} disabled={contacts.length === 0} className="rounded-full px-6">
                   <Phone className="mr-2 h-5 w-5" />
-                  Start Call
+                  Start Gesprek
                 </Button>
               </div>
             ) : showDisposition ? (
               <div className="space-y-6">
                 <div className="text-center">
-                  <p className="text-lg font-medium">Call Ended</p>
+                  <p className="text-lg font-medium">Gesprek Afgerond</p>
                   <p className="text-3xl font-bold">{formatDuration(callDuration)}</p>
                 </div>
                 
                 <div>
-                  <p className="mb-2 text-sm font-medium">Rate this call (1-5):</p>
+                  <p className="mb-2 text-sm font-medium">Beoordeel dit gesprek (1-5):</p>
                   <div className="flex justify-center gap-2">
                     {[1, 2, 3, 4, 5].map((star) => (
                       <button
@@ -215,23 +250,34 @@ export function AgentWorkspace() {
                 </div>
 
                 <div>
-                  <p className="mb-2 text-sm font-medium">Disposition:</p>
+                  <p className="mb-2 text-sm font-medium">Gespreksnotitie:</p>
+                  <Input
+                    placeholder="Voer korte opmerking of afspraakdetails in..."
+                    value={notes}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNotes(e.target.value)}
+                    className="mb-4 text-xs"
+                  />
+                  <p className="mb-2 text-sm font-medium">Selecteer Dispositie (Opslaan in CRM):</p>
                   <div className="grid grid-cols-2 gap-2">
+                    <Button variant="outline" onClick={() => handleDisposition('Afspraak Gemaakt')} className="justify-start border-emerald-500/40 hover:bg-emerald-500/10 text-emerald-600 font-semibold">
+                      <CheckCircle2 className="mr-2 h-4 w-4 text-emerald-500" />
+                      Afspraak Gemaakt
+                    </Button>
                     <Button variant="outline" onClick={() => handleDisposition('Interested')} className="justify-start">
                       <CheckCircle2 className="mr-2 h-4 w-4 text-green-500" />
-                      Interested
-                    </Button>
-                    <Button variant="outline" onClick={() => handleDisposition('Not Interested')} className="justify-start">
-                      <XCircle className="mr-2 h-4 w-4 text-red-500" />
-                      Not Interested
+                      Geïnteresseerd (Warm)
                     </Button>
                     <Button variant="outline" onClick={() => handleDisposition('Callback')} className="justify-start">
                       <Clock className="mr-2 h-4 w-4 text-blue-500" />
-                      Callback
+                      Terugbellen
+                    </Button>
+                    <Button variant="outline" onClick={() => handleDisposition('Not Interested')} className="justify-start">
+                      <XCircle className="mr-2 h-4 w-4 text-red-500" />
+                      Geen Interesse
                     </Button>
                     <Button variant="outline" onClick={() => handleDisposition('No Answer')} className="justify-start">
                       <PhoneOff className="mr-2 h-4 w-4 text-gray-500" />
-                      No Answer
+                      Geen Gehoor / Voicemail
                     </Button>
                   </div>
                 </div>

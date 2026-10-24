@@ -127,14 +127,19 @@ export const useCRMStore = create<CRMState>()(
         }),
 
       addContact: (contactData) => {
+        const authUser = useAuthStore.getState().user;
+        const orgId = authUser?.org_id || useAuthStore.getState().organization?.id || 'default_org';
+        const userCompanyName = authUser?.company_name || '';
+
         const newContact: Contact = {
+          org_id: orgId,
+          company_name: userCompanyName,
           ...contactData,
           id: generateId(),
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
         set((state) => ({ contacts: [...state.contacts, newContact] }));
-        const orgId = useAuthStore.getState().organization?.id || 'default_org';
         saveContactToFirestore(newContact, orgId);
         return newContact;
       },
@@ -161,14 +166,19 @@ export const useCRMStore = create<CRMState>()(
       },
 
       addCompany: (companyData) => {
+        const authUser = useAuthStore.getState().user;
+        const orgId = authUser?.org_id || useAuthStore.getState().organization?.id || 'default_org';
+        const userCompanyName = authUser?.company_name || '';
+
         const newCompany: Company = {
+          org_id: orgId,
+          company_name: userCompanyName,
           ...companyData,
           id: generateId(),
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
         set((state) => ({ companies: [...state.companies, newCompany] }));
-        const orgId = useAuthStore.getState().organization?.id || 'default_org';
         saveCompanyToFirestore(newCompany, orgId);
         return newCompany;
       },
@@ -195,14 +205,19 @@ export const useCRMStore = create<CRMState>()(
       },
 
       addDeal: (dealData) => {
+        const authUser = useAuthStore.getState().user;
+        const orgId = authUser?.org_id || useAuthStore.getState().organization?.id || 'default_org';
+        const userCompanyName = authUser?.company_name || '';
+
         const newDeal: Deal = {
+          org_id: orgId,
+          company_name: userCompanyName,
           ...dealData,
           id: generateId(),
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
         set((state) => ({ deals: [...state.deals, newDeal] }));
-        const orgId = useAuthStore.getState().organization?.id || 'default_org';
         saveDealToFirestore(newDeal, orgId);
         return newDeal;
       },
@@ -245,14 +260,19 @@ export const useCRMStore = create<CRMState>()(
       },
 
       addActivity: (activityData) => {
+        const authUser = useAuthStore.getState().user;
+        const orgId = authUser?.org_id || useAuthStore.getState().organization?.id || 'default_org';
+        const userCompanyName = authUser?.company_name || '';
+
         const newActivity: Activity = {
+          org_id: orgId,
+          company_name: userCompanyName,
           ...activityData,
           id: generateId(),
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
         set((state) => ({ activities: [...state.activities, newActivity] }));
-        const orgId = useAuthStore.getState().organization?.id || 'default_org';
         saveActivityToFirestore(newActivity, orgId);
         return newActivity;
       },
@@ -452,7 +472,11 @@ export const useCRMStore = create<CRMState>()(
     {
       name: 'crmos-crm-live-v3',
       partialize: (state) => ({
+        contacts: state.contacts,
+        companies: state.companies,
+        deals: state.deals,
         pipelines: state.pipelines,
+        activities: state.activities,
       }),
     }
   )

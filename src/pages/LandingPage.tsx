@@ -385,7 +385,7 @@ export function LandingPage() {
                     }`}
                   >
                     <Trophy className="h-3.5 w-3.5" />
-                    <span>Gamification &amp; Rayons</span>
+                    <span>Game &amp; Rayons</span>
                   </button>
                 </div>
 
@@ -568,7 +568,7 @@ export function LandingPage() {
                   </div>
                 )}
 
-                {/* Tab 4: Gamification & Rayons */}
+                {/* Tab 4: Game & Rayons */}
                 {activeTab === 'gamification' && (
                   <div className="rounded-2xl bg-neutral-950 border border-white/10 p-5 sm:p-7 text-left text-white animate-in fade-in duration-300">
                     <div className="flex flex-wrap items-center justify-between border-b border-white/10 pb-4 mb-5 gap-2">

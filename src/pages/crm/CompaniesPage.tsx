@@ -72,11 +72,15 @@ export function CompaniesPage() {
 
   const [newCompany, setNewCompany] = useState({
     name: '',
+    kvk_number: '',
     domain: '',
     industry: '',
     size: '',
     phone: '',
     website: '',
+    street: '',
+    postal_code: '',
+    city: '',
   });
 
   const accessibleCompanies = useMemo(
@@ -105,7 +109,19 @@ export function CompaniesPage() {
       return;
     }
     addCompany({
-      ...newCompany,
+      name: newCompany.name.trim(),
+      kvk_number: newCompany.kvk_number.trim() || undefined,
+      domain: newCompany.domain.trim() || undefined,
+      industry: newCompany.industry.trim() || undefined,
+      size: newCompany.size.trim() || undefined,
+      phone: newCompany.phone.trim() || undefined,
+      website: newCompany.website.trim() || undefined,
+      address: {
+        street: newCompany.street.trim() || undefined,
+        postal_code: newCompany.postal_code.trim() || undefined,
+        city: newCompany.city.trim() || undefined,
+        country: 'Nederland',
+      },
       org_id: organization?.id || 'default_org',
       company_name: userCompanyName,
       allowed_companies: isCorePartner
@@ -115,7 +131,18 @@ export function CompaniesPage() {
       deals_count: 0,
     });
     setIsAddDialogOpen(false);
-    setNewCompany({ name: '', domain: '', industry: '', size: '', phone: '', website: '' });
+    setNewCompany({
+      name: '',
+      kvk_number: '',
+      domain: '',
+      industry: '',
+      size: '',
+      phone: '',
+      website: '',
+      street: '',
+      postal_code: '',
+      city: '',
+    });
     toast.success('Bedrijf succesvol opgeslagen');
   };
 
@@ -287,40 +314,95 @@ export function CompaniesPage() {
             <DialogHeader>
               <DialogTitle>Add New Company</DialogTitle>
             </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="space-y-2">
-                <Label>Company Name</Label>
+            <div className="grid gap-3 py-3 text-xs sm:text-sm">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Bedrijfsnaam *</Label>
                 <Input
+                  placeholder="bijv. Jansen Techniek B.V."
                   value={newCompany.name}
                   onChange={(e) => setNewCompany({ ...newCompany, name: e.target.value })}
+                  className="text-xs h-9"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Industry</Label>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold">KVK-nummer</Label>
                   <Input
-                    value={newCompany.industry}
-                    onChange={(e) => setNewCompany({ ...newCompany, industry: e.target.value })}
+                    placeholder="8-cijferig KVK nr"
+                    value={newCompany.kvk_number}
+                    onChange={(e) => setNewCompany({ ...newCompany, kvk_number: e.target.value })}
+                    className="text-xs h-9"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label>Company Size</Label>
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold">Telefoon</Label>
+                  <Input
+                    placeholder="+31 20 1234567"
+                    value={newCompany.phone}
+                    onChange={(e) => setNewCompany({ ...newCompany, phone: e.target.value })}
+                    className="text-xs h-9"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold">Sector / Industrie</Label>
+                  <Input
+                    placeholder="bijv. Logistiek of IT"
+                    value={newCompany.industry}
+                    onChange={(e) => setNewCompany({ ...newCompany, industry: e.target.value })}
+                    className="text-xs h-9"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold">Bedrijfsgrootte</Label>
                   <Input
                     value={newCompany.size}
                     onChange={(e) => setNewCompany({ ...newCompany, size: e.target.value })}
-                    placeholder="e.g., 50-200"
+                    placeholder="bijv. 10-50 mdk"
+                    className="text-xs h-9"
                   />
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label>Website</Label>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Vestigingsadres (Straat + Huisnummer)</Label>
+                <Input
+                  placeholder="bijv. Keizersgracht 421"
+                  value={newCompany.street}
+                  onChange={(e) => setNewCompany({ ...newCompany, street: e.target.value })}
+                  className="text-xs h-9"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold">Postcode</Label>
+                  <Input
+                    placeholder="bijv. 1016 EK"
+                    value={newCompany.postal_code}
+                    onChange={(e) => setNewCompany({ ...newCompany, postal_code: e.target.value })}
+                    className="text-xs h-9"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold">Stad</Label>
+                  <Input
+                    placeholder="bijv. Amsterdam"
+                    value={newCompany.city}
+                    onChange={(e) => setNewCompany({ ...newCompany, city: e.target.value })}
+                    className="text-xs h-9"
+                  />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Website</Label>
                 <Input
                   value={newCompany.website}
                   onChange={(e) => setNewCompany({ ...newCompany, website: e.target.value })}
                   placeholder="https://..."
+                  className="text-xs h-9"
                 />
               </div>
-              <Button onClick={handleAddCompany}>Bedrijf toevoegen</Button>
+              <Button onClick={handleAddCompany} className="mt-2 rounded-xl h-10 font-semibold">Bedrijf Opslaan</Button>
             </div>
           </DialogContent>
         </Dialog>

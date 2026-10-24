@@ -238,7 +238,7 @@ function StageColumn({ stage, deals, onEdit, onViewDetails, onDelete }: StageCol
 }
 
 export function DealsPage() {
-  const { pipelines, deals, moveDeal, addDeal, updateDeal, deleteDeal } = useCRMStore();
+  const { pipelines, deals, companies, contacts, moveDeal, addDeal, updateDeal, deleteDeal } = useCRMStore();
   const { user, organization, adminCompanyFilter } = useAuthStore();
 
   const isSuperAdmin =
@@ -265,6 +265,7 @@ export function DealsPage() {
   const [newDeal, setNewDeal] = useState({
     name: '',
     company_id: '',
+    contact_id: '',
     value: 0,
     stage: 'lead',
     expected_close_date: '',
@@ -364,10 +365,23 @@ export function DealsPage() {
   const wonValue = accessibleDeals.filter((d) => d.stage === 'closed-won' || d.stage === 'won').reduce((sum, d) => sum + d.value, 0);
 
   const handleAddDeal = () => {
+    if (!newDeal.name.trim()) {
+      toast.error('Vul een dealnaam in');
+      return;
+    }
+    const selectedCompany = companies.find((c) => c.id === newDeal.company_id);
+    const selectedContact = contacts.find((c) => c.id === newDeal.contact_id);
+
     addDeal({
-      ...newDeal,
+      name: newDeal.name,
+      company_id: newDeal.company_id,
+      company_name: selectedCompany?.name || userCompanyName,
+      contact_id: newDeal.contact_id || undefined,
+      contact_name: selectedContact ? `${selectedContact.first_name} ${selectedContact.last_name}` : undefined,
+      value: newDeal.value,
+      stage: newDeal.stage,
+      expected_close_date: newDeal.expected_close_date || undefined,
       org_id: organization?.id || 'default_org',
-      company_name: userCompanyName,
       allowed_companies: isCorePartner
         ? ['CRMos', 'VVC', 'Quantum Initium', 'Logs Rent', 'Djobba', 'Trusting Work']
         : [userCompanyName],
@@ -376,11 +390,12 @@ export function DealsPage() {
       probability: defaultPipeline?.stages.find((s) => s.id === newDeal.stage)?.probability || 10,
       source: 'Manual',
       assigned_to: user?.id || 'user1',
+      assigned_name: user?.name || 'Accountmanager',
       tags: [],
       activities: [],
     });
     setIsAddDialogOpen(false);
-    setNewDeal({ name: '', company_id: '', value: 0, stage: 'lead', expected_close_date: '' });
+    setNewDeal({ name: '', company_id: '', contact_id: '', value: 0, stage: 'lead', expected_close_date: '' });
     toast.success('Deal succesvol aangemaakt');
   };
 
@@ -412,15 +427,36 @@ export function DealsPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Bedrijfstoewijzing</Label>
-                <Input
-                  value={userCompanyName}
-                  disabled
-                  className="bg-muted/40 text-xs font-mono"
-                />
-                <p className="text-[10px] text-muted-foreground">
-                  Gekoppeld aan {userCompanyName} {isCorePartner ? '(gedeeld met CRMos kernpartners)' : '(strikt geïsoleerd)'}
-                </p>
+                <Label>Klantbedrijf (Relatie)</Label>
+                <select
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs"
+                  value={newDeal.company_id}
+                  onChange={(e) => setNewDeal({ ...newDeal, company_id: e.target.value })}
+                >
+                  <option value="">-- Selecteer klantbedrijf --</option>
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} {c.industry ? `(${c.industry})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label>Contactpersoon</Label>
+                <select
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs"
+                  value={newDeal.contact_id}
+                  onChange={(e) => setNewDeal({ ...newDeal, contact_id: e.target.value })}
+                >
+                  <option value="">-- Selecteer contactpersoon (optioneel) --</option>
+                  {contacts
+                    .filter((c) => !newDeal.company_id || c.company_id === newDeal.company_id || (c.company && companies.find(comp => comp.id === newDeal.company_id)?.name === c.company))
+                    .map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.first_name} {c.last_name} {c.title ? `- ${c.title}` : ''}
+                      </option>
+                    ))}
+                </select>
               </div>
               <div className="space-y-2">
                 <Label>Waarde (€)</Label>

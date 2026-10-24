@@ -33,7 +33,7 @@ export function PricingPage() {
       notIncluded: [
         t('Recruitment (ATS) Module'),
         t('Contact Center Workspace & Pitch Flows'),
-        t('Gamification & Commissions'),
+        t('Game & Commissions'),
         t('Territory & Rayon Management'),
         t('Custom Workflows & Automations'),
       ],
@@ -61,7 +61,7 @@ export function PricingPage() {
         t('Priority Email & Chat Support'),
       ],
       notIncluded: [
-        t('Gamification & Streak System'),
+        t('Game & Streak System'),
         t('Territory & Rayon GeoJSON Maps'),
         t('Dedicated Cloud Infrastructure'),
       ],
@@ -79,7 +79,7 @@ export function PricingPage() {
       features: [
         t('Unlimited team members & seats'),
         t('Everything in Professional included'),
-        t('Full Gamification, Badges & Commissions'),
+        t('Full Game, Badges & Commissions'),
         t('Territory Management & Postcode Assignment'),
         t('Custom Dashboard Builder with KPI widgets'),
         t('Audit Logs & Compliance Tracking'),
@@ -124,7 +124,7 @@ export function PricingPage() {
       category: t('Advanced Operations'),
       items: [
         { name: t('No-Code Workflow Triggers'), starter: false, pro: true, enterprise: true },
-        { name: t('Gamification, Badges & Streaks'), starter: false, pro: false, enterprise: true },
+        { name: t('Game, Badges & Streaks'), starter: false, pro: false, enterprise: true },
         { name: t('Territory Postcode Polygon Maps'), starter: false, pro: false, enterprise: true },
         { name: t('Dashboard Widget Builder'), starter: false, pro: false, enterprise: true },
         { name: t('Audit Logs & Compliance'), starter: false, pro: false, enterprise: true },

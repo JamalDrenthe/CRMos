@@ -55,10 +55,16 @@ import {
 } from '@/services/b2bEnrichmentPipeline';
 
 export function TerritoriesPage() {
-  const { territories, addTerritory, updateTerritory, deleteTerritory } = useEnhancedStore();
+  const { territories, addTerritory, updateTerritory, deleteTerritory, syncTerritoriesWithFirestore } = useEnhancedStore();
   const { pins: d2dPins, bulkImportPins, autoSyncKadasterTerritory } = useD2DStore();
   const { companies, addCompany } = useCRMStore();
   const { organization, user } = useAuthStore();
+
+  useEffect(() => {
+    const orgId = user?.org_id || organization?.id || 'default_org';
+    const unsub = syncTerritoriesWithFirestore(orgId);
+    return () => unsub();
+  }, [user?.org_id, organization?.id, syncTerritoriesWithFirestore]);
   const [viewMode, setViewMode] = useState<'map' | 'table'>('map');
   const [selectedTerritoryIdForMapTab, setSelectedTerritoryIdForMapTab] = useState<string>('all');
   const [autoKadasterSync, setAutoKadasterSync] = useState<boolean>(true);

@@ -36,7 +36,8 @@ export function GamificationPage() {
   const { user } = useAuthStore();
   const [period, setPeriod] = useState<'daily' | 'weekly' | 'monthly'>('weekly');
 
-  const userProfile = gamificationProfiles['user1'];
+  const activeUserId = user?.id || 'user1';
+  const userProfile = gamificationProfiles[activeUserId] || gamificationProfiles['user1'] || Object.values(gamificationProfiles)[0];
   const sortedLeaderboard = getLeaderboard(period);
 
   const nextLevelPoints = userProfile ? (userProfile.level * 1000) + 1000 : 1000;
@@ -45,8 +46,8 @@ export function GamificationPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Gamification</h1>
-        <p className="text-muted-foreground">Track your performance and earn rewards</p>
+        <h1 className="text-3xl font-bold">Game</h1>
+        <p className="text-muted-foreground">Volg je salesprestaties, verdien punten en strijd mee op het leaderboard</p>
       </div>
 
       {/* User Profile Card */}
@@ -206,7 +207,7 @@ export function GamificationPage() {
                   <div 
                     key={entry.user_id} 
                     className={`flex items-center gap-4 p-3 rounded-lg ${
-                      entry.user_id === 'user1' ? 'bg-primary/5 border border-primary/20' : ''
+                      entry.user_id === activeUserId ? 'bg-primary/10 border border-primary/30 font-semibold' : ''
                     }`}
                   >
                     <div className={`

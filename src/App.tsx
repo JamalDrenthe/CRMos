@@ -422,6 +422,14 @@ function App() {
             }
           />
           <Route
+            path="/game"
+            element={
+              <ProtectedRoute>
+                <GamificationPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/territories"
             element={
               <ProtectedRoute>

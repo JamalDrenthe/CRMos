@@ -140,7 +140,8 @@ export interface Contact {
   company_id?: string;
   title?: string;
   industry?: string;
-  status: 'lead' | 'prospect' | 'customer' | 'churned';
+  status: 'lead' | 'prospect' | 'customer' | 'churned' | 'partner' | 'internal';
+  contact_type?: 'client' | 'partner' | 'internal' | 'vendor';
   score?: number;
   source: string;
   assigned_to?: string;
@@ -190,6 +191,8 @@ export interface Company {
   industry?: string;
   size?: string;
   revenue?: string;
+  kvk_number?: string;
+  bag_id?: string;
   address?: Address;
   phone?: string;
   website?: string;
@@ -280,7 +283,13 @@ export interface TimelineEvent {
 // ===== Sales =====
 export interface Quote {
   id: string;
-  deal_id: string;
+  org_id?: string;
+  company_name?: string;
+  allowed_companies?: string[];
+  deal_id?: string;
+  company_id?: string;
+  contact_id?: string;
+  customer_name?: string;
   quote_number: string;
   title: string;
   items: QuoteItem[];

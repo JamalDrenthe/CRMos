@@ -39,7 +39,43 @@ import {
 export function ProductsPage() {
   const { organization } = useAuthStore();
   const orgId = organization?.id || 'default_org';
-  const [products, setProducts] = useState<Product[]>([]);
+  const defaultProducts: Product[] = [
+    {
+      id: 'prod_1',
+      name: 'CRMos Pro Bedrijfslicentie (Jaarlijks)',
+      sku: 'SKU-CRM-01',
+      price: 2400,
+      currency: 'EUR',
+      category: 'Software Licentie',
+      description: 'Volledige toegang tot CRM, D2D Field Sales kaarten en Telemarketing workspaces.',
+      is_active: true,
+      created_at: new Date().toISOString(),
+    },
+    {
+      id: 'prod_2',
+      name: 'D2D Buitendienst Tablet & Kaartsuite',
+      sku: 'SKU-D2D-HW',
+      price: 650,
+      currency: 'EUR',
+      category: 'Hardware & Tools',
+      description: 'Geoptimaliseerde veldtablet met offline BAG Kadaster data en Salesdock contract-app.',
+      is_active: true,
+      created_at: new Date().toISOString(),
+    },
+    {
+      id: 'prod_3',
+      name: 'Contact Center Beller Seat (Maandelijks)',
+      sku: 'SKU-CC-SEAT',
+      price: 120,
+      currency: 'EUR',
+      category: 'Telemarketing',
+      description: 'Inclusief Twilio Voice integratie, automatische disposition-logging en Pitch Flows.',
+      is_active: true,
+      created_at: new Date().toISOString(),
+    },
+  ];
+
+  const [products, setProducts] = useState<Product[]>(defaultProducts);
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [newProduct, setNewProduct] = useState({
@@ -52,7 +88,9 @@ export function ProductsPage() {
 
   useEffect(() => {
     const unsub = subscribeToProducts(orgId, (items) => {
-      setProducts(items || []);
+      if (items && items.length > 0) {
+        setProducts(items);
+      }
     });
     return () => unsub();
   }, [orgId]);

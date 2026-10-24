@@ -113,8 +113,8 @@ export function canUserAccessRecord(
     return true;
   }
 
-  // 3. Direct company name match
-  const recordCompanyName = normalizeCompanyName(record.company_name || record.company);
+  // 3. Direct company name match (only match tenant company name, not customer company)
+  const recordCompanyName = normalizeCompanyName(record.company_name);
   if (recordCompanyName && userCompanyName && recordCompanyName === userCompanyName) {
     return true;
   }

@@ -50,7 +50,7 @@ import { toast } from 'sonner';
 export function ContactsPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { contacts, addContact, deleteContact } = useCRMStore();
+  const { contacts, companies, addContact, deleteContact } = useCRMStore();
   const { user, organization, adminCompanyFilter } = useAuthStore();
   const { addAuditLog } = useEnhancedStore();
 
@@ -79,8 +79,9 @@ export function ContactsPage() {
     email: '',
     phone: '',
     company: '',
+    company_id: '',
     title: '',
-    status: 'lead' as const,
+    status: 'lead' as Contact['status'],
     source: 'Manual',
     tags: [] as string[],
     custom_fields: {},
@@ -141,6 +142,7 @@ export function ContactsPage() {
       email: '',
       phone: '',
       company: '',
+      company_id: '',
       title: '',
       status: 'lead',
       source: 'Manual',
@@ -375,15 +377,62 @@ export function ContactsPage() {
                 </div>
               </div>
               <div className="space-y-1">
-                <Label className="text-xs font-semibold">Bedrijfstoewijzing</Label>
+                <Label className="text-xs font-semibold">Klantbedrijf (Relatie)</Label>
+                <select
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs h-9"
+                  value={newContact.company_id}
+                  onChange={(e) => {
+                    const compId = e.target.value;
+                    const selected = companies.find((c) => c.id === compId);
+                    setNewContact({
+                      ...newContact,
+                      company_id: compId,
+                      company: selected ? selected.name : newContact.company,
+                    });
+                  }}
+                >
+                  <option value="">-- Kies bestaand bedrijf of voer handmatig in --</option>
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} {c.industry ? `(${c.industry})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Bedrijfsnaam (Vrij veld)</Label>
                 <Input
-                  value={newContact.company || userCompanyName}
-                  disabled
-                  className="bg-muted/40 text-xs font-mono h-9"
+                  placeholder="Bedrijfsnaam van het contact"
+                  value={newContact.company}
+                  onChange={(e) => setNewContact({ ...newContact, company: e.target.value })}
+                  className="text-xs h-9"
                 />
-                <p className="text-[10px] text-muted-foreground">
-                  Gekoppeld aan {userCompanyName} {isCorePartner ? '(gedeeld met CRMos kernpartners)' : '(strikt geïsoleerd)'}
-                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold">Functietitel</Label>
+                  <Input
+                    placeholder="bijv. Directeur / Inkoop"
+                    value={newContact.title}
+                    onChange={(e) => setNewContact({ ...newContact, title: e.target.value })}
+                    className="text-xs h-9"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold">Relatiestatus</Label>
+                  <select
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs h-9"
+                    value={newContact.status}
+                    onChange={(e) => setNewContact({ ...newContact, status: e.target.value as Contact['status'] })}
+                  >
+                    <option value="lead">Lead</option>
+                    <option value="prospect">Prospect</option>
+                    <option value="customer">Klant (Customer)</option>
+                    <option value="partner">Partner</option>
+                    <option value="internal">Interne Medewerker</option>
+                    <option value="churned">Inactief / Churned</option>
+                  </select>
+                </div>
               </div>
               <div className="space-y-1">
                 <Label className="text-xs font-semibold">E-mail</Label>
@@ -402,24 +451,6 @@ export function ContactsPage() {
                   onChange={(e) => setNewContact({ ...newContact, phone: e.target.value })}
                   className="text-xs h-9"
                 />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label className="text-xs font-semibold">Bedrijfsnaam</Label>
-                  <Input
-                    value={newContact.company}
-                    onChange={(e) => setNewContact({ ...newContact, company: e.target.value })}
-                    className="text-xs h-9"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs font-semibold">Functietitel</Label>
-                  <Input
-                    value={newContact.title}
-                    onChange={(e) => setNewContact({ ...newContact, title: e.target.value })}
-                    className="text-xs h-9"
-                  />
-                </div>
               </div>
               <Button onClick={handleAddContact} className="mt-2 rounded-xl h-10 font-semibold">
                 Contact Opslaan
