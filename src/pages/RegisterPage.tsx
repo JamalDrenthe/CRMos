@@ -62,12 +62,13 @@ export function RegisterPage() {
       const nameParts = (registeredUser.name || '').trim().split(/\s+/);
       const firstName = nameParts[0] || registeredUser.name || 'Gebruiker';
       const lastName = nameParts.slice(1).join(' ') || '';
+      const userVvcTag =
+        registeredUser.vvc_tag ||
+        `vvc-usr-${registeredUser.id.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10)}`;
 
-      const existing = useCRMStore
-        .getState()
-        .contacts.find((c) => c.email.toLowerCase() === registeredUser.email.toLowerCase());
-      if (!existing && registeredUser.email) {
+      if (registeredUser.email) {
         const createdContact = useCRMStore.getState().addContact({
+          id: `contact_usr_${registeredUser.id}`,
           first_name: firstName,
           last_name: lastName,
           email: registeredUser.email,
@@ -75,11 +76,13 @@ export function RegisterPage() {
           title: registeredUser.role,
           status: 'partner',
           source: 'CRMos Google Aanmelding',
-          vvc_tag: registeredUser.vvc_tag,
-          tags: registeredUser.vvc_tag ? [registeredUser.vvc_tag, 'Aanmelding'] : ['Aanmelding'],
-          custom_fields: { user_id: registeredUser.id },
+          vvc_tag: userVvcTag,
+          tags: [userVvcTag, 'Aanmelding', 'CRMos Profiel'],
+          custom_fields: { user_id: registeredUser.id, vvc_tag: userVvcTag },
         });
-        toast.success(`Welkom! Je unieke VVC API Tag is aangemaakt: ${createdContact.vvc_tag || registeredUser.vvc_tag}`);
+        toast.success(
+          `Welkom! Je bent direct opgeslagen als CRM Contact met VVC Tag: ${createdContact.vvc_tag || userVvcTag}`
+        );
       }
       navigate('/dashboard');
     } catch (error: unknown) {
@@ -130,8 +133,12 @@ export function RegisterPage() {
       const nameParts = name.trim().split(/\s+/);
       const firstName = nameParts[0] || name.trim();
       const lastName = nameParts.slice(1).join(' ') || '';
+      const userVvcTag =
+        registeredUser.vvc_tag ||
+        `vvc-usr-${registeredUser.id.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10)}`;
 
       const createdContact = useCRMStore.getState().addContact({
+        id: `contact_usr_${registeredUser.id}`,
         first_name: firstName,
         last_name: lastName,
         email: email.trim(),
@@ -139,13 +146,13 @@ export function RegisterPage() {
         title: role,
         status: isEcosystemPartner ? 'partner' : 'customer',
         source: 'CRMos Account Aanmelding',
-        vvc_tag: registeredUser.vvc_tag,
-        tags: registeredUser.vvc_tag ? [registeredUser.vvc_tag, 'Aanmelding'] : ['Aanmelding'],
-        custom_fields: { user_id: registeredUser.id },
+        vvc_tag: userVvcTag,
+        tags: [userVvcTag, 'Aanmelding', 'CRMos Profiel'],
+        custom_fields: { user_id: registeredUser.id, vvc_tag: userVvcTag },
       });
 
       toast.success(
-        `Welkom bij CRMos! Je unieke VVC API Tag is aangemaakt: ${createdContact.vvc_tag || registeredUser.vvc_tag}`
+        `Welkom bij CRMos! Je profiel en CRM Contact zijn aangemaakt met VVC Tag: ${createdContact.vvc_tag || userVvcTag}`
       );
       navigate('/dashboard');
     } catch (error: unknown) {

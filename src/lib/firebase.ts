@@ -86,7 +86,8 @@ export async function registerWithEmailPassword(
   name: string,
   email: string,
   password: string,
-  companyName?: string
+  companyName?: string,
+  role?: User['role']
 ): Promise<{ user: User; org: Organization }> {
   if (!isFirebaseConfigured()) {
     throw new Error(
@@ -99,7 +100,7 @@ export async function registerWithEmailPassword(
     await updateProfile(credential.user, { displayName: name });
   }
 
-  return await syncFirebaseUserWithFirestore(credential.user, companyName);
+  return await syncFirebaseUserWithFirestore(credential.user, companyName, role, name);
 }
 
 /**
@@ -133,7 +134,9 @@ export async function logoutFirebase(): Promise<void> {
  */
 export async function syncFirebaseUserWithFirestore(
   fbUser: FirebaseUser,
-  companyName?: string
+  companyName?: string,
+  requestedRole?: User['role'],
+  explicitName?: string
 ): Promise<{ user: User; org: Organization }> {
   const userRef = doc(db, 'users', fbUser.uid);
   let existingUserData: Record<string, unknown> = {};
@@ -225,13 +228,19 @@ export async function syncFirebaseUserWithFirestore(
     fbUser.email?.toLowerCase() === 'info@crmos.one' ||
     existingUserData.is_super_admin === true;
 
-  const userRole: User['role'] = isSuperAdmin ? 'admin' : ((existingUserData.role as User['role']) || 'admin');
+  const userRole: User['role'] = isSuperAdmin
+    ? 'admin'
+    : requestedRole || ((existingUserData.role as User['role']) || 'admin');
   const userVvcTag =
     (existingUserData.vvc_tag as string) ||
     `vvc-usr-${fbUser.uid.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10)}`;
 
   const fullName =
-    fbUser.displayName || fbUser.email?.split('@')[0] || (isSuperAdmin ? 'Jamal Drenthe' : 'CRMos Gebruiker');
+    explicitName ||
+    fbUser.displayName ||
+    (existingUserData.name as string) ||
+    fbUser.email?.split('@')[0] ||
+    (isSuperAdmin ? 'Jamal Drenthe' : 'CRMos Gebruiker');
   const nameParts = fullName.trim().split(/\s+/);
   const firstName = nameParts[0] || fullName;
   const lastName = nameParts.slice(1).join(' ') || '';
@@ -265,18 +274,48 @@ export async function syncFirebaseUserWithFirestore(
       { merge: true }
     );
 
+    // Sla de aanmelding ook direct op als Contact in het CRM (crm_contacts) met de unieke VVC tag standaard op het contact
+    const crmContactId = `contact_usr_${fbUser.uid}`;
+    const crmContactRef = doc(db, 'crm_contacts', crmContactId);
+    const crmContactPayload = {
+      id: crmContactId,
+      first_name: firstName,
+      last_name: lastName,
+      email: appUser.email,
+      company: effectiveCompanyName,
+      company_name: effectiveCompanyName,
+      title: userRole,
+      status: isCoreEcosystem ? 'partner' : 'customer',
+      source: 'CRMos Account Aanmelding',
+      score: 90,
+      vvc_tag: userVvcTag,
+      tags: [userVvcTag, 'Aanmelding', 'CRMos Profiel'],
+      org_id: org.id,
+      allowed_companies: appUser.allowed_companies,
+      custom_fields: {
+        user_id: fbUser.uid,
+        registration_type: 'account',
+        vvc_tag: userVvcTag,
+      },
+      created_at: appUser.created_at,
+      updated_at: new Date().toISOString(),
+      _firestore_timestamp: serverTimestamp(),
+    };
+    await setDoc(crmContactRef, crmContactPayload, { merge: true });
+
     // Synchroniseer account-aanmelding direct naar vvc_sync_codes & crm_vvc_registry zodat VVC deze via API kan ophalen
     const vvcPayload = {
       vvc_tag: userVvcTag,
       registration_type: 'account',
-      entity_id: fbUser.uid,
+      entity_id: crmContactId,
+      user_id: fbUser.uid,
       first_name: firstName,
       last_name: lastName,
       full_name: fullName,
       email: appUser.email,
       company: effectiveCompanyName,
       role: userRole,
-      status: 'active',
+      status: isCoreEcosystem ? 'partner' : 'customer',
       source: 'CRMos Account Aanmelding',
       org_id: org.id,
       created_at: appUser.created_at,

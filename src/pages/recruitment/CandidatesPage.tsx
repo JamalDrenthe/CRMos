@@ -823,32 +823,37 @@ export function CandidatesPage() {
           </DialogHeader>
           {viewingCandidate && (
             <div className="space-y-4 py-2 text-sm">
-              {/* VVC API Communicatie Tag voor Kandidaat Aanmelding */}
-              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <Tag className="h-4 w-4 text-amber-500 shrink-0" />
-                  <div className="min-w-0">
-                    <span className="text-[10px] uppercase tracking-wider font-bold text-amber-700 dark:text-amber-400 block">
-                      Unieke VVC API Tag (Aanmelding)
-                    </span>
-                    <span className="font-mono text-xs font-semibold text-foreground truncate block">
-                      {getVvcTag(viewingCandidate) || `vvc-cand-${viewingCandidate.id}`}
-                    </span>
+              {/* VVC API Communicatie Tag voor Kandidaat Aanmelding & CRM Contact Koppeling */}
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Tag className="h-4 w-4 text-amber-500 shrink-0" />
+                    <div className="min-w-0">
+                      <span className="text-[10px] uppercase tracking-wider font-bold text-amber-700 dark:text-amber-400 block">
+                        Unieke VVC API Tag (Profiel &amp; CRM Contact)
+                      </span>
+                      <span className="font-mono text-xs font-semibold text-foreground truncate block">
+                        {getVvcTag(viewingCandidate) || `vvc-cand-${viewingCandidate.id}`}
+                      </span>
+                    </div>
                   </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      const tag = getVvcTag(viewingCandidate) || `vvc-cand-${viewingCandidate.id}`;
+                      navigator.clipboard.writeText(tag);
+                      toast.success(`VVC API tag gekopieerd: ${tag}`);
+                    }}
+                    className="h-7 text-xs px-2.5 gap-1.5 border-amber-500/30 text-amber-700 dark:text-amber-400 hover:bg-amber-500/15 shrink-0"
+                  >
+                    <Copy className="h-3 w-3" />
+                    <span>Kopieer Tag</span>
+                  </Button>
                 </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    const tag = getVvcTag(viewingCandidate) || `vvc-cand-${viewingCandidate.id}`;
-                    navigator.clipboard.writeText(tag);
-                    toast.success(`VVC API tag gekopieerd: ${tag}`);
-                  }}
-                  className="h-7 text-xs px-2.5 gap-1.5 border-amber-500/30 text-amber-700 dark:text-amber-400 hover:bg-amber-500/15 shrink-0"
-                >
-                  <Copy className="h-3 w-3" />
-                  <span>Kopieer Tag</span>
-                </Button>
+                <p className="text-[11px] text-muted-foreground">
+                  ✓ Aanmeldgegevens zijn automatisch opgeslagen als Contact in het CRM met deze tag standaard gekoppeld.
+                </p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">

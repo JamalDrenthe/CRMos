@@ -79,7 +79,7 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
         try {
           if (isFirebaseConfigured()) {
-            const { user, org } = await registerWithEmailPassword(name, email, password, companyName);
+            const { user, org } = await registerWithEmailPassword(name, email, password, companyName, role);
             set({
               user,
               organization: org,
@@ -178,12 +178,14 @@ export const useAuthStore = create<AuthState>()(
               created_at: new Date().toISOString(),
             };
 
+            const cleanSeed = email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10) || 'user1';
             const mockUser: User = {
               id: 'user1',
               email,
               name: email.split('@')[0].replace(/\./g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
               role: 'admin',
               org_id: 'org1',
+              vvc_tag: `vvc-usr-${cleanSeed}`,
               timezone: 'Europe/Amsterdam',
               created_at: new Date().toISOString(),
             };
@@ -232,7 +234,7 @@ export const useAuthStore = create<AuthState>()(
             try {
               // Only sync if user was not already loaded or if different
               const currentUser = get().user;
-              if (!currentUser || currentUser.id !== fbUser.uid) {
+              if (!currentUser || currentUser.id !== fbUser.uid || !currentUser.vvc_tag) {
                 const { user, org } = await syncFirebaseUserWithFirestore(fbUser);
                 set({ user, organization: org, isAuthenticated: true });
               }

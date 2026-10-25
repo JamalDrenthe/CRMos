@@ -64,7 +64,7 @@ interface CRMState {
   setActivities: (activities: Activity[]) => void;
   clearLocalStore: () => void;
 
-  addContact: (contact: Omit<Contact, 'id' | 'created_at' | 'updated_at'>) => Contact;
+  addContact: (contact: Omit<Contact, 'id' | 'created_at' | 'updated_at'> & { id?: string }) => Contact;
   updateContact: (id: string, updates: Partial<Contact>) => void;
   deleteContact: (id: string) => void;
 
@@ -136,8 +136,8 @@ export const useCRMStore = create<CRMState>()(
 
       addContact: (contactData) => {
         const authUser = useAuthStore.getState().user;
-        const orgId = authUser?.org_id || useAuthStore.getState().organization?.id || 'default_org';
-        const userCompanyName = authUser?.company_name || '';
+        const orgId = contactData.org_id || authUser?.org_id || useAuthStore.getState().organization?.id || 'default_org';
+        const userCompanyName = contactData.company_name || authUser?.company_name || '';
 
         const existingVvcTags = new Set(
           get()
@@ -149,14 +149,26 @@ export const useCRMStore = create<CRMState>()(
           org_id: orgId,
           company_name: userCompanyName,
           ...contactData,
-          id: generateId(),
+          id: contactData.id || generateId(),
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
 
         const newContact = ensureContactVvcTag(baseContact, existingVvcTags);
 
-        set((state) => ({ contacts: [...state.contacts, newContact] }));
+        set((state) => {
+          const existingIdx = state.contacts.findIndex(
+            (c) =>
+              c.id === newContact.id ||
+              (newContact.vvc_tag && getVvcTag(c)?.toLowerCase() === newContact.vvc_tag.toLowerCase())
+          );
+          if (existingIdx >= 0) {
+            const next = [...state.contacts];
+            next[existingIdx] = { ...next[existingIdx], ...newContact };
+            return { contacts: next };
+          }
+          return { contacts: [newContact, ...state.contacts] };
+        });
         saveContactToFirestore(newContact, orgId);
         return newContact;
       },
@@ -497,6 +509,7 @@ export const useCRMStore = create<CRMState>()(
             c.last_name.toLowerCase().includes(lowerQuery) ||
             c.email.toLowerCase().includes(lowerQuery) ||
             c.company?.toLowerCase().includes(lowerQuery) ||
+            c.vvc_tag?.toLowerCase().includes(lowerQuery) ||
             c.tags?.some((t) => t.toLowerCase().includes(lowerQuery))
         );
       },

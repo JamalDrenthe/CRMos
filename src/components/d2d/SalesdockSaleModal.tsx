@@ -122,7 +122,7 @@ export function SalesdockSaleModal({
   onSaleCompleted,
 }: SalesdockSaleModalProps) {
   const { logVisit } = useD2DStore();
-  const { addDeal, addCompany, addContact, companies, contacts } = useCRMStore();
+  const { addDeal, addCompany, addContact, updateContact, companies, contacts } = useCRMStore();
   const { user } = useAuthStore();
 
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
@@ -299,7 +299,7 @@ export function SalesdockSaleModal({
         companyId = newComp.id;
       }
 
-      // 3. Maak Contactpersoon aan in het CRM
+      // 3. Maak Contactpersoon aan in het CRM met standaard gekoppelde VVC tag
       const existingContact = contacts.find(
         (c) =>
           c.company_id === companyId ||
@@ -325,13 +325,20 @@ export function SalesdockSaleModal({
           },
           score: 95,
           source: 'Field D2D - Salesdock',
-          tags: ['Field Sale', 'Salesdock Order'],
+          tags: ['Aanmelding', 'Field Sale', 'Salesdock Order'],
           custom_fields: {},
         });
         contactId = newContact.id;
         vvcTag = newContact.vvc_tag || getVvcTag(newContact) || `vvc-${newContact.id}`;
-      } else if (!vvcTag) {
-        vvcTag = `vvc-${existingContact.id}`;
+      } else {
+        vvcTag = vvcTag || `vvc-${existingContact.id}`;
+        updateContact(existingContact.id, {
+          vvc_tag: vvcTag,
+          status: 'customer',
+          tags: Array.from(
+            new Set([vvcTag, ...(existingContact.tags || []), 'Aanmelding', 'Field Sale', 'Salesdock Order'])
+          ),
+        });
       }
 
       // Synchroniseer de volledige aanmelding & sale naar vvc_sync_codes en crm_vvc_registry voor VVC API ophalen

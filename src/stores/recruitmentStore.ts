@@ -10,12 +10,74 @@ import {
   subscribeToJobs,
 } from '@/services/firestoreService';
 import { useAuthStore } from '@/stores/authStore';
+import { useCRMStore } from '@/stores/crmStore';
 import { isFirebaseConfigured } from '@/lib/firebase';
 import {
   ensureCandidateVvcTag,
   ensureAllCandidatesHaveVvcTags,
   getVvcTag,
 } from '@/services/vvcTagService';
+
+/**
+ * Zorgt ervoor dat elke kandidaat-aanmelding direct ook als Contact in het CRM staat,
+ * inclusief dezelfde unieke VVC tag standaard gekoppeld op het contact en in de contact-tags.
+ */
+function syncCandidateAsCrmContact(candidate: Candidate) {
+  const crmState = useCRMStore.getState();
+  const candidateVvcTag = getVvcTag(candidate) || `vvc-cand-${candidate.id}`;
+  const contactId = `contact_cand_${candidate.id}`;
+
+  const existingContact = crmState.contacts.find(
+    (c) =>
+      c.id === contactId ||
+      (candidateVvcTag && getVvcTag(c)?.toLowerCase() === candidateVvcTag.toLowerCase()) ||
+      (candidate.email && c.email.toLowerCase() === candidate.email.toLowerCase())
+  );
+
+  const defaultTags = Array.from(
+    new Set([
+      candidateVvcTag,
+      'Kandidaat',
+      'Aanmelding',
+      ...(candidate.skills || []).slice(0, 3),
+    ])
+  );
+
+  if (!existingContact) {
+    crmState.addContact({
+      id: contactId,
+      first_name: candidate.first_name,
+      last_name: candidate.last_name,
+      email: candidate.email,
+      phone: candidate.phone,
+      company: candidate.company_name || 'Recruitment Kandidaat',
+      title: candidate.skills?.[0] ? `Kandidaat (${candidate.skills[0]})` : 'Kandidaat',
+      status: candidate.status === 'hired' ? 'customer' : 'lead',
+      source: candidate.source ? `Recruitment (${candidate.source})` : 'Recruitment Aanmelding',
+      vvc_tag: candidateVvcTag,
+      tags: defaultTags,
+      address: candidate.location ? { city: candidate.location } : undefined,
+      custom_fields: {
+        candidate_id: candidate.id,
+        registration_type: 'candidate',
+        vvc_tag: candidateVvcTag,
+      },
+    });
+  } else {
+    const mergedTags = Array.from(
+      new Set([candidateVvcTag, ...(existingContact.tags || []), 'Kandidaat', 'Aanmelding'])
+    );
+    if (
+      existingContact.vvc_tag !== candidateVvcTag ||
+      !existingContact.tags?.includes(candidateVvcTag)
+    ) {
+      crmState.updateContact(existingContact.id, {
+        vvc_tag: existingContact.vvc_tag || candidateVvcTag,
+        tags: mergedTags,
+      });
+    }
+  }
+}
 
 if (typeof window !== 'undefined') {
   window.localStorage.removeItem('crmos-recruitment-storage');
@@ -122,9 +184,13 @@ export const useRecruitmentStore = create<RecruitmentState>()(
         };
 
         const newCandidate = ensureCandidateVvcTag(baseCandidate, existingTags);
-        set((state) => ({ candidates: [...state.candidates, newCandidate] }));
+        set((state) => ({ candidates: [newCandidate, ...state.candidates] }));
         const orgId = useAuthStore.getState().organization?.id || 'default_org';
         saveCandidateToFirestore(newCandidate, orgId);
+
+        // Sla de kandidaat-aanmelding direct op als Contact in het CRM met dezelfde VVC tag standaard bij het contact
+        syncCandidateAsCrmContact(newCandidate);
+
         return newCandidate;
       },
 
@@ -137,6 +203,7 @@ export const useRecruitmentStore = create<RecruitmentState>()(
           if (updated) {
             const orgId = useAuthStore.getState().organization?.id || 'default_org';
             saveCandidateToFirestore(updated, orgId);
+            syncCandidateAsCrmContact(updated);
           }
           return { candidates: updatedCandidates };
         });

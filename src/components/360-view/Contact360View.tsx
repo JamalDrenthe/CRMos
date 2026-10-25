@@ -559,6 +559,47 @@ export function Contact360View({ contactId, isOpen, onClose }: Contact360ViewPro
                         </a>
                       </div>
                     )}
+
+                    {/* Standaard gekoppelde VVC Tag & Contact Tags in het Profiel */}
+                    <div className="p-2.5 rounded-xl bg-amber-500/5 border border-amber-500/20 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <Tag className="h-4 w-4 text-amber-500 shrink-0" />
+                          <span className="text-xs font-semibold text-foreground">Standaard VVC Tag:</span>
+                          <span className="font-mono text-xs font-bold text-amber-700 dark:text-amber-400">
+                            {vvcTag || `vvc-${contact.id}`}
+                          </span>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            const tagToCopy = vvcTag || `vvc-${contact.id}`;
+                            navigator.clipboard.writeText(tagToCopy);
+                            toast.success(`VVC tag gekopieerd: ${tagToCopy}`);
+                          }}
+                          className="h-6 text-[11px] px-2 text-amber-700 dark:text-amber-400 hover:bg-amber-500/15 gap-1"
+                        >
+                          <Copy className="h-3 w-3" />
+                          <span>Kopieer</span>
+                        </Button>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                        {Array.from(new Set([vvcTag || `vvc-${contact.id}`, ...(contact.tags || [])])).map((tag) => (
+                          <Badge
+                            key={tag}
+                            variant="outline"
+                            className={
+                              tag.toLowerCase().startsWith('vvc-')
+                                ? 'text-[10px] font-mono bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30'
+                                : 'text-[10px] bg-background'
+                            }
+                          >
+                            {tag}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
                   </CardContent>
                 </Card>
 
@@ -1236,6 +1277,34 @@ export function Contact360View({ contactId, isOpen, onClose }: Contact360ViewPro
                   onChange={(e) => setEditScore(Number(e.target.value))}
                   className="text-xs h-9"
                 />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold flex items-center gap-1.5">
+                <Tag className="h-3.5 w-3.5 text-amber-500" />
+                <span>Standaard VVC API Tag (gekoppeld aan dit Contact)</span>
+              </Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  value={vvcTag || `vvc-${contact.id}`}
+                  readOnly
+                  className="text-xs h-9 font-mono bg-amber-500/5 border-amber-500/25 text-amber-700 dark:text-amber-400"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    const tagToCopy = vvcTag || `vvc-${contact.id}`;
+                    navigator.clipboard.writeText(tagToCopy);
+                    toast.success(`VVC tag gekopieerd: ${tagToCopy}`);
+                  }}
+                  className="h-9 px-3 text-xs border-amber-500/30 hover:bg-amber-500/10 text-amber-700 dark:text-amber-400 shrink-0 gap-1"
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                  <span>Kopieer</span>
+                </Button>
               </div>
             </div>
           </div>

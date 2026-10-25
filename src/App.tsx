@@ -218,8 +218,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function App() {
-  const { initAuthListener, organization, user, isAuthenticated } = useAuthStore();
-  const { syncWithFirestore } = useCRMStore();
+  const { initAuthListener, organization, user, isAuthenticated, updateUser } = useAuthStore();
+  const { syncWithFirestore, contacts, isFirestoreSynced, addContact, updateContact } = useCRMStore();
   const { syncWithFirestore: syncRecruitment } = useRecruitmentStore();
   const { syncWithFirestore: syncContactCenter } = useContactCenterStore();
   const { syncWithFirestore: syncD2D } = useD2DStore();
@@ -245,6 +245,64 @@ function App() {
       }
     };
   }, [initAuthListener]);
+
+  // Garandeer dat elk aangemeld profiel een unieke VVC tag heeft én direct als Contact met die tag in het CRM staat
+  useEffect(() => {
+    if (!isAuthenticated || !user || !user.email) return;
+
+    const cleanId = (user.id || user.email.split('@')[0] || 'usr')
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '')
+      .slice(0, 10);
+    const effectiveVvcTag = user.vvc_tag || `vvc-usr-${cleanId}`;
+
+    if (!user.vvc_tag) {
+      updateUser({ vvc_tag: effectiveVvcTag });
+    }
+
+    // Wacht tot initiële Firestore sync gereed is voordat we controleren of het contact al bestaat
+    if (!isFirestoreSynced && contacts.length === 0) return;
+
+    const contactId = `contact_usr_${user.id}`;
+    const existingContact = contacts.find(
+      (c) =>
+        c.id === contactId ||
+        (c.email && c.email.toLowerCase() === user.email.toLowerCase()) ||
+        (c.vvc_tag && c.vvc_tag.toLowerCase() === effectiveVvcTag.toLowerCase())
+    );
+
+    if (!existingContact) {
+      const nameParts = (user.name || '').trim().split(/\s+/);
+      const firstName = nameParts[0] || user.name || 'CRMos';
+      const lastName = nameParts.slice(1).join(' ') || 'Gebruiker';
+      addContact({
+        id: contactId,
+        first_name: firstName,
+        last_name: lastName,
+        email: user.email,
+        company: user.company_name || organization?.name || 'CRMos',
+        title: user.role || 'admin',
+        status: 'partner',
+        source: 'CRMos Account Aanmelding',
+        vvc_tag: effectiveVvcTag,
+        tags: [effectiveVvcTag, 'Aanmelding', 'CRMos Profiel'],
+        custom_fields: { user_id: user.id, registration_type: 'account', vvc_tag: effectiveVvcTag },
+      });
+    } else {
+      const contactTag = existingContact.vvc_tag || effectiveVvcTag;
+      const currentTags = Array.isArray(existingContact.tags) ? existingContact.tags : [];
+      const hasVvcInTags = currentTags.some((t) => t.toLowerCase() === contactTag.toLowerCase());
+      if (existingContact.vvc_tag !== contactTag || !hasVvcInTags) {
+        updateContact(existingContact.id, {
+          vvc_tag: contactTag,
+          tags: Array.from(new Set([contactTag, ...currentTags, 'Aanmelding'])),
+        });
+      }
+      if (user.vvc_tag !== contactTag) {
+        updateUser({ vvc_tag: contactTag });
+      }
+    }
+  }, [isAuthenticated, user, isFirestoreSynced, contacts, organization, updateUser, addContact, updateContact]);
 
   const isSuperAdmin =
     user?.email?.toLowerCase() === 'info@jamaldrenthe.com' ||

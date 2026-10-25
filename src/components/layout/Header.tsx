@@ -38,6 +38,8 @@ import {
   Building2,
   Database,
   ChevronRight,
+  Tag,
+  Copy,
 } from 'lucide-react';
 import { isFirebaseConfigured } from '@/lib/firebase';
 import { ThemeToggle } from '@/components/common/ThemeToggle';
@@ -394,6 +396,28 @@ export function Header({ onOpenSearch, onToggleMobileMenu }: HeaderProps = {}) {
                         Geïsoleerd
                       </span>
                     )}
+                  </div>
+                  <div className="mt-1.5 flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const tag =
+                          user?.vvc_tag ||
+                          `vvc-usr-${(user?.id || 'user1').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10)}`;
+                        navigator.clipboard.writeText(tag);
+                        toast.success(`VVC Profiel Tag gekopieerd: ${tag}`);
+                      }}
+                      title="Klik om je VVC Profiel Tag te kopiëren"
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-mono text-[10px] font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 hover:bg-amber-500/25 transition-colors cursor-pointer"
+                    >
+                      <Tag className="h-2.5 w-2.5 text-amber-500 shrink-0" />
+                      <span>
+                        {user?.vvc_tag ||
+                          `vvc-usr-${(user?.id || 'user1').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10)}`}
+                      </span>
+                      <Copy className="h-2.5 w-2.5 opacity-60" />
+                    </button>
                   </div>
                 </div>
               </div>

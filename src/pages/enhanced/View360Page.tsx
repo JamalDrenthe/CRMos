@@ -5,8 +5,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useCRMStore } from '@/stores/crmStore';
+import { getVvcTag } from '@/services/vvcTagService';
 import { Contact360View } from '@/components/360-view/Contact360View';
 import { Company360View } from '@/components/360-view/Company360View';
+import { toast } from 'sonner';
 import {
   Search,
   Star,
@@ -22,6 +24,8 @@ import {
   ChevronRight,
   Sparkles,
   ArrowUpRight,
+  Tag,
+  Copy,
 } from 'lucide-react';
 
 const PAGE_SIZE = 24;
@@ -151,7 +155,9 @@ export function View360Page() {
         (contact.first_name && contact.first_name.toLowerCase().includes(q)) ||
         (contact.last_name && contact.last_name.toLowerCase().includes(q)) ||
         (contact.email && contact.email.toLowerCase().includes(q)) ||
-        (contact.company && contact.company.toLowerCase().includes(q))
+        (contact.company && contact.company.toLowerCase().includes(q)) ||
+        (contact.vvc_tag && contact.vvc_tag.toLowerCase().includes(q)) ||
+        (contact.tags && contact.tags.some((t) => t.toLowerCase().includes(q)))
     );
   }, [contacts, deferredQuery]);
 
@@ -345,6 +351,26 @@ export function View360Page() {
                       </div>
                       <p className="text-xs text-muted-foreground truncate">{contact.title || 'Geen functie'}</p>
                       <p className="text-xs text-sky-600 dark:text-sky-400 font-medium truncate">{contact.company || 'Geen bedrijf'}</p>
+                      {(() => {
+                        const contactVvcTag = getVvcTag(contact);
+                        if (!contactVvcTag) return null;
+                        return (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigator.clipboard.writeText(contactVvcTag);
+                              toast.success(`VVC API Tag gekopieerd: ${contactVvcTag}`);
+                            }}
+                            title="Klik om de VVC API Tag van dit contact te kopiëren"
+                            className="mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-mono text-[10px] font-medium bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/25 hover:bg-amber-500/20 transition-colors cursor-pointer"
+                          >
+                            <Tag className="h-2.5 w-2.5 text-amber-500 shrink-0" />
+                            <span>{contactVvcTag}</span>
+                            <Copy className="h-2.5 w-2.5 opacity-60" />
+                          </button>
+                        );
+                      })()}
                     </div>
                     <div className="flex items-center gap-1 shrink-0 bg-amber-500/10 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-lg border border-amber-500/20">
                       <Star className="h-3.5 w-3.5 fill-amber-500 text-amber-500" />

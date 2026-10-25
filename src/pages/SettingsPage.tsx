@@ -35,10 +35,14 @@ import {
   Globe,
   Users2,
   Key,
+  Tag,
+  Copy,
+  ExternalLink,
 } from 'lucide-react';
 import { isCoreEcosystemCompany } from '@/types';
 import { CORE_PARTNER_OPTIONS } from '@/lib/companyAccess';
 import { seedDemoDataToFirestore, purgeDemoAndMockDataFromFirestore } from '@/services/firestoreService';
+import { syncVvcRecordToCloud } from '@/services/vvcTagService';
 import { useCRMStore } from '@/stores/crmStore';
 import { useRecruitmentStore } from '@/stores/recruitmentStore';
 import { useContactCenterStore } from '@/stores/contactCenterStore';
@@ -49,6 +53,26 @@ export function SettingsPage() {
   const { user, logout, updateUser } = useAuthStore();
   const { theme, setTheme } = useThemeStore();
   const { language, setLanguage, t } = useLanguageStore();
+  const { contacts, addContact, updateContact, clearLocalStore: clearCRM } = useCRMStore();
+
+  const cleanUserSeed = (user?.id || user?.email?.split('@')[0] || 'user1')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
+    .slice(0, 10);
+  const profileVvcTag = user?.vvc_tag || `vvc-usr-${cleanUserSeed}`;
+
+  const linkedCrmContact = contacts.find(
+    (c) =>
+      c.id === `contact_usr_${user?.id}` ||
+      (user?.email && c.email.toLowerCase() === user.email.toLowerCase()) ||
+      (c.vvc_tag && c.vvc_tag.toLowerCase() === profileVvcTag.toLowerCase())
+  );
+
+  const [firstName, setFirstName] = useState(user?.name?.split(' ')[0] || 'Jamal');
+  const [lastName, setLastName] = useState(user?.name?.split(' ').slice(1).join(' ') || 'Drenthe');
+  const [profileEmail, setProfileEmail] = useState(user?.email || 'info@jamaldrenthe.com');
+  const [profilePhone, setProfilePhone] = useState(linkedCrmContact?.phone || '+31 6 12345678');
+  const [profileTimezone, setProfileTimezone] = useState(user?.timezone || 'Europe/Amsterdam');
 
   const [companyName, setCompanyName] = useState(user?.company_name || 'CRMos');
   const [kvkNumber, setKvkNumber] = useState('84920114');
@@ -57,6 +81,14 @@ export function SettingsPage() {
   const [allowedCompaniesInput, setAllowedCompaniesInput] = useState((user?.allowed_companies || []).join(', '));
 
   useEffect(() => {
+    if (user?.name) {
+      const parts = user.name.trim().split(/\s+/);
+      setFirstName(parts[0] || '');
+      setLastName(parts.slice(1).join(' ') || '');
+    }
+    if (user?.email) {
+      setProfileEmail(user.email);
+    }
     if (user?.company_name) {
       setCompanyName(user.company_name);
     }
@@ -64,6 +96,63 @@ export function SettingsPage() {
       setAllowedCompaniesInput(user.allowed_companies.join(', '));
     }
   }, [user]);
+
+  const handleSaveProfile = async () => {
+    const fullName = `${firstName.trim()} ${lastName.trim()}`.trim() || 'CRMos Gebruiker';
+    updateUser({
+      name: fullName,
+      email: profileEmail.trim(),
+      timezone: profileTimezone,
+      vvc_tag: profileVvcTag,
+    });
+
+    if (linkedCrmContact) {
+      updateContact(linkedCrmContact.id, {
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
+        email: profileEmail.trim(),
+        phone: profilePhone.trim(),
+        company: user?.company_name || companyName,
+        vvc_tag: profileVvcTag,
+        tags: Array.from(new Set([profileVvcTag, ...(linkedCrmContact.tags || []), 'Aanmelding', 'CRMos Profiel'])),
+      });
+    } else if (user) {
+      addContact({
+        id: `contact_usr_${user.id}`,
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
+        email: profileEmail.trim(),
+        phone: profilePhone.trim(),
+        company: user.company_name || companyName,
+        title: user.role || 'admin',
+        status: 'partner',
+        source: 'CRMos Account Aanmelding',
+        vvc_tag: profileVvcTag,
+        tags: [profileVvcTag, 'Aanmelding', 'CRMos Profiel'],
+        custom_fields: { user_id: user.id, registration_type: 'account', vvc_tag: profileVvcTag },
+      });
+    }
+
+    await syncVvcRecordToCloud({
+      vvc_tag: profileVvcTag,
+      registration_type: 'account',
+      entity_id: linkedCrmContact?.id || `contact_usr_${user?.id || 'user1'}`,
+      first_name: firstName.trim(),
+      last_name: lastName.trim(),
+      full_name: fullName,
+      email: profileEmail.trim(),
+      phone: profilePhone.trim(),
+      company: user?.company_name || companyName,
+      role: user?.role || 'admin',
+      status: 'active',
+      source: 'CRMos Profiel & Contact',
+      org_id: user?.org_id || 'default_org',
+      created_at: user?.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+
+    toast.success(`Profiel én gekoppeld CRM Contact (${profileVvcTag}) succesvol bijgewerkt!`);
+  };
 
   const isCorePartner = isCoreEcosystemCompany(user?.company_name);
   const isSuperAdmin =
@@ -112,7 +201,6 @@ export function SettingsPage() {
     setSearchParams({ tab: val });
   };
 
-  const { clearLocalStore: clearCRM } = useCRMStore();
   const { clearLocalStore: clearRec } = useRecruitmentStore();
   const { clearLocalStore: clearCC } = useContactCenterStore();
 
@@ -168,6 +256,19 @@ export function SettingsPage() {
                 <Badge variant="outline" className="text-xs bg-primary/10 text-primary border-primary/30 font-semibold uppercase">
                   {user?.role || 'admin'}
                 </Badge>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(profileVvcTag);
+                    toast.success(`VVC Profiel Tag gekopieerd: ${profileVvcTag}`);
+                  }}
+                  title="Klik om je persoonlijke VVC API Tag te kopiëren"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-mono text-xs font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 hover:bg-amber-500/25 transition-all cursor-pointer group"
+                >
+                  <Tag className="h-3 w-3 text-amber-500 shrink-0" />
+                  <span>{profileVvcTag}</span>
+                  <Copy className="h-2.5 w-2.5 opacity-60 group-hover:opacity-100 transition-opacity" />
+                </button>
               </div>
               <p className="text-xs sm:text-sm text-muted-foreground">
                 {user?.email || 'info@jamaldrenthe.com'}
@@ -187,7 +288,7 @@ export function SettingsPage() {
                 <span>•</span>
                 <span className="text-emerald-500 font-medium flex items-center gap-1">
                   <CheckCircle2 className="h-3 w-3" />
-                  Account Actief
+                  Opgeslagen als CRM Contact
                 </span>
               </div>
             </div>
@@ -296,22 +397,108 @@ export function SettingsPage() {
         {/* TAB 1: PROFILE */}
         {/* ===================================================================== */}
         <TabsContent value="profile" className="space-y-5 animate-in fade-in duration-200">
+          {/* VVC API Tag & CRM Contact Koppeling Card in Profile */}
+          <Card className="rounded-3xl border-amber-500/30 bg-amber-500/[0.04] backdrop-blur-xl shadow-xs">
+            <CardHeader className="p-5 sm:p-6 pb-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                    <Tag className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base sm:text-lg font-bold flex items-center gap-2">
+                      <span>Unieke VVC API Tag &amp; CRM Contactprofiel</span>
+                      <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-[11px]">
+                        Actief Gekoppeld
+                      </Badge>
+                    </CardTitle>
+                    <CardDescription className="text-xs text-muted-foreground mt-0.5">
+                      Bij aanmelding zijn jouw gegevens direct opgeslagen als Contact in het CRM met onderstaande unieke VVC-tag standaard gekoppeld.
+                    </CardDescription>
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    navigate(
+                      linkedCrmContact
+                        ? `/crm/contacts?id=${linkedCrmContact.id}`
+                        : '/crm/contacts'
+                    )
+                  }
+                  className="rounded-full text-xs gap-1.5 h-8 border-amber-500/30 hover:bg-amber-500/10"
+                >
+                  <ExternalLink className="h-3.5 w-3.5 text-amber-500" />
+                  <span>Bekijk in CRM Contacten</span>
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="p-5 sm:p-6 pt-0 space-y-3">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-3.5 rounded-2xl bg-background/80 border border-amber-500/25">
+                <div className="space-y-1">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block">
+                    Jouw Persoonlijke VVC API Tag (Profiel &amp; CRM Contact)
+                  </span>
+                  <div className="flex items-center gap-2 font-mono text-sm sm:text-base font-bold text-amber-700 dark:text-amber-400">
+                    <Tag className="h-4 w-4 text-amber-500 shrink-0" />
+                    <span>{profileVvcTag}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      navigator.clipboard.writeText(profileVvcTag);
+                      toast.success(`VVC API Tag gekopieerd: ${profileVvcTag}`);
+                    }}
+                    className="rounded-xl text-xs h-9 px-3.5 gap-1.5 border-amber-500/30 hover:bg-amber-500/15 text-amber-700 dark:text-amber-400 font-semibold"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                    <span>Kopieer VVC Tag</span>
+                  </Button>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground px-1">
+                <span>
+                  Standaard tags op jouw CRM Contact:{' '}
+                  <strong className="font-mono text-foreground">{profileVvcTag}</strong>,{' '}
+                  <strong className="text-foreground">Aanmelding</strong>,{' '}
+                  <strong className="text-foreground">CRMos Profiel</strong>
+                </span>
+                <span className="font-mono text-[10px] text-emerald-600 dark:text-emerald-400">
+                  GET /api/vvc/lookup?tag={profileVvcTag}
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+
           <Card className="rounded-3xl border-border/60 bg-card/70 backdrop-blur-xl">
             <CardHeader className="p-5 sm:p-6 pb-2">
               <CardTitle className="text-lg font-bold">Persoonlijke Gegevens</CardTitle>
               <CardDescription className="text-xs text-muted-foreground">
-                Beheer je naam, e-mailadres en contactinformatie.
+                Beheer je naam, e-mailadres en contactinformatie. Wijzigingen worden direct gesynchroniseerd met je CRM Contact en VVC API Tag.
               </CardDescription>
             </CardHeader>
             <CardContent className="p-5 sm:p-6 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <Label className="text-xs">Voornaam</Label>
-                  <Input defaultValue={user?.name?.split(' ')[0] || 'Jamal'} className="h-9 text-xs" />
+                  <Input
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    className="h-9 text-xs"
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">Achternaam</Label>
-                  <Input defaultValue={user?.name?.split(' ')[1] || 'Drenthe'} className="h-9 text-xs" />
+                  <Input
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    className="h-9 text-xs"
+                  />
                 </div>
               </div>
 
@@ -321,31 +508,58 @@ export function SettingsPage() {
                     <Mail className="h-3.5 w-3.5 text-muted-foreground" />
                     <span>E-mailadres</span>
                   </Label>
-                  <Input type="email" defaultValue={user?.email || 'info@jamaldrenthe.com'} className="h-9 text-xs" />
+                  <Input
+                    type="email"
+                    value={profileEmail}
+                    onChange={(e) => setProfileEmail(e.target.value)}
+                    className="h-9 text-xs"
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs flex items-center gap-1.5">
                     <Phone className="h-3.5 w-3.5 text-muted-foreground" />
                     <span>Telefoonnummer</span>
                   </Label>
-                  <Input placeholder="+31 6 12345678" defaultValue="+31 6 12345678" className="h-9 text-xs" />
+                  <Input
+                    placeholder="+31 6 12345678"
+                    value={profilePhone}
+                    onChange={(e) => setProfilePhone(e.target.value)}
+                    className="h-9 text-xs"
+                  />
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <Label className="text-xs flex items-center gap-1.5">
-                  <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span>Tijdzone</span>
-                </Label>
-                <select className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs">
-                  <option value="Europe/Amsterdam">Europa / Amsterdam (CET/CEST)</option>
-                  <option value="Europe/London">Londen (GMT/BST)</option>
-                  <option value="America/New_York">Eastern Time (ET)</option>
-                </select>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs flex items-center gap-1.5">
+                    <Tag className="h-3.5 w-3.5 text-amber-500" />
+                    <span>Standaard VVC Tag (Profiel &amp; Contact)</span>
+                  </Label>
+                  <Input
+                    value={profileVvcTag}
+                    readOnly
+                    className="h-9 text-xs font-mono bg-amber-500/5 border-amber-500/25 text-amber-700 dark:text-amber-400"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs flex items-center gap-1.5">
+                    <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span>Tijdzone</span>
+                  </Label>
+                  <select
+                    value={profileTimezone}
+                    onChange={(e) => setProfileTimezone(e.target.value)}
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs h-9"
+                  >
+                    <option value="Europe/Amsterdam">Europa / Amsterdam (CET/CEST)</option>
+                    <option value="Europe/London">Londen (GMT/BST)</option>
+                    <option value="America/New_York">Eastern Time (ET)</option>
+                  </select>
+                </div>
               </div>
 
               <div className="pt-2">
-                <Button onClick={() => toast.success('Profiel succesvol bijgewerkt')} className="rounded-full px-6 h-9 text-xs">
+                <Button onClick={handleSaveProfile} className="rounded-full px-6 h-9 text-xs">
                   <Save className="mr-2 h-3.5 w-3.5" />
                   Wijzigingen Opslaan
                 </Button>
