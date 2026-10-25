@@ -41,6 +41,7 @@ export const COLLECTIONS = {
   TERRITORIES: 'crm_territories',
   D2D_PINS: 'crm_d2d_pins',
   VVC_REGISTRY: 'crm_vvc_registry',
+  VVC_SYNC_CODES: 'vvc_sync_codes',
 };
 
 // ====================================================
@@ -68,32 +69,44 @@ export async function fetchContactsFromFirestore(orgId: string): Promise<Contact
 export async function saveContactToFirestore(contact: Contact, orgId: string): Promise<void> {
   if (!isFirebaseConfigured()) return;
   try {
+    const vvcTag =
+      contact.vvc_tag ||
+      contact.tags?.find((t) => typeof t === 'string' && t.toLowerCase().startsWith('vvc-')) ||
+      `vvc-${contact.id.toLowerCase().replace(/[^a-z0-9_-]/g, '')}`;
+
     const docRef = doc(db, COLLECTIONS.CONTACTS, contact.id);
     await setDoc(docRef, {
       ...contact,
+      vvc_tag: vvcTag,
       org_id: orgId,
       updated_at: new Date().toISOString(),
       _firestore_timestamp: serverTimestamp(),
     }, { merge: true });
 
-    // Registreer unieke VVC communicatie tag direct in crm_vvc_registry voor VVC API communicatie
-    const vvcTag = contact.tags?.find((t) => typeof t === 'string' && t.toLowerCase().startsWith('vvc-'));
-    if (vvcTag) {
-      const regRef = doc(db, COLLECTIONS.VVC_REGISTRY, vvcTag);
-      await setDoc(regRef, {
-        vvc_tag: vvcTag,
-        contact_id: contact.id,
-        first_name: contact.first_name || '',
-        last_name: contact.last_name || '',
-        email: contact.email || '',
-        phone: contact.phone || '',
-        company: contact.company || '',
-        status: contact.status || 'lead',
-        org_id: orgId,
-        updated_at: new Date().toISOString(),
-        _firestore_timestamp: serverTimestamp(),
-      }, { merge: true });
-    }
+    // Registreer unieke VVC communicatie tag direct in zowel vvc_sync_codes als crm_vvc_registry voor VVC API communicatie
+    const vvcPayload = {
+      vvc_tag: vvcTag,
+      registration_type: 'contact',
+      entity_id: contact.id,
+      contact_id: contact.id,
+      first_name: contact.first_name || '',
+      last_name: contact.last_name || '',
+      full_name: `${contact.first_name || ''} ${contact.last_name || ''}`.trim(),
+      email: contact.email || '',
+      phone: contact.phone || contact.mobile || '',
+      company: contact.company || contact.company_name || '',
+      title: contact.title || '',
+      status: contact.status || 'lead',
+      source: contact.source || 'CRMos',
+      location: contact.address?.city || '',
+      org_id: orgId,
+      created_at: contact.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      _firestore_timestamp: serverTimestamp(),
+    };
+
+    await setDoc(doc(db, COLLECTIONS.VVC_SYNC_CODES, vvcTag), vvcPayload, { merge: true });
+    await setDoc(doc(db, COLLECTIONS.VVC_REGISTRY, vvcTag), vvcPayload, { merge: true });
   } catch (err) {
     console.error('Fout bij opslaan van contact in Firestore:', err);
   }
@@ -345,13 +358,44 @@ export function subscribeToActivities(
 export async function saveCandidateToFirestore(candidate: Candidate, orgId: string): Promise<void> {
   if (!isFirebaseConfigured()) return;
   try {
+    const vvcTag =
+      candidate.vvc_tag ||
+      `vvc-cand-${candidate.id.toLowerCase().replace(/[^a-z0-9_-]/g, '')}`;
+
     const docRef = doc(db, COLLECTIONS.CANDIDATES, candidate.id);
     await setDoc(docRef, {
       ...candidate,
+      vvc_tag: vvcTag,
       org_id: orgId,
       updated_at: new Date().toISOString(),
       _firestore_timestamp: serverTimestamp(),
     }, { merge: true });
+
+    // Registreer kandidaat-aanmelding direct in vvc_sync_codes en crm_vvc_registry zodat VVC de gegevens via API kan ophalen
+    const vvcPayload = {
+      vvc_tag: vvcTag,
+      registration_type: 'candidate',
+      entity_id: candidate.id,
+      candidate_id: candidate.id,
+      first_name: candidate.first_name || '',
+      last_name: candidate.last_name || '',
+      full_name: `${candidate.first_name || ''} ${candidate.last_name || ''}`.trim(),
+      email: candidate.email || '',
+      phone: candidate.phone || '',
+      company: candidate.company_name || 'Kandidaat Aanmelding',
+      status: candidate.status || 'new',
+      source: candidate.source || 'Recruitment',
+      location: candidate.location || '',
+      skills: candidate.skills || [],
+      experience_years: candidate.experience_years || 0,
+      org_id: orgId,
+      created_at: candidate.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      _firestore_timestamp: serverTimestamp(),
+    };
+
+    await setDoc(doc(db, COLLECTIONS.VVC_SYNC_CODES, vvcTag), vvcPayload, { merge: true });
+    await setDoc(doc(db, COLLECTIONS.VVC_REGISTRY, vvcTag), vvcPayload, { merge: true });
   } catch (err) {
     console.error('Fout bij opslaan van kandidaat:', err);
   }

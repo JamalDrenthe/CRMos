@@ -101,10 +101,11 @@ service cloud.firestore {
 
     // VVC Ecosysteem Koppeling: Veilige sync-codes
     match /vvc_sync_codes/{codeId} {
-      // Iedereen met de unieke code mag dát specifieke document ophalen
+      // Iedereen met de unieke code mag dát specifieke document ophalen via de API
       allow get: if true;
       allow list: if false; // Voorkomt dat iemand de hele lijst kan opvragen
-      allow write: if isAdmin(); // Alleen beheerder mag codes aanmaken/bewerken
+      allow write: if isAuthenticated();
+      allow create: if request.resource.data.keys().hasAll(['vvc_tag', 'email']);
     }
 
     // VVC API Registry: Unieke vvc_tag registraties voor VVC API & onboarding

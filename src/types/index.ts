@@ -33,6 +33,7 @@ export interface User {
   is_super_admin?: boolean;
   allowed_companies?: string[];
   phone?: string;
+  vvc_tag?: string;
   timezone: string;
   created_at: string;
 }
@@ -73,6 +74,7 @@ export interface Candidate {
   company_name?: string;
   allowed_companies?: string[];
   is_crmos_core?: boolean;
+  vvc_tag?: string;
   first_name: string;
   last_name: string;
   email: string;
@@ -130,6 +132,7 @@ export interface Contact {
   org_id?: string;
   company_name?: string;
   allowed_companies?: string[];
+  vvc_tag?: string;
   first_name: string;
   last_name: string;
   email: string;
@@ -211,6 +214,7 @@ export interface Deal {
   company_name?: string;
   allowed_companies?: string[];
   is_crmos_core?: boolean;
+  vvc_tag?: string;
   name: string;
   company_id: string;
   contact_id?: string;

@@ -10,6 +10,7 @@ import { useCRMStore } from '@/stores/crmStore';
 import { useAuthStore } from '@/stores/authStore';
 import { filterRecordsForUser, isCoreEcosystemCompany } from '@/lib/companyAccess';
 import type { Candidate } from '@/types';
+import { getVvcTag } from '@/services/vvcTagService';
 import {
   Plus,
   Search,
@@ -26,6 +27,9 @@ import {
   Trash2,
   Eye,
   CheckCircle2,
+  Tag,
+  Copy,
+  RefreshCw,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -55,7 +59,7 @@ const stages = [
 ];
 
 export function CandidatesPage() {
-  const { candidates, moveCandidate, addCandidate, deleteCandidate } = useRecruitmentStore();
+  const { candidates, moveCandidate, addCandidate, deleteCandidate, ensureVvcTagsOnAllCandidates } = useRecruitmentStore();
   const { addActivity, addContact } = useCRMStore();
   const { user, organization, adminCompanyFilter } = useAuthStore();
 
@@ -99,14 +103,30 @@ export function CandidatesPage() {
   );
 
   const filteredCandidates = useMemo(() => {
+    const q = searchQuery.toLowerCase();
     return accessibleCandidates.filter(
       (candidate) =>
-        candidate.first_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        candidate.last_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        candidate.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (candidate.skills && candidate.skills.some((s) => s.toLowerCase().includes(searchQuery.toLowerCase())))
+        candidate.first_name.toLowerCase().includes(q) ||
+        candidate.last_name.toLowerCase().includes(q) ||
+        candidate.email.toLowerCase().includes(q) ||
+        candidate.vvc_tag?.toLowerCase().includes(q) ||
+        (candidate.skills && candidate.skills.some((s) => s.toLowerCase().includes(q)))
     );
   }, [accessibleCandidates, searchQuery]);
+
+  const vvcTaggedCandidatesCount = useMemo(
+    () => accessibleCandidates.filter((c) => Boolean(getVvcTag(c))).length,
+    [accessibleCandidates]
+  );
+
+  const handleSyncCandidateVvcTags = () => {
+    const updated = ensureVvcTagsOnAllCandidates();
+    if (updated > 0) {
+      toast.success(`${updated} kandidaat-aanmelding(en) voorzien van unieke VVC API tag!`);
+    } else {
+      toast.info('Alle kandidaten hebben al een unieke VVC API tag.');
+    }
+  };
 
   const totalPages = Math.max(1, Math.ceil(filteredCandidates.length / pageSize));
   const paginatedCandidates = useMemo(() => {
@@ -133,7 +153,7 @@ export function CandidatesPage() {
       toast.error('Vul voor- en achternaam in');
       return;
     }
-    addCandidate({
+    const created = addCandidate({
       ...newCandidate,
       org_id: organization?.id || 'default_org',
       company_name: userCompanyName,
@@ -154,7 +174,7 @@ export function CandidatesPage() {
       location: '',
       source: 'Manual',
     });
-    toast.success('Kandidaat succesvol toegevoegd');
+    toast.success(`Kandidaat aangemeld! Unieke VVC API Tag: ${created.vvc_tag || getVvcTag(created)}`);
   };
 
   // Recruitment to Revenue: Convert candidate to active sales agent / team contact
@@ -232,6 +252,32 @@ export function CandidatesPage() {
           <Badge className={stage?.color.replace('bg-', 'bg-opacity-20 text-') || ''}>
             {stage?.name || row.original.status}
           </Badge>
+        );
+      },
+    },
+    {
+      accessorKey: 'vvc_tag',
+      header: 'VVC API Tag',
+      cell: ({ row }: { row: { original: Candidate } }) => {
+        const vvcTag = getVvcTag(row.original);
+        if (!vvcTag) {
+          return <span className="text-[11px] text-muted-foreground italic">Niet gekoppeld</span>;
+        }
+        return (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              navigator.clipboard.writeText(vvcTag);
+              toast.success(`VVC kandidaat-tag gekopieerd: ${vvcTag}`);
+            }}
+            title="Klik om unieke VVC API tag te kopiëren"
+            className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md font-mono text-[11px] font-medium bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/25 hover:bg-amber-500/20 transition-all cursor-pointer group"
+          >
+            <Tag className="h-3 w-3 shrink-0 text-amber-500" />
+            <span>{vvcTag}</span>
+            <Copy className="h-2.5 w-2.5 opacity-50 group-hover:opacity-100 transition-opacity" />
+          </button>
         );
       },
     },
@@ -451,6 +497,15 @@ export function CandidatesPage() {
                     />
                   </div>
                 </div>
+                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-800 dark:text-amber-300 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Tag className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                    <span>Unieke VVC API tag wordt automatisch aangemaakt voor deze aanmelding</span>
+                  </div>
+                  <Badge variant="outline" className="text-[10px] bg-background border-amber-500/30 text-amber-700 dark:text-amber-400 font-mono">
+                    vvc-cand-auto
+                  </Badge>
+                </div>
                 <Button onClick={handleAddCandidate}>Add Candidate</Button>
               </div>
           </DialogContent>
@@ -497,6 +552,27 @@ export function CandidatesPage() {
                 : `Strikte data-isolatie actief: Deze kandidaten zijn uitsluitend zichtbaar voor recruiters en medewerkers van ${userCompanyName}.`}
             </p>
           </div>
+        </div>
+
+        {/* VVC API Link Status for Candidate Registrations */}
+        <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-xs">
+            <Tag className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+            <span className="font-semibold text-amber-700 dark:text-amber-400">
+              VVC API Link: {vvcTaggedCandidatesCount}/{accessibleCandidates.length}
+            </span>
+          </div>
+          {vvcTaggedCandidatesCount < accessibleCandidates.length && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleSyncCandidateVvcTags}
+              className="h-8 rounded-xl text-xs gap-1.5 border-amber-500/30 text-amber-700 dark:text-amber-400 hover:bg-amber-500/10 shadow-xs"
+            >
+              <RefreshCw className="h-3 w-3" />
+              <span>Koppel Tags</span>
+            </Button>
+          )}
         </div>
       </div>
 
@@ -663,6 +739,22 @@ export function CandidatesPage() {
                               {candidate.first_name} {candidate.last_name}
                             </p>
                             <p className="text-xs text-muted-foreground truncate">{candidate.email}</p>
+                            {getVvcTag(candidate) && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const t = getVvcTag(candidate)!;
+                                  navigator.clipboard.writeText(t);
+                                  toast.success(`VVC tag gekopieerd: ${t}`);
+                                }}
+                                title="Kopieer VVC API tag"
+                                className="mt-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-mono text-[10px] font-medium bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 hover:bg-amber-500/20 transition-colors"
+                              >
+                                <Tag className="h-2.5 w-2.5 text-amber-500 shrink-0" />
+                                <span className="truncate max-w-[140px]">{getVvcTag(candidate)}</span>
+                              </button>
+                            )}
                             {candidate.skills && candidate.skills.length > 0 && (
                               <div className="mt-2 flex flex-wrap gap-1">
                                 {candidate.skills.slice(0, 2).map((skill) => (
@@ -731,6 +823,34 @@ export function CandidatesPage() {
           </DialogHeader>
           {viewingCandidate && (
             <div className="space-y-4 py-2 text-sm">
+              {/* VVC API Communicatie Tag voor Kandidaat Aanmelding */}
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Tag className="h-4 w-4 text-amber-500 shrink-0" />
+                  <div className="min-w-0">
+                    <span className="text-[10px] uppercase tracking-wider font-bold text-amber-700 dark:text-amber-400 block">
+                      Unieke VVC API Tag (Aanmelding)
+                    </span>
+                    <span className="font-mono text-xs font-semibold text-foreground truncate block">
+                      {getVvcTag(viewingCandidate) || `vvc-cand-${viewingCandidate.id}`}
+                    </span>
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    const tag = getVvcTag(viewingCandidate) || `vvc-cand-${viewingCandidate.id}`;
+                    navigator.clipboard.writeText(tag);
+                    toast.success(`VVC API tag gekopieerd: ${tag}`);
+                  }}
+                  className="h-7 text-xs px-2.5 gap-1.5 border-amber-500/30 text-amber-700 dark:text-amber-400 hover:bg-amber-500/15 shrink-0"
+                >
+                  <Copy className="h-3 w-3" />
+                  <span>Kopieer Tag</span>
+                </Button>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div className="p-3 rounded-xl border border-border/50 bg-card">
                   <span className="text-[11px] text-muted-foreground block mb-1">Status / Fase</span>

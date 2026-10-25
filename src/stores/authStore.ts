@@ -112,13 +112,15 @@ export const useAuthStore = create<AuthState>()(
               created_at: new Date().toISOString(),
             };
 
+            const userId = `user_${Math.random().toString(36).substring(2, 8)}`;
             const mockUser: User = {
-              id: `user_${Math.random().toString(36).substring(2, 8)}`,
+              id: userId,
               email,
               name,
               role,
               org_id: orgId,
               company_name: companyName || `${name}'s Bedrijf`,
+              vvc_tag: `vvc-usr-${userId.replace(/[^a-z0-9]/g, '')}`,
               allowed_companies: [companyName || `${name}'s Bedrijf`],
               timezone: 'Europe/Amsterdam',
               created_at: new Date().toISOString(),

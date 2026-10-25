@@ -226,22 +226,32 @@ export async function syncFirebaseUserWithFirestore(
     existingUserData.is_super_admin === true;
 
   const userRole: User['role'] = isSuperAdmin ? 'admin' : ((existingUserData.role as User['role']) || 'admin');
+  const userVvcTag =
+    (existingUserData.vvc_tag as string) ||
+    `vvc-usr-${fbUser.uid.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10)}`;
+
+  const fullName =
+    fbUser.displayName || fbUser.email?.split('@')[0] || (isSuperAdmin ? 'Jamal Drenthe' : 'CRMos Gebruiker');
+  const nameParts = fullName.trim().split(/\s+/);
+  const firstName = nameParts[0] || fullName;
+  const lastName = nameParts.slice(1).join(' ') || '';
 
   // App User object
   const appUser: User = {
     id: fbUser.uid,
     email: fbUser.email || '',
-    name: fbUser.displayName || fbUser.email?.split('@')[0] || (isSuperAdmin ? 'Jamal Drenthe' : 'CRMos Gebruiker'),
+    name: fullName,
     avatar: fbUser.photoURL || undefined,
     role: userRole,
     org_id: org.id,
     company_name: effectiveCompanyName,
     is_super_admin: isSuperAdmin,
+    vvc_tag: userVvcTag,
     allowed_companies: isCoreEcosystem
       ? ['CRMos', 'VVC', 'Quantum Initium', 'Logs Rent', 'Djobba', 'Trusting Work']
       : [effectiveCompanyName],
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Amsterdam',
-    created_at: new Date().toISOString(),
+    created_at: (existingUserData.created_at as string) || new Date().toISOString(),
   };
 
   try {
@@ -254,8 +264,30 @@ export async function syncFirebaseUserWithFirestore(
       },
       { merge: true }
     );
+
+    // Synchroniseer account-aanmelding direct naar vvc_sync_codes & crm_vvc_registry zodat VVC deze via API kan ophalen
+    const vvcPayload = {
+      vvc_tag: userVvcTag,
+      registration_type: 'account',
+      entity_id: fbUser.uid,
+      first_name: firstName,
+      last_name: lastName,
+      full_name: fullName,
+      email: appUser.email,
+      company: effectiveCompanyName,
+      role: userRole,
+      status: 'active',
+      source: 'CRMos Account Aanmelding',
+      org_id: org.id,
+      created_at: appUser.created_at,
+      updated_at: new Date().toISOString(),
+      _firestore_timestamp: serverTimestamp(),
+    };
+
+    await setDoc(doc(db, 'vvc_sync_codes', userVvcTag), vvcPayload, { merge: true });
+    await setDoc(doc(db, 'crm_vvc_registry', userVvcTag), vvcPayload, { merge: true });
   } catch (error) {
-    console.warn('Kon gebruikersdocument niet bijwerken in Firestore:', error);
+    console.warn('Kon gebruikersdocument of VVC registratie niet bijwerken in Firestore:', error);
   }
 
   return { user: appUser, org };

@@ -52,7 +52,13 @@ import {
   Tag,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { getVvcTagStats } from '@/services/vvcTagService';
+import {
+  getVvcTagStats,
+  getVvcTag,
+  fetchAanmeldingByVvcTag,
+  getVvcFirestoreRestApiUrl,
+  type VvcSyncRecord,
+} from '@/services/vvcTagService';
 import {
   syncAllDataFromHubSpot,
   loadHubSpotConfigFromFirestore,
@@ -268,17 +274,46 @@ export function IntegrationsPage() {
   const { organization, user } = useAuthStore();
   const orgId = organization?.id || user?.org_id || 'default_org';
   const { contacts, setContacts, setCompanies, setDeals, setActivities, clearLocalStore: clearCRM, ensureVvcTagsOnAllContacts } = useCRMStore();
-  const { clearLocalStore: clearRec } = useRecruitmentStore();
+  const { candidates, clearLocalStore: clearRec, ensureVvcTagsOnAllCandidates } = useRecruitmentStore();
   const { setCalls, clearLocalStore: clearCC } = useContactCenterStore();
 
-  const vvcStats = useMemo(() => getVvcTagStats(contacts), [contacts]);
+  const vvcStats = useMemo(() => getVvcTagStats(contacts, candidates), [contacts, candidates]);
+  const [vvcTestTagInput, setVvcTestTagInput] = useState('');
+  const [vvcLookupResult, setVvcLookupResult] = useState<VvcSyncRecord | null>(null);
+  const [isLookingUpVvc, setIsLookingUpVvc] = useState(false);
 
   const handleSyncVvcTags = () => {
-    const updated = ensureVvcTagsOnAllContacts();
-    if (updated > 0) {
-      toast.success(`${updated} contact(en) voorzien van unieke VVC communicatie tags!`);
+    const updatedContactsCount = ensureVvcTagsOnAllContacts();
+    const updatedCandidatesCount = ensureVvcTagsOnAllCandidates();
+    const totalUpdated = updatedContactsCount + updatedCandidatesCount;
+    if (totalUpdated > 0) {
+      toast.success(`${totalUpdated} aanmelding(en) voorzien van unieke VVC API tags & gesynchroniseerd!`);
     } else {
-      toast.info('Alle contacten hebben al een unieke VVC communicatie tag.');
+      toast.info('Alle contacten en kandidaten hebben al een unieke VVC API tag.');
+    }
+  };
+
+  const handleTestVvcLookup = async (overrideTag?: string) => {
+    const targetTag = (overrideTag ?? vvcTestTagInput).trim();
+    if (!targetTag) {
+      toast.error('Voer een unieke VVC tag in (bijv. vvc-xxx)');
+      return;
+    }
+    setVvcTestTagInput(targetTag);
+    setIsLookingUpVvc(true);
+    try {
+      const result = await fetchAanmeldingByVvcTag(targetTag, contacts, candidates);
+      if (result) {
+        setVvcLookupResult(result);
+        toast.success(`Aanmelding succesvol opgehaald via VVC tag: ${result.vvc_tag}`);
+      } else {
+        setVvcLookupResult(null);
+        toast.error(`Geen aanmelding gevonden voor tag: ${targetTag}`);
+      }
+    } catch {
+      toast.error('Fout bij ophalen van aanmelding via VVC API.');
+    } finally {
+      setIsLookingUpVvc(false);
     }
   };
 
@@ -1381,7 +1416,7 @@ export function IntegrationsPage() {
                     <div className="flex items-center gap-2">
                       <Tag className="h-4 w-4 text-amber-500" />
                       <span className="font-semibold text-xs text-amber-800 dark:text-amber-300">
-                        VVC Contact Communicatie Tags
+                        VVC Aanmeldingen &amp; Unieke API Tags
                       </span>
                     </div>
                     <Badge variant="outline" className="text-[10px] bg-background border-amber-500/30 text-amber-700 dark:text-amber-400">
@@ -1389,12 +1424,11 @@ export function IntegrationsPage() {
                     </Badge>
                   </div>
                   <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    CRMos kent aan ieder contact automatisch een unieke identificatietag toe (<code>vvc-xxx</code>). 
-                    Hiermee kan het VVC Referral Netwerk gericht communiceren via de CRMos API.
+                    Voor elke aanmelding (Contact, Kandidaat, Accountregistratie of Field Sale) maakt CRMos automatisch een unieke tag aan (<code>vvc-xxx</code>) en slaat deze op in <code>vvc_sync_codes</code> &amp; <code>crm_vvc_registry</code> zodat VVC de gegevens direct via de API kan ophalen.
                   </p>
                   <div className="flex items-center justify-between gap-2 pt-1">
-                    <div className="text-[11px] font-mono text-muted-foreground truncate">
-                      <code>GET /v1/contacts?tag=vvc-xxx</code>
+                    <div className="text-[10px] font-mono text-muted-foreground truncate">
+                      Contacten: {vvcStats.contactsTagged}/{vvcStats.contactsTotal} • Kandidaten: {vvcStats.candidatesTagged}/{vvcStats.candidatesTotal}
                     </div>
                     <Button
                       size="sm"
@@ -1405,6 +1439,84 @@ export function IntegrationsPage() {
                       <RefreshCw className="h-3 w-3" />
                       <span>Synchroniseer Tags</span>
                     </Button>
+                  </div>
+
+                  {/* Live VVC API Lookup Tester */}
+                  <div className="pt-2 border-t border-amber-500/20 space-y-2">
+                    <Label className="text-[11px] font-bold text-amber-800 dark:text-amber-300 flex items-center justify-between">
+                      <span>Test VVC API Ophalen (op basis van VVC Tag)</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const sampleTag = vvcTestTagInput.trim() || getVvcTag(contacts[0]) || 'vvc-demo-c1';
+                          handleCopyText(getVvcFirestoreRestApiUrl(sampleTag), 'VVC Cloud API URL');
+                        }}
+                        className="text-[10px] font-normal underline hover:text-foreground inline-flex items-center gap-1"
+                      >
+                        <Copy className="h-2.5 w-2.5" />
+                        <span>Kopieer Cloud API URL</span>
+                      </button>
+                    </Label>
+                    <div className="flex gap-1.5">
+                      <Input
+                        value={vvcTestTagInput}
+                        onChange={(e) => setVvcTestTagInput(e.target.value)}
+                        placeholder={getVvcTag(contacts[0]) || 'bijv. vvc-demo-c1'}
+                        className="h-8 font-mono text-xs bg-background"
+                      />
+                      <Button
+                        size="sm"
+                        onClick={() => handleTestVvcLookup()}
+                        disabled={isLookingUpVvc}
+                        className="h-8 px-3 text-xs shrink-0 bg-amber-600 hover:bg-amber-700 text-white"
+                      >
+                        {isLookingUpVvc ? 'Ophalen...' : 'API Test'}
+                      </Button>
+                    </div>
+
+                    {/* Quick Tag Chips from existing registrations */}
+                    {(contacts.length > 0 || candidates.length > 0) && (
+                      <div className="flex flex-wrap gap-1 pt-0.5">
+                        {contacts.slice(0, 3).map((c) => {
+                          const tag = getVvcTag(c);
+                          if (!tag) return null;
+                          return (
+                            <button
+                              key={c.id}
+                              type="button"
+                              onClick={() => handleTestVvcLookup(tag)}
+                              className="text-[10px] font-mono px-2 py-0.5 rounded bg-background/80 border border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 transition-colors"
+                            >
+                              {tag} ({c.first_name})
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {vvcLookupResult && (
+                      <div className="p-2.5 rounded-xl bg-background border border-amber-500/30 text-[10px] font-mono space-y-1 max-h-36 overflow-y-auto">
+                        <div className="flex items-center justify-between text-emerald-600 dark:text-emerald-400 font-sans font-semibold text-[11px]">
+                          <span>✓ Gevonden via VVC API ({vvcLookupResult.registration_type})</span>
+                          <span>{vvcLookupResult.vvc_tag}</span>
+                        </div>
+                        <pre className="text-[10px] text-muted-foreground whitespace-pre-wrap break-all">
+                          {JSON.stringify(
+                            {
+                              vvc_tag: vvcLookupResult.vvc_tag,
+                              type: vvcLookupResult.registration_type,
+                              full_name: vvcLookupResult.full_name,
+                              email: vvcLookupResult.email,
+                              phone: vvcLookupResult.phone,
+                              company: vvcLookupResult.company,
+                              status: vvcLookupResult.status,
+                            },
+                            null,
+                            2
+                          )}
+                        </pre>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

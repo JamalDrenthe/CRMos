@@ -3,11 +3,12 @@ import react from "@vitejs/plugin-react"
 import { defineConfig } from "vite"
 import { inspectAttr } from 'kimi-plugin-inspect-react'
 import { twilioProxyPlugin } from './src/server/twilioProxyPlugin'
+import { vvcApiPlugin } from './src/server/vvcApiPlugin'
 
 // https://vite.dev/config/
 export default defineConfig({
   base: '/',
-  plugins: [inspectAttr(), react(), twilioProxyPlugin()],
+  plugins: [inspectAttr(), react(), twilioProxyPlugin(), vvcApiPlugin()],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

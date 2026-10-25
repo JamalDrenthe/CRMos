@@ -15,6 +15,7 @@ import type { D2DAddressPin } from '@/types';
 import { useD2DStore } from '@/stores/d2dStore';
 import { useCRMStore } from '@/stores/crmStore';
 import { useAuthStore } from '@/stores/authStore';
+import { getVvcTag, syncVvcRecordToCloud } from '@/services/vvcTagService';
 import { toast } from 'sonner';
 import {
   Building2,
@@ -30,6 +31,8 @@ import {
   ShieldCheck,
   Briefcase,
   Check,
+  Tag,
+  Copy,
 } from 'lucide-react';
 
 interface SalesdockSaleModalProps {
@@ -125,6 +128,7 @@ export function SalesdockSaleModal({
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [completedOrderId, setCompletedOrderId] = useState<string | null>(null);
+  const [completedVvcTag, setCompletedVvcTag] = useState<string | null>(null);
 
   // Step 1: Bedrijf & Beslisser
   const [companyName, setCompanyName] = useState('');
@@ -302,6 +306,7 @@ export function SalesdockSaleModal({
           (email && c.email.toLowerCase() === email.toLowerCase())
       );
       let contactId = existingContact?.id;
+      let vvcTag = existingContact ? getVvcTag(existingContact) : undefined;
       if (!existingContact) {
         const newContact = addContact({
           first_name: firstName,
@@ -324,6 +329,34 @@ export function SalesdockSaleModal({
           custom_fields: {},
         });
         contactId = newContact.id;
+        vvcTag = newContact.vvc_tag || getVvcTag(newContact) || `vvc-${newContact.id}`;
+      } else if (!vvcTag) {
+        vvcTag = `vvc-${existingContact.id}`;
+      }
+
+      // Synchroniseer de volledige aanmelding & sale naar vvc_sync_codes en crm_vvc_registry voor VVC API ophalen
+      if (vvcTag) {
+        await syncVvcRecordToCloud({
+          vvc_tag: vvcTag,
+          registration_type: 'field_sale',
+          entity_id: contactId || orderId,
+          first_name: firstName,
+          last_name: lastName,
+          full_name: `${salutation} ${firstName} ${lastName}`.trim(),
+          email: email || `${firstName.toLowerCase()}@${companyName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'bedrijf'}.nl`,
+          phone: phone || pin.business_phone || '',
+          company: companyName,
+          title: decisionMakerRole,
+          status: 'customer',
+          source: 'Field D2D - Salesdock',
+          location: `${pin.street} ${pin.house_number}, ${pin.postal_code} ${pin.city}`,
+          deal_value: totalContractValue,
+          order_id: orderId,
+          kvk_number: kvkNumber || undefined,
+          org_id: user?.org_id || 'default_org',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        });
       }
 
       // 4. Maak een Deal aan in het CRM (in stage 'closed-won')
@@ -341,14 +374,16 @@ export function SalesdockSaleModal({
         source: 'Field D2D - Salesdock',
         assigned_to: user?.id || 'current_user',
         assigned_name: repName,
-        tags: ['Field Sale', 'Salesdock Order', `#${orderId}`],
+        vvc_tag: vvcTag,
+        tags: vvcTag ? ['Field Sale', 'Salesdock Order', `#${orderId}`, vvcTag] : ['Field Sale', 'Salesdock Order', `#${orderId}`],
         activities: [],
         expected_close_date: new Date().toISOString(),
         actual_close_date: new Date().toISOString(),
       });
 
       setCompletedOrderId(orderId);
-      toast.success(`🎉 Sale geregistreerd! Order #${orderId} is definitief verwerkt`);
+      setCompletedVvcTag(vvcTag || null);
+      toast.success(`🎉 Sale geregistreerd! Order #${orderId} • VVC Tag: ${vvcTag}`);
 
       if (onSaleCompleted && updatedPin) {
         onSaleCompleted(updatedPin, orderId);
@@ -467,6 +502,25 @@ export function SalesdockSaleModal({
                     <span>Totale Contractwaarde:</span>
                     <span>€{totalContractValue.toLocaleString('nl-NL')}</span>
                   </div>
+                  {completedVvcTag && (
+                    <div className="flex justify-between items-center pt-2.5 border-t border-amber-500/30">
+                      <span className="text-amber-700 dark:text-amber-400 font-semibold flex items-center gap-1.5">
+                        <Tag className="h-3.5 w-3.5 text-amber-500" />
+                        <span>Unieke VVC API Tag:</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(completedVvcTag);
+                          toast.success(`VVC API tag gekopieerd: ${completedVvcTag}`);
+                        }}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/15 text-amber-700 dark:text-amber-300 font-mono text-xs font-bold border border-amber-500/30 hover:bg-amber-500/25 transition-colors cursor-pointer"
+                      >
+                        <span>{completedVvcTag}</span>
+                        <Copy className="h-3 w-3" />
+                      </button>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 

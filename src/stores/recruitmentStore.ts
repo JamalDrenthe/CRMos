@@ -11,6 +11,11 @@ import {
 } from '@/services/firestoreService';
 import { useAuthStore } from '@/stores/authStore';
 import { isFirebaseConfigured } from '@/lib/firebase';
+import {
+  ensureCandidateVvcTag,
+  ensureAllCandidatesHaveVvcTags,
+  getVvcTag,
+} from '@/services/vvcTagService';
 
 if (typeof window !== 'undefined') {
   window.localStorage.removeItem('crmos-recruitment-storage');
@@ -55,6 +60,7 @@ interface RecruitmentState {
 
   searchCandidates: (query: string) => Candidate[];
   searchJobs: (query: string) => Job[];
+  ensureVvcTagsOnAllCandidates: () => number;
 }
 
 export const useRecruitmentStore = create<RecruitmentState>()(
@@ -76,7 +82,18 @@ export const useRecruitmentStore = create<RecruitmentState>()(
         const unsubs: (() => void)[] = [];
 
         const unsubCandidates = subscribeToCandidates(orgId, (firestoreCandidates) => {
-          set({ candidates: firestoreCandidates || [] });
+          const rawCandidates = firestoreCandidates || [];
+          const { updatedCandidates, changedCount } = ensureAllCandidatesHaveVvcTags(rawCandidates);
+          set({ candidates: updatedCandidates });
+
+          if (changedCount > 0 && isFirebaseConfigured()) {
+            updatedCandidates.forEach((candidate) => {
+              const original = rawCandidates.find((c) => c.id === candidate.id);
+              if (original !== candidate) {
+                saveCandidateToFirestore(candidate, orgId);
+              }
+            });
+          }
         });
         unsubs.push(unsubCandidates);
 
@@ -91,12 +108,20 @@ export const useRecruitmentStore = create<RecruitmentState>()(
       },
 
       addCandidate: (candidateData) => {
-        const newCandidate: Candidate = {
+        const existingTags = new Set(
+          get()
+            .candidates.map((c) => getVvcTag(c)?.toLowerCase())
+            .filter(Boolean) as string[]
+        );
+
+        const baseCandidate: Candidate = {
           ...candidateData,
           id: generateId(),
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
+
+        const newCandidate = ensureCandidateVvcTag(baseCandidate, existingTags);
         set((state) => ({ candidates: [...state.candidates, newCandidate] }));
         const orgId = useAuthStore.getState().organization?.id || 'default_org';
         saveCandidateToFirestore(newCandidate, orgId);
@@ -245,6 +270,24 @@ export const useRecruitmentStore = create<RecruitmentState>()(
         return get().candidates.filter((c) => c.status === stage);
       },
 
+      ensureVvcTagsOnAllCandidates: () => {
+        const { candidates } = get();
+        const { updatedCandidates, changedCount } = ensureAllCandidatesHaveVvcTags(candidates);
+        if (changedCount > 0) {
+          const orgId = useAuthStore.getState().organization?.id || 'default_org';
+          set({ candidates: updatedCandidates });
+          if (isFirebaseConfigured()) {
+            updatedCandidates.forEach((candidate) => {
+              const old = candidates.find((c) => c.id === candidate.id);
+              if (old !== candidate) {
+                saveCandidateToFirestore(candidate, orgId);
+              }
+            });
+          }
+        }
+        return changedCount;
+      },
+
       searchCandidates: (query) => {
         const lowerQuery = query.toLowerCase();
         return get().candidates.filter(
@@ -252,6 +295,7 @@ export const useRecruitmentStore = create<RecruitmentState>()(
             c.first_name.toLowerCase().includes(lowerQuery) ||
             c.last_name.toLowerCase().includes(lowerQuery) ||
             c.email.toLowerCase().includes(lowerQuery) ||
+            c.vvc_tag?.toLowerCase().includes(lowerQuery) ||
             c.skills.some((s) => s.toLowerCase().includes(lowerQuery))
         );
       },

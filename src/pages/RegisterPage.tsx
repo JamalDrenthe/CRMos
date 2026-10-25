@@ -6,13 +6,15 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useAuthStore } from '@/stores/authStore';
+import { useCRMStore } from '@/stores/crmStore';
 import { isFirebaseConfigured } from '@/lib/firebase';
 import { ThemeToggle } from '@/components/common/ThemeToggle';
 import { LanguageToggle } from '@/components/common/LanguageToggle';
 import { useTranslation } from '@/stores/languageStore';
-import { Eye, EyeOff, Loader2, AlertCircle, ArrowLeft, Building2, ShieldCheck, Lock } from 'lucide-react';
+import { Eye, EyeOff, Loader2, AlertCircle, ArrowLeft, Building2, ShieldCheck, Lock, Tag } from 'lucide-react';
 import { CRMosLogo } from '@/components/common/CRMosLogo';
 import { validateBusinessEmail, CORE_PARTNER_OPTIONS, isCoreEcosystemCompany } from '@/lib/companyAccess';
+import { toast } from 'sonner';
 import type { User } from '@/types';
 
 export function RegisterPage() {
@@ -56,7 +58,29 @@ export function RegisterPage() {
     setIsGoogleLoading(true);
     setError('');
     try {
-      await loginWithGoogleAction();
+      const { user: registeredUser } = await loginWithGoogleAction();
+      const nameParts = (registeredUser.name || '').trim().split(/\s+/);
+      const firstName = nameParts[0] || registeredUser.name || 'Gebruiker';
+      const lastName = nameParts.slice(1).join(' ') || '';
+
+      const existing = useCRMStore
+        .getState()
+        .contacts.find((c) => c.email.toLowerCase() === registeredUser.email.toLowerCase());
+      if (!existing && registeredUser.email) {
+        const createdContact = useCRMStore.getState().addContact({
+          first_name: firstName,
+          last_name: lastName,
+          email: registeredUser.email,
+          company: registeredUser.company_name || 'CRMos',
+          title: registeredUser.role,
+          status: 'partner',
+          source: 'CRMos Google Aanmelding',
+          vvc_tag: registeredUser.vvc_tag,
+          tags: registeredUser.vvc_tag ? [registeredUser.vvc_tag, 'Aanmelding'] : ['Aanmelding'],
+          custom_fields: { user_id: registeredUser.id },
+        });
+        toast.success(`Welkom! Je unieke VVC API Tag is aangemaakt: ${createdContact.vvc_tag || registeredUser.vvc_tag}`);
+      }
       navigate('/dashboard');
     } catch (error: unknown) {
       const err = error as { code?: string; message?: string };
@@ -102,7 +126,27 @@ export function RegisterPage() {
     setIsLoading(true);
 
     try {
-      await registerWithEmailAction(name, email, password, companyName.trim(), role);
+      const { user: registeredUser } = await registerWithEmailAction(name, email, password, companyName.trim(), role);
+      const nameParts = name.trim().split(/\s+/);
+      const firstName = nameParts[0] || name.trim();
+      const lastName = nameParts.slice(1).join(' ') || '';
+
+      const createdContact = useCRMStore.getState().addContact({
+        first_name: firstName,
+        last_name: lastName,
+        email: email.trim(),
+        company: companyName.trim(),
+        title: role,
+        status: isEcosystemPartner ? 'partner' : 'customer',
+        source: 'CRMos Account Aanmelding',
+        vvc_tag: registeredUser.vvc_tag,
+        tags: registeredUser.vvc_tag ? [registeredUser.vvc_tag, 'Aanmelding'] : ['Aanmelding'],
+        custom_fields: { user_id: registeredUser.id },
+      });
+
+      toast.success(
+        `Welkom bij CRMos! Je unieke VVC API Tag is aangemaakt: ${createdContact.vvc_tag || registeredUser.vvc_tag}`
+      );
       navigate('/dashboard');
     } catch (error: unknown) {
       const err = error as { code?: string; message?: string };
@@ -390,6 +434,22 @@ export function RegisterPage() {
                   <option value="recruiter">ATS Recruiter / Talent Consultant</option>
                   <option value="agent">Contact Center Agent / Buitendienst Sales</option>
                 </select>
+              </div>
+
+              {/* Automatic VVC Tag Assignment Indicator */}
+              <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-between gap-2 text-xs">
+                <div className="flex items-center gap-2 text-amber-800 dark:text-amber-300">
+                  <Tag className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                  <span className="text-[11px] font-medium">
+                    Unieke VVC API Tag wordt bij aanmelding automatisch aangemaakt
+                  </span>
+                </div>
+                <Badge
+                  variant="outline"
+                  className="text-[10px] font-mono bg-background border-amber-500/30 text-amber-700 dark:text-amber-400 shrink-0"
+                >
+                  vvc-usr-auto
+                </Badge>
               </div>
 
               {/* Agreement Checkbox */}
