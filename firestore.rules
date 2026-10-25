@@ -106,5 +106,13 @@ service cloud.firestore {
       allow list: if false; // Voorkomt dat iemand de hele lijst kan opvragen
       allow write: if isAdmin(); // Alleen beheerder mag codes aanmaken/bewerken
     }
+
+    // VVC API Registry: Unieke vvc_tag registraties voor VVC API & onboarding
+    match /crm_vvc_registry/{vvcTag} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+      allow create: if request.resource.data.keys().hasAll(['vvc_tag', 'email']) &&
+                       vvcTag.matches('^vvc-.*');
+    }
   }
 }

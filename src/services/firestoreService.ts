@@ -40,6 +40,7 @@ export const COLLECTIONS = {
   PRODUCTS: 'crm_products',
   TERRITORIES: 'crm_territories',
   D2D_PINS: 'crm_d2d_pins',
+  VVC_REGISTRY: 'crm_vvc_registry',
 };
 
 // ====================================================
@@ -74,6 +75,25 @@ export async function saveContactToFirestore(contact: Contact, orgId: string): P
       updated_at: new Date().toISOString(),
       _firestore_timestamp: serverTimestamp(),
     }, { merge: true });
+
+    // Registreer unieke VVC communicatie tag direct in crm_vvc_registry voor VVC API communicatie
+    const vvcTag = contact.tags?.find((t) => typeof t === 'string' && t.toLowerCase().startsWith('vvc-'));
+    if (vvcTag) {
+      const regRef = doc(db, COLLECTIONS.VVC_REGISTRY, vvcTag);
+      await setDoc(regRef, {
+        vvc_tag: vvcTag,
+        contact_id: contact.id,
+        first_name: contact.first_name || '',
+        last_name: contact.last_name || '',
+        email: contact.email || '',
+        phone: contact.phone || '',
+        company: contact.company || '',
+        status: contact.status || 'lead',
+        org_id: orgId,
+        updated_at: new Date().toISOString(),
+        _firestore_timestamp: serverTimestamp(),
+      }, { merge: true });
+    }
   } catch (err) {
     console.error('Fout bij opslaan van contact in Firestore:', err);
   }
