@@ -98,5 +98,13 @@ service cloud.firestore {
     match /crm_integrations/{integrationId} {
       allow read, write: if isAuthenticated();
     }
+
+    // VVC Ecosysteem Koppeling: Veilige sync-codes
+    match /vvc_sync_codes/{codeId} {
+      // Iedereen met de unieke code mag dát specifieke document ophalen
+      allow get: if true;
+      allow list: if false; // Voorkomt dat iemand de hele lijst kan opvragen
+      allow write: if isAdmin(); // Alleen beheerder mag codes aanmaken/bewerken
+    }
   }
 }
