@@ -119,8 +119,14 @@ export function Footer() {
 
           {/* Pricing & Account */}
           <div>
-            <h4 className="font-semibold tracking-wider text-foreground uppercase text-[11px]">Prijzen &amp; Contact</h4>
+            <h4 className="font-semibold tracking-wider text-foreground uppercase text-[11px]">Prijzen &amp; Carrière</h4>
             <ul className="mt-3.5 space-y-2 text-muted-foreground">
+              <li>
+                <Link to="/careers" className="hover:text-foreground transition-colors font-medium text-primary flex items-center gap-1.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span>Vacatures (13 No Cure No Pay)</span>
+                </Link>
+              </li>
               <li>
                 <Link to="/pricing" className="hover:text-foreground transition-colors">Starter (vanaf €39/mnd)</Link>
               </li>

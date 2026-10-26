@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Contact, Contact360, Company, Deal, Pipeline, Activity, TimelineEvent } from '@/types';
+import type { Contact, Contact360, Company, CompanyInvitation, CRMTeam, TeamStatus, Deal, Pipeline, Activity, TimelineEvent } from '@/types';
 import {
   saveContactToFirestore,
   deleteContactFromFirestore,
@@ -17,11 +17,60 @@ import {
 } from '@/services/firestoreService';
 import { useAuthStore } from '@/stores/authStore';
 import { isFirebaseConfigured } from '@/lib/firebase';
+import { DEFAULT_ECOSYSTEM_COMPANIES, formatCompanyTag } from '@/lib/companyAccess';
 import {
   ensureContactVvcTag,
   ensureAllContactsHaveVvcTags,
   getVvcTag,
 } from '@/services/vvcTagService';
+import {
+  DEFAULT_CRM_TEAMS,
+  deduplicateAndEnrichContactsWithTeams,
+  isReferredByJamal,
+  smartSearchContacts,
+  smartSearchCompanies,
+} from '@/services/crmSearchEngine';
+
+function mergeEcosystemCompanies(existingCompanies: Company[]): {
+  merged: Company[];
+  addedCompanies: Company[];
+} {
+  const result = existingCompanies.map((comp) => {
+    const primaryTag = comp.company_tag || formatCompanyTag(comp.name);
+    const allTags = Array.from(new Set([primaryTag, ...(comp.company_tags || [])].filter(Boolean)));
+    if (comp.company_tag === primaryTag && comp.company_tags?.length === allTags.length) {
+      return comp;
+    }
+    return {
+      ...comp,
+      company_tag: primaryTag,
+      company_tags: allTags,
+    };
+  });
+
+  const addedCompanies: Company[] = [];
+  const now = new Date().toISOString();
+
+  for (const eco of DEFAULT_ECOSYSTEM_COMPANIES) {
+    const exists = result.some(
+      (c) =>
+        c.id === eco.id ||
+        c.name.trim().toLowerCase() === eco.name.trim().toLowerCase() ||
+        (c.company_tag && eco.company_tag && c.company_tag.toLowerCase() === eco.company_tag.toLowerCase())
+    );
+    if (!exists) {
+      const fullCompany: Company = {
+        ...eco,
+        created_at: now,
+        updated_at: now,
+      };
+      result.unshift(fullCompany);
+      addedCompanies.push(fullCompany);
+    }
+  }
+
+  return { merged: result, addedCompanies };
+}
 
 // Clean up legacy mock localStorage key on load
 if (typeof window !== 'undefined') {
@@ -48,6 +97,7 @@ const defaultPipelines: Pipeline[] = [
 
 interface CRMState {
   contacts: Contact[];
+  teams: CRMTeam[];
   companies: Company[];
   deals: Deal[];
   pipelines: Pipeline[];
@@ -58,6 +108,7 @@ interface CRMState {
 
   // Actions
   setContacts: (contacts: Contact[]) => void;
+  setTeams: (teams: CRMTeam[]) => void;
   setCompanies: (companies: Company[]) => void;
   setDeals: (deals: Deal[]) => void;
   setPipelines: (pipelines: Pipeline[]) => void;
@@ -94,9 +145,31 @@ interface CRMState {
   searchContacts: (query: string) => Contact[];
   searchCompanies: (query: string) => Company[];
   searchDeals: (query: string) => Deal[];
+  searchAccountsByCompanyTag: (tagOrQuery: string) => Contact[];
 
-  // VVC API Tag Sync
+  // VVC API Tag, Ecosystem Companies, Custom Tags & Referral Teams Sync
   ensureVvcTagsOnAllContacts: () => number;
+  ensureEcosystemCompaniesInCRM: () => number;
+  ensureTeamsAndCoreReferralsInCRM: () => void;
+  addTagToContact: (contactId: string, tag: string) => void;
+  removeTagFromContact: (contactId: string, tag: string) => void;
+  addCompanyTagToContact: (contactId: string, companyTag: string) => void;
+  removeCompanyTagFromContact: (contactId: string, companyTag: string) => void;
+  inviteContactToCompany: (companyId: string, contactId: string, role?: string) => CompanyInvitation | null;
+  acceptCompanyInvitation: (contactId: string, invitationId: string) => void;
+
+  // Team & Referral Actions
+  assignContactToTeam: (contactId: string, teamIdOrName: string, status?: TeamStatus, role?: 'leader' | 'member') => void;
+  setContactTeamStatus: (contactId: string, status: TeamStatus) => void;
+  setContactReferrer: (contactId: string, referredByName: string) => void;
+  startTeamForContact: (contactId: string, teamName: string, status?: TeamStatus) => {
+    success: boolean;
+    reason?: string;
+    team?: CRMTeam;
+  };
+  requestTeamForContact: (contactId: string, desiredTeamName: string, status?: TeamStatus) => void;
+  approveTeamRequest: (contactId: string) => CRMTeam | null;
+  rejectTeamRequest: (contactId: string) => void;
 
   // Firestore Sync
   isFirestoreSynced: boolean;
@@ -104,11 +177,14 @@ interface CRMState {
   syncWithFirestore: (orgId: string) => () => void;
 }
 
+const initialEnriched = deduplicateAndEnrichContactsWithTeams([], DEFAULT_CRM_TEAMS);
+
 export const useCRMStore = create<CRMState>()(
   persist(
     (set, get) => ({
-      contacts: [],
-      companies: [],
+      contacts: initialEnriched.contacts,
+      teams: initialEnriched.teams,
+      companies: mergeEcosystemCompanies([]).merged,
       deals: [],
       pipelines: defaultPipelines,
       activities: [],
@@ -119,6 +195,7 @@ export const useCRMStore = create<CRMState>()(
       syncStatus: 'idle',
 
       setContacts: (contacts) => set({ contacts }),
+      setTeams: (teams) => set({ teams }),
       setCompanies: (companies) => set({ companies }),
       setDeals: (deals) => set({ deals }),
       setPipelines: (pipelines) => set({ pipelines }),
@@ -126,6 +203,7 @@ export const useCRMStore = create<CRMState>()(
       clearLocalStore: () =>
         set({
           contacts: [],
+          teams: DEFAULT_CRM_TEAMS,
           companies: [],
           deals: [],
           activities: [],
@@ -145,10 +223,26 @@ export const useCRMStore = create<CRMState>()(
             .filter(Boolean) as string[]
         );
 
+        const referredByName = contactData.referred_by_name || authUser?.name || 'Jamal Drenthe';
+        const canStartTeam = contactData.can_start_team ?? isReferredByJamal(referredByName, contactData);
+        const teamStatus: TeamStatus = contactData.team_status || 'active';
+        const defaultTeamId = contactData.team_id || 'team_jamal_drenthe';
+        const matchedTeam = get().teams.find((t) => t.id === defaultTeamId || t.name === contactData.team_name);
+        const teamName = contactData.team_name || matchedTeam?.name || 'Team Jamal Drenthe';
+        const statusTag = teamStatus === 'active' ? 'Actief Team' : 'Passief Team';
+
         const baseContact: Contact = {
           org_id: orgId,
           company_name: userCompanyName,
           ...contactData,
+          team_id: matchedTeam?.id || defaultTeamId,
+          team_name: teamName,
+          team_status: teamStatus,
+          team_role: contactData.team_role || 'member',
+          referred_by_name: referredByName,
+          can_start_team: canStartTeam,
+          team_request_status: contactData.team_request_status || (canStartTeam ? 'approved' : 'none'),
+          tags: Array.from(new Set([...(contactData.tags || []), statusTag])),
           id: contactData.id || generateId(),
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -196,18 +290,26 @@ export const useCRMStore = create<CRMState>()(
 
       addCompany: (companyData) => {
         const authUser = useAuthStore.getState().user;
-        const orgId = authUser?.org_id || useAuthStore.getState().organization?.id || 'default_org';
-        const userCompanyName = authUser?.company_name || '';
+        const orgId = companyData.org_id || authUser?.org_id || useAuthStore.getState().organization?.id || 'default_org';
+        const userCompanyName = companyData.company_name || authUser?.company_name || '';
+        const primaryCompanyTag = formatCompanyTag(companyData.company_tag || companyData.name);
+        const allCompanyTags = Array.from(
+          new Set(
+            [primaryCompanyTag, ...(companyData.company_tags || []).map((t) => formatCompanyTag(t))].filter(Boolean)
+          )
+        );
 
         const newCompany: Company = {
           org_id: orgId,
           company_name: userCompanyName,
           ...companyData,
-          id: generateId(),
+          company_tag: primaryCompanyTag,
+          company_tags: allCompanyTags,
+          id: (companyData as Partial<Company>).id || generateId(),
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
-        set((state) => ({ companies: [...state.companies, newCompany] }));
+        set((state) => ({ companies: [newCompany, ...state.companies] }));
         saveCompanyToFirestore(newCompany, orgId);
         return newCompany;
       },
@@ -358,31 +460,43 @@ export const useCRMStore = create<CRMState>()(
 
         const unsubs: (() => void)[] = [];
 
-        // Contacts subscription (replace state directly with real Firestore records, guaranteeing VVC tags)
+        // Contacts subscription (replace state directly with real Firestore records, deduplicating & enriching with Teams + VVC tags)
         const unsubContacts = subscribeToContacts(orgId, (firestoreContacts) => {
           const rawContacts = firestoreContacts || [];
-          const { updatedContacts, changedCount } = ensureAllContactsHaveVvcTags(rawContacts);
+          const { updatedContacts } = ensureAllContactsHaveVvcTags(rawContacts);
+          const {
+            contacts: enrichedContacts,
+            teams: enrichedTeams,
+            addedOrUpdatedCoreContacts,
+          } = deduplicateAndEnrichContactsWithTeams(updatedContacts, get().teams);
+
           set({
-            contacts: updatedContacts,
+            contacts: enrichedContacts,
+            teams: enrichedTeams,
             syncStatus: 'synced',
             isFirestoreSynced: true,
           });
 
-          // Als er contacten waren die nog geen unieke VVC communicatie tag hadden, sla deze direct op in Firestore
-          if (changedCount > 0 && isFirebaseConfigured()) {
-            updatedContacts.forEach((contact) => {
-              const original = rawContacts.find((c) => c.id === contact.id);
-              if (original !== contact) {
-                saveContactToFirestore(contact, orgId);
-              }
+          // Sla eventueel nieuw aangemaakte kernteamleden (zoals Boas Salesmates) op in Firestore
+          if (addedOrUpdatedCoreContacts.length > 0 && isFirebaseConfigured()) {
+            addedOrUpdatedCoreContacts.forEach((contact) => {
+              saveContactToFirestore(contact, 'default_org');
             });
           }
         });
         unsubs.push(unsubContacts);
 
-        // Companies subscription
+        // Companies subscription (garandeer altijd alle 13 ecosysteem-bedrijven + bedrijfstags)
         const unsubCompanies = subscribeToCompanies(orgId, (firestoreCompanies) => {
-          set({ companies: firestoreCompanies || [] });
+          const rawCompanies = firestoreCompanies || [];
+          const { merged, addedCompanies } = mergeEcosystemCompanies(rawCompanies);
+          set({ companies: merged });
+
+          if (addedCompanies.length > 0 && isFirebaseConfigured()) {
+            addedCompanies.forEach((comp) => {
+              saveCompanyToFirestore(comp, comp.org_id || 'default_org');
+            });
+          }
         });
         unsubs.push(unsubCompanies);
 
@@ -501,35 +615,399 @@ export const useCRMStore = create<CRMState>()(
         return changedCount;
       },
 
-      searchContacts: (query) => {
-        const lowerQuery = query.toLowerCase();
-        return get().contacts.filter(
-          (c) =>
-            c.first_name.toLowerCase().includes(lowerQuery) ||
-            c.last_name.toLowerCase().includes(lowerQuery) ||
-            c.email.toLowerCase().includes(lowerQuery) ||
-            c.company?.toLowerCase().includes(lowerQuery) ||
-            c.vvc_tag?.toLowerCase().includes(lowerQuery) ||
-            c.tags?.some((t) => t.toLowerCase().includes(lowerQuery))
+      ensureEcosystemCompaniesInCRM: () => {
+        const currentCompanies = get().companies;
+        const { merged, addedCompanies } = mergeEcosystemCompanies(currentCompanies);
+        set({ companies: merged });
+        if (isFirebaseConfigured()) {
+          addedCompanies.forEach((comp) => {
+            saveCompanyToFirestore(comp, comp.org_id || 'default_org');
+          });
+        }
+        return addedCompanies.length;
+      },
+
+      ensureTeamsAndCoreReferralsInCRM: () => {
+        const state = get();
+        const { contacts, teams, addedOrUpdatedCoreContacts } = deduplicateAndEnrichContactsWithTeams(
+          state.contacts,
+          state.teams
         );
+        set({ contacts, teams });
+        if (addedOrUpdatedCoreContacts.length > 0 && isFirebaseConfigured()) {
+          addedOrUpdatedCoreContacts.forEach((c) => {
+            saveContactToFirestore(c, 'default_org');
+          });
+        }
+      },
+
+      addTagToContact: (contactId, rawTag) => {
+        const cleanTag = rawTag.trim();
+        if (!cleanTag) return;
+        const isCompTag = cleanTag.startsWith('#');
+        set((state) => {
+          const updatedContacts = state.contacts.map((c) => {
+            if (c.id !== contactId) return c;
+            const nextTags = Array.from(new Set([...(c.tags || []), cleanTag]));
+            const nextCompanyTags = isCompTag
+              ? Array.from(new Set([...(c.company_tags || []), formatCompanyTag(cleanTag)]))
+              : c.company_tags;
+            return {
+              ...c,
+              tags: nextTags,
+              company_tags: nextCompanyTags,
+              updated_at: new Date().toISOString(),
+            };
+          });
+          const updated = updatedContacts.find((c) => c.id === contactId);
+          if (updated) {
+            saveContactToFirestore(updated, updated.org_id || 'default_org');
+          }
+          return { contacts: updatedContacts };
+        });
+      },
+
+      removeTagFromContact: (contactId, tagToRemove) => {
+        const lower = tagToRemove.trim().toLowerCase();
+        set((state) => {
+          const updatedContacts = state.contacts.map((c) => {
+            if (c.id !== contactId) return c;
+            return {
+              ...c,
+              tags: (c.tags || []).filter((t) => t.toLowerCase() !== lower),
+              company_tags: (c.company_tags || []).filter((t) => t.toLowerCase() !== lower),
+              updated_at: new Date().toISOString(),
+            };
+          });
+          const updated = updatedContacts.find((c) => c.id === contactId);
+          if (updated) {
+            saveContactToFirestore(updated, updated.org_id || 'default_org');
+          }
+          return { contacts: updatedContacts };
+        });
+      },
+
+      assignContactToTeam: (contactId, teamIdOrName, status, role) => {
+        const state = get();
+        const foundTeam =
+          state.teams.find((t) => t.id === teamIdOrName || t.name.toLowerCase() === teamIdOrName.toLowerCase()) ||
+          state.teams[0];
+        if (!foundTeam) return;
+
+        const contact = state.contacts.find((c) => c.id === contactId);
+        if (!contact) return;
+
+        const nextStatus: TeamStatus = status || contact.team_status || foundTeam.status || 'active';
+        const statusTag = nextStatus === 'active' ? 'Actief Team' : 'Passief Team';
+        const filteredTags = (contact.tags || []).filter((t) => t !== 'Actief Team' && t !== 'Passief Team');
+
+        get().updateContact(contactId, {
+          team_id: foundTeam.id,
+          team_name: foundTeam.name,
+          team_status: nextStatus,
+          team_role: role || contact.team_role || (foundTeam.leader_id === contactId ? 'leader' : 'member'),
+          tags: Array.from(new Set([...filteredTags, statusTag])),
+        });
+
+        set((s) => ({
+          teams: s.teams.map((t) =>
+            t.id === foundTeam.id
+              ? { ...t, member_ids: Array.from(new Set([...t.member_ids, contactId])) }
+              : t
+          ),
+        }));
+      },
+
+      setContactTeamStatus: (contactId, status) => {
+        const contact = get().contacts.find((c) => c.id === contactId);
+        if (!contact) return;
+        const statusTag = status === 'active' ? 'Actief Team' : 'Passief Team';
+        const filteredTags = (contact.tags || []).filter((t) => t !== 'Actief Team' && t !== 'Passief Team');
+        get().updateContact(contactId, {
+          team_status: status,
+          tags: Array.from(new Set([...filteredTags, statusTag])),
+        });
+      },
+
+      setContactReferrer: (contactId, referredByName) => {
+        const contact = get().contacts.find((c) => c.id === contactId);
+        if (!contact) return;
+        const trimmed = referredByName.trim() || 'Jamal Drenthe';
+        const canStart = isReferredByJamal(trimmed, { ...contact, referred_by_name: trimmed });
+        const filteredTags = (contact.tags || []).filter((t) => !t.startsWith('Ref: '));
+        get().updateContact(contactId, {
+          referred_by_name: trimmed,
+          can_start_team: canStart,
+          team_request_status: canStart ? 'approved' : contact.team_request_status || 'none',
+          tags: Array.from(new Set([...filteredTags, `Ref: ${trimmed}`])),
+        });
+      },
+
+      startTeamForContact: (contactId, teamName, status = 'active') => {
+        const state = get();
+        const contact = state.contacts.find((c) => c.id === contactId);
+        if (!contact) {
+          return { success: false, reason: 'Contact niet gevonden' };
+        }
+
+        const allowed = isReferredByJamal(contact.referred_by_name, contact);
+        if (!allowed) {
+          return {
+            success: false,
+            reason:
+              'Alleen personen die rechtstreeks door Jamal Drenthe zijn aangeleverd (of een goedgekeurde aanvraag hebben) kunnen direct een eigen team starten. Dien eerst een Team Aanvraag in.',
+          };
+        }
+
+        const cleanName = teamName.trim() || `Team ${contact.first_name}`;
+        const teamId = `team_${contact.first_name.toLowerCase().replace(/[^a-z0-9]/g, '')}_${Date.now().toString(36).slice(-4)}`;
+        const newTeam: CRMTeam = {
+          id: teamId,
+          name: cleanName,
+          leader_id: contact.id,
+          leader_name: `${contact.first_name} ${contact.last_name}`.trim(),
+          referred_by_name: contact.referred_by_name || 'Jamal Drenthe',
+          status,
+          member_ids: [contact.id],
+          company_name: contact.company || 'VVC (Verdienende Vrienden Club)',
+          description: `Team gestart door ${contact.first_name} ${contact.last_name} (aangeleverd door ${contact.referred_by_name || 'Jamal Drenthe'}).`,
+          created_at: new Date().toISOString(),
+        };
+
+        set((s) => ({
+          teams: [newTeam, ...s.teams],
+        }));
+
+        const statusTag = status === 'active' ? 'Actief Team' : 'Passief Team';
+        const filteredTags = (contact.tags || []).filter((t) => t !== 'Actief Team' && t !== 'Passief Team');
+
+        get().updateContact(contactId, {
+          team_id: newTeam.id,
+          team_name: newTeam.name,
+          team_status: status,
+          team_role: 'leader',
+          own_team_id: newTeam.id,
+          own_team_name: newTeam.name,
+          can_start_team: true,
+          team_request_status: 'approved',
+          tags: Array.from(new Set([...filteredTags, statusTag, 'Teamleider', cleanName])),
+        });
+
+        return { success: true, team: newTeam };
+      },
+
+      requestTeamForContact: (contactId, desiredTeamName, status = 'active') => {
+        const contact = get().contacts.find((c) => c.id === contactId);
+        if (!contact) return;
+        const cleanName = desiredTeamName.trim() || `Team ${contact.first_name}`;
+        get().updateContact(contactId, {
+          team_request_status: 'pending',
+          team_request_name: cleanName,
+          team_status: status,
+          tags: Array.from(new Set([...(contact.tags || []), 'Team Aanvraag Ingediend'])),
+        });
+      },
+
+      approveTeamRequest: (contactId) => {
+        const contact = get().contacts.find((c) => c.id === contactId);
+        if (!contact) return null;
+        const desiredName = contact.team_request_name || `Team ${contact.first_name}`;
+        // Mark approved first so startTeamForContact succeeds
+        get().updateContact(contactId, {
+          can_start_team: true,
+          team_request_status: 'approved',
+          tags: (contact.tags || []).filter((t) => t !== 'Team Aanvraag Ingediend'),
+        });
+        const res = get().startTeamForContact(contactId, desiredName, contact.team_status || 'active');
+        return res.team || null;
+      },
+
+      rejectTeamRequest: (contactId) => {
+        const contact = get().contacts.find((c) => c.id === contactId);
+        if (!contact) return;
+        get().updateContact(contactId, {
+          team_request_status: 'rejected',
+          tags: (contact.tags || []).filter((t) => t !== 'Team Aanvraag Ingediend'),
+        });
+      },
+
+      addCompanyTagToContact: (contactId, rawCompanyTag) => {
+        const formattedTag = formatCompanyTag(rawCompanyTag);
+        if (!formattedTag) return;
+
+        set((state) => {
+          const updatedContacts = state.contacts.map((c) => {
+            if (c.id !== contactId) return c;
+            const nextCompanyTags = Array.from(new Set([...(c.company_tags || []), formattedTag]));
+            const nextTags = Array.from(new Set([...(c.tags || []), formattedTag]));
+            return {
+              ...c,
+              company_tags: nextCompanyTags,
+              tags: nextTags,
+              updated_at: new Date().toISOString(),
+            };
+          });
+          const updated = updatedContacts.find((c) => c.id === contactId);
+          if (updated) {
+            const orgId = updated.org_id || useAuthStore.getState().organization?.id || 'default_org';
+            saveContactToFirestore(updated, orgId);
+          }
+          return { contacts: updatedContacts };
+        });
+      },
+
+      removeCompanyTagFromContact: (contactId, rawCompanyTag) => {
+        const formattedTag = formatCompanyTag(rawCompanyTag);
+        set((state) => {
+          const updatedContacts = state.contacts.map((c) => {
+            if (c.id !== contactId) return c;
+            return {
+              ...c,
+              company_tags: (c.company_tags || []).filter((t) => t.toLowerCase() !== formattedTag.toLowerCase()),
+              tags: (c.tags || []).filter((t) => t.toLowerCase() !== formattedTag.toLowerCase()),
+              updated_at: new Date().toISOString(),
+            };
+          });
+          const updated = updatedContacts.find((c) => c.id === contactId);
+          if (updated) {
+            const orgId = updated.org_id || useAuthStore.getState().organization?.id || 'default_org';
+            saveContactToFirestore(updated, orgId);
+          }
+          return { contacts: updatedContacts };
+        });
+      },
+
+      inviteContactToCompany: (companyId, contactId, role = 'Medewerker') => {
+        const state = get();
+        const company = state.companies.find((c) => c.id === companyId);
+        const contact = state.contacts.find((c) => c.id === contactId);
+        if (!company || !contact) return null;
+
+        const authUser = useAuthStore.getState().user;
+        const companyTag = company.company_tag || formatCompanyTag(company.name);
+
+        const invitation: CompanyInvitation = {
+          id: `inv_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          company_id: company.id,
+          company_name: company.name,
+          company_tag: companyTag,
+          contact_id: contact.id,
+          contact_name: `${contact.first_name} ${contact.last_name}`.trim(),
+          contact_email: contact.email,
+          vvc_tag: getVvcTag(contact),
+          role,
+          invited_by_name: authUser?.name || 'Bedrijfsbeheerder',
+          status: 'pending',
+          created_at: new Date().toISOString(),
+        };
+
+        // Werk Contact bij met de bedrijfstag, uitnodiging en bedrijfskoppeling
+        const nextCompanyTags = Array.from(new Set([...(contact.company_tags || []), companyTag]));
+        const nextTags = Array.from(new Set([...(contact.tags || []), companyTag, `Uitgenodigd: ${company.name}`]));
+        const nextInvitedCompanies = Array.from(new Set([...(contact.invited_companies || []), company.name]));
+        const nextMemberCompanies = Array.from(new Set([...(contact.member_companies || []), company.name]));
+        const existingInvs = (contact.company_invitations || []).filter((i) => i.company_id !== company.id);
+        const nextInvitations = [invitation, ...existingInvs];
+        const nextAllowed = Array.from(new Set([...(contact.allowed_companies || []), company.name]));
+
+        get().updateContact(contact.id, {
+          company: contact.company || company.name,
+          company_id: contact.company_id || company.id,
+          company_tags: nextCompanyTags,
+          tags: nextTags,
+          invited_companies: nextInvitedCompanies,
+          member_companies: nextMemberCompanies,
+          company_invitations: nextInvitations,
+          allowed_companies: nextAllowed,
+        });
+
+        // Werk Company bij met gekoppelde medewerker en verhoogde teller
+        const nextInvitedMemberIds = Array.from(new Set([...(company.invited_member_ids || []), contact.id]));
+        const nextMemberIds = Array.from(new Set([...(company.member_ids || []), contact.id]));
+        get().updateCompany(company.id, {
+          invited_member_ids: nextInvitedMemberIds,
+          member_ids: nextMemberIds,
+          contacts_count: Math.max((company.contacts_count || 0) + 1, nextMemberIds.length),
+        });
+
+        // Als de uitgenodigde persoon de momenteel ingelogde gebruiker is, voeg de uitnodiging en tag ook direct aan zijn profiel toe
+        if (authUser && authUser.email.toLowerCase() === contact.email.toLowerCase()) {
+          useAuthStore.getState().updateUser({
+            company_tags: Array.from(new Set([...(authUser.company_tags || []), companyTag])),
+            company_invitations: [
+              invitation,
+              ...(authUser.company_invitations || []).filter((i) => i.company_id !== company.id),
+            ],
+            allowed_companies: Array.from(new Set([...(authUser.allowed_companies || []), company.name])),
+          });
+        }
+
+        // Log activiteit op de tijdlijn van het contact
+        get().addActivity({
+          type: 'note',
+          title: `Uitgenodigd om bij ${company.name} (${companyTag}) te komen`,
+          description: `${invitation.contact_name} is via bedrijfstag ${companyTag} gevonden en uitgenodigd als ${role} bij ${company.name} door ${invitation.invited_by_name}.`,
+          status: 'completed',
+          completed_at: new Date().toISOString(),
+          assigned_to: authUser?.id || 'user1',
+          related_to: { type: 'contact', id: contact.id },
+          org_id: authUser?.org_id || 'default_org',
+        });
+
+        return invitation;
+      },
+
+      acceptCompanyInvitation: (contactId, invitationId) => {
+        const contact = get().contacts.find((c) => c.id === contactId);
+        if (!contact) return;
+
+        const targetInv = (contact.company_invitations || []).find((i) => i.id === invitationId);
+        const updatedInvs = (contact.company_invitations || []).map((inv) =>
+          inv.id === invitationId ? { ...inv, status: 'accepted' as const } : inv
+        );
+
+        get().updateContact(contactId, {
+          company: targetInv?.company_name || contact.company,
+          company_id: targetInv?.company_id || contact.company_id,
+          status: 'internal',
+          company_invitations: updatedInvs,
+          member_companies: targetInv
+            ? Array.from(new Set([...(contact.member_companies || []), targetInv.company_name]))
+            : contact.member_companies,
+        });
+
+        const authUser = useAuthStore.getState().user;
+        if (authUser && targetInv && authUser.email.toLowerCase() === contact.email.toLowerCase()) {
+          useAuthStore.getState().updateUser({
+            company_name: targetInv.company_name,
+            company_invitations: (authUser.company_invitations || []).map((inv) =>
+              inv.id === invitationId ? { ...inv, status: 'accepted' as const } : inv
+            ),
+          });
+        }
+      },
+
+      searchAccountsByCompanyTag: (tagOrQuery) => {
+        return smartSearchContacts(get().contacts, tagOrQuery);
+      },
+
+      searchContacts: (query) => {
+        return smartSearchContacts(get().contacts, query);
       },
 
       searchCompanies: (query) => {
-        const lowerQuery = query.toLowerCase();
-        return get().companies.filter(
-          (c) =>
-            c.name.toLowerCase().includes(lowerQuery) ||
-            c.industry?.toLowerCase().includes(lowerQuery)
-        );
+        return smartSearchCompanies(get().companies, query);
       },
 
       searchDeals: (query) => {
-        const lowerQuery = query.toLowerCase();
+        const lowerQuery = query.toLowerCase().trim();
+        if (!lowerQuery) return get().deals;
         return get().deals.filter(
           (d) =>
             d.name.toLowerCase().includes(lowerQuery) ||
             d.company_name?.toLowerCase().includes(lowerQuery) ||
-            d.contact_name?.toLowerCase().includes(lowerQuery)
+            d.contact_name?.toLowerCase().includes(lowerQuery) ||
+            d.stage?.toLowerCase().includes(lowerQuery)
         );
       },
     }),
@@ -537,6 +1015,7 @@ export const useCRMStore = create<CRMState>()(
       name: 'crmos-crm-live-v3',
       partialize: (state) => ({
         contacts: state.contacts,
+        teams: state.teams,
         companies: state.companies,
         deals: state.deals,
         pipelines: state.pipelines,

@@ -40,6 +40,7 @@ const SolutionsPage = lazy(() => import('@/pages/SolutionsPage').then((m) => ({ 
 const ComparePage = lazy(() => import('@/pages/ComparePage').then((m) => ({ default: m.ComparePage })));
 const RegisterPage = lazy(() => import('@/pages/RegisterPage').then((m) => ({ default: m.RegisterPage })));
 const DataIntelligencePage = lazy(() => import('@/pages/DataIntelligencePage').then((m) => ({ default: m.DataIntelligencePage })));
+const CareersPage = lazy(() => import('@/pages/CareersPage').then((m) => ({ default: m.CareersPage })));
 
 function PageLoader() {
   return (
@@ -59,6 +60,7 @@ import { useRecruitmentStore } from '@/stores/recruitmentStore';
 import { useContactCenterStore } from '@/stores/contactCenterStore';
 import { useD2DStore } from '@/stores/d2dStore';
 import { useThemeStore } from '@/stores/themeStore';
+import { formatCompanyTag } from '@/lib/companyAccess';
 import { cn } from '@/lib/utils';
 
 function Layout({ children }: { children: React.ReactNode }) {
@@ -219,11 +221,17 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 function App() {
   const { initAuthListener, organization, user, isAuthenticated, updateUser } = useAuthStore();
-  const { syncWithFirestore, contacts, isFirestoreSynced, addContact, updateContact } = useCRMStore();
+  const { syncWithFirestore, contacts, isFirestoreSynced, addContact, updateContact, ensureEcosystemCompaniesInCRM, ensureTeamsAndCoreReferralsInCRM } = useCRMStore();
   const { syncWithFirestore: syncRecruitment } = useRecruitmentStore();
   const { syncWithFirestore: syncContactCenter } = useContactCenterStore();
   const { syncWithFirestore: syncD2D } = useD2DStore();
   const { theme } = useThemeStore();
+
+  // Zorg dat alle 13 ecosysteem-bedrijven én alle referral-teams + 7 kernteamleiders altijd in het CRM staan
+  useEffect(() => {
+    ensureEcosystemCompaniesInCRM();
+    ensureTeamsAndCoreReferralsInCRM();
+  }, [ensureEcosystemCompaniesInCRM, ensureTeamsAndCoreReferralsInCRM]);
 
   // Sync theme class on document element
   useEffect(() => {
@@ -246,7 +254,7 @@ function App() {
     };
   }, [initAuthListener]);
 
-  // Garandeer dat elk aangemeld profiel een unieke VVC tag heeft én direct als Contact met die tag in het CRM staat
+  // Garandeer dat elk aangemeld profiel een unieke VVC tag én bedrijfstag heeft én direct als Contact met die tags in het CRM staat
   useEffect(() => {
     if (!isAuthenticated || !user || !user.email) return;
 
@@ -255,9 +263,14 @@ function App() {
       .replace(/[^a-z0-9]/g, '')
       .slice(0, 10);
     const effectiveVvcTag = user.vvc_tag || `vvc-usr-${cleanId}`;
+    const defaultCompanyTag = formatCompanyTag(user.company_name || organization?.name || 'CRMos');
+    const currentUserCompanyTags = Array.isArray(user.company_tags) ? user.company_tags : [];
 
-    if (!user.vvc_tag) {
-      updateUser({ vvc_tag: effectiveVvcTag });
+    if (!user.vvc_tag || !currentUserCompanyTags.includes(defaultCompanyTag)) {
+      updateUser({
+        vvc_tag: effectiveVvcTag,
+        company_tags: Array.from(new Set([defaultCompanyTag, ...currentUserCompanyTags])),
+      });
     }
 
     // Wacht tot initiële Firestore sync gereed is voordat we controleren of het contact al bestaat
@@ -270,6 +283,8 @@ function App() {
         (c.email && c.email.toLowerCase() === user.email.toLowerCase()) ||
         (c.vvc_tag && c.vvc_tag.toLowerCase() === effectiveVvcTag.toLowerCase())
     );
+
+    const effectiveCompanyTags = Array.from(new Set([defaultCompanyTag, ...currentUserCompanyTags]));
 
     if (!existingContact) {
       const nameParts = (user.name || '').trim().split(/\s+/);
@@ -285,17 +300,23 @@ function App() {
         status: 'partner',
         source: 'CRMos Account Aanmelding',
         vvc_tag: effectiveVvcTag,
-        tags: [effectiveVvcTag, 'Aanmelding', 'CRMos Profiel'],
+        company_tags: effectiveCompanyTags,
+        tags: [effectiveVvcTag, ...effectiveCompanyTags, 'Aanmelding', 'CRMos Profiel'],
         custom_fields: { user_id: user.id, registration_type: 'account', vvc_tag: effectiveVvcTag },
       });
     } else {
       const contactTag = existingContact.vvc_tag || effectiveVvcTag;
       const currentTags = Array.isArray(existingContact.tags) ? existingContact.tags : [];
+      const currentCompTags = Array.isArray(existingContact.company_tags) ? existingContact.company_tags : [];
+      const mergedCompTags = Array.from(new Set([...currentCompTags, ...effectiveCompanyTags]));
       const hasVvcInTags = currentTags.some((t) => t.toLowerCase() === contactTag.toLowerCase());
-      if (existingContact.vvc_tag !== contactTag || !hasVvcInTags) {
+      const hasAllCompTags = mergedCompTags.every((ct) => currentCompTags.includes(ct));
+
+      if (existingContact.vvc_tag !== contactTag || !hasVvcInTags || !hasAllCompTags) {
         updateContact(existingContact.id, {
           vvc_tag: contactTag,
-          tags: Array.from(new Set([contactTag, ...currentTags, 'Aanmelding'])),
+          company_tags: mergedCompTags,
+          tags: Array.from(new Set([contactTag, ...mergedCompTags, ...currentTags, 'Aanmelding'])),
         });
       }
       if (user.vvc_tag !== contactTag) {
@@ -353,6 +374,8 @@ function App() {
           <Route path="/geodata" element={<Navigate to="/data-intelligence" replace />} />
           <Route path="/compare" element={<ComparePage />} />
           <Route path="/pricing" element={<PricingPage />} />
+          <Route path="/careers" element={<CareersPage />} />
+          <Route path="/vacatures" element={<CareersPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
 
@@ -543,7 +566,7 @@ function App() {
         </Routes>
         </Suspense>
       </BrowserRouter>
-      <Toaster />
+      <Toaster position="top-center" closeButton richColors />
     </TooltipProvider>
   );
 }

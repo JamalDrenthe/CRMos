@@ -1,36 +1,35 @@
 <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="ring-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#2563eb"/>
-      <stop offset="50%" stop-color="#7c3aed"/>
+      <stop offset="0%" stop-color="#3b82f6"/>
+      <stop offset="45%" stop-color="#6366f1"/>
+      <stop offset="75%" stop-color="#8b5cf6"/>
       <stop offset="100%" stop-color="#06b6d4"/>
     </linearGradient>
-    <linearGradient id="purple-grad" x1="0%" y1="100%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#7c3aed"/>
-      <stop offset="60%" stop-color="#9333ea"/>
-      <stop offset="100%" stop-color="#3b82f6"/>
-    </linearGradient>
-    <radialGradient id="nucleus-grad" cx="40%" cy="40%" r="60%">
-      <stop offset="0%" stop-color="#60a5fa"/>
-      <stop offset="50%" stop-color="#2563eb"/>
+    <radialGradient id="core-glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="45%" stop-color="#60a5fa"/>
+      <stop offset="80%" stop-color="#3b82f6"/>
       <stop offset="100%" stop-color="#1e3a8a"/>
     </radialGradient>
-    <linearGradient id="diamond-fill" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.95"/>
-      <stop offset="100%" stop-color="#dbeafe" stop-opacity="0.85"/>
+    <linearGradient id="arc-grad" x1="15%" y1="15%" x2="85%" y2="85%">
+      <stop offset="0%" stop-color="#60a5fa"/>
+      <stop offset="50%" stop-color="#a855f7"/>
+      <stop offset="100%" stop-color="#ec4899"/>
+    </linearGradient>
+    <linearGradient id="chrome-grad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#94a3b8" stop-opacity="0.25"/>
+      <stop offset="50%" stop-color="#ffffff" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#64748b" stop-opacity="0.3"/>
     </linearGradient>
   </defs>
-
-  <!-- Orbital Track -->
-  <circle cx="50" cy="50" r="41" stroke="url(#ring-grad)" stroke-width="2" stroke-dasharray="4 2 10 3 20 4" opacity="0.45"/>
-  <circle cx="50" cy="9" r="2.8" fill="#2563eb"/>
-
-  <!-- CRMos Primary Swirl Arcs -->
-  <path d="M 45 22 C 28 24 16 38 16 52 C 16 67 28 80 46 80 C 58 80 68 73 73 63" stroke="url(#ring-grad)" stroke-width="6.5" stroke-linecap="round"/>
-  <path d="M 55 78 C 72 76 84 62 84 48 C 84 33 72 20 54 20 C 42 20 32 27 27 37" stroke="url(#purple-grad)" stroke-width="5.5" stroke-linecap="round"/>
-
-  <!-- Center Diamond & Pulsar Core -->
-  <polygon points="50,34 66,50 50,66 34,50" fill="url(#diamond-fill)" stroke="#3b82f6" stroke-width="1.8"/>
-  <circle cx="50" cy="50" r="7.5" fill="url(#nucleus-grad)"/>
-  <circle cx="50" cy="50" r="3" fill="#ffffff"/>
+  <circle cx="50" cy="50" r="43" fill="url(#core-glow)" opacity="0.35"/>
+  <circle cx="50" cy="50" r="44" stroke="url(#ring-grad)" stroke-width="2.5" stroke-dasharray="4 2 12 3 24 4" opacity="0.85"/>
+  <circle cx="50" cy="6" r="2.5" fill="#ffffff"/>
+  <circle cx="50" cy="50" r="47" stroke="#ffffff" stroke-width="1" stroke-dasharray="2 18 1 24" stroke-opacity="0.2"/>
+  <path d="M 45 22 C 28 24 16 38 16 52 C 16 67 28 80 46 80 C 58 80 68 73 73 63" stroke="url(#ring-grad)" stroke-width="6" stroke-linecap="round"/>
+  <path d="M 55 78 C 72 76 84 62 84 48 C 84 33 72 20 54 20 C 42 20 32 27 27 37" stroke="url(#arc-grad)" stroke-width="5" stroke-linecap="round" stroke-dasharray="95 15"/>
+  <polygon points="50,33 67,50 50,67 33,50" fill="#ffffff" fill-opacity="0.1" stroke="url(#chrome-grad)" stroke-width="1.5"/>
+  <circle cx="50" cy="50" r="7.5" fill="url(#core-glow)"/>
+  <circle cx="50" cy="50" r="3.2" fill="#ffffff"/>
 </svg>

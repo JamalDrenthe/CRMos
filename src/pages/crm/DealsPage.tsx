@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Contact360View } from '@/components/360-view/Contact360View';
 import { useCRMStore } from '@/stores/crmStore';
 import { useAuthStore } from '@/stores/authStore';
 import { filterRecordsForUser, isCoreEcosystemCompany } from '@/lib/companyAccess';
@@ -253,6 +254,7 @@ export function DealsPage() {
   const [activeDeal, setActiveDeal] = useState<typeof deals[0] | null>(null);
   const [viewingDeal, setViewingDeal] = useState<typeof deals[0] | null>(null);
   const [editingDeal, setEditingDeal] = useState<typeof deals[0] | null>(null);
+  const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
   const [editFormData, setEditFormData] = useState({
     name: '',
     value: 0,
@@ -662,6 +664,68 @@ export function DealsPage() {
                 </div>
               </div>
 
+              {/* Gekoppeld Contact met Volledige Informatie & Tags */}
+              {(() => {
+                const linkedContact =
+                  contacts.find((c) => c.id === viewingDeal.contact_id) ||
+                  contacts.find(
+                    (c) =>
+                      viewingDeal.company_id &&
+                      (c.company_id === viewingDeal.company_id ||
+                        (c.company &&
+                          viewingDeal.company_name &&
+                          c.company.toLowerCase() === viewingDeal.company_name.toLowerCase()))
+                  );
+                if (!linkedContact) return null;
+                const contactTags = Array.from(
+                  new Set([
+                    ...(linkedContact.vvc_tag ? [linkedContact.vvc_tag] : []),
+                    ...(linkedContact.company_tags || []),
+                    ...(linkedContact.tags || []),
+                  ])
+                );
+                return (
+                  <div className="p-3.5 rounded-xl border border-primary/25 bg-primary/[0.03] space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-primary block">
+                          Gekoppeld Contactpersoon
+                        </span>
+                        <p className="font-bold text-xs text-foreground">
+                          {linkedContact.first_name} {linkedContact.last_name}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {linkedContact.phone || linkedContact.email || 'Geen contactgegevens'} •{' '}
+                          {linkedContact.team_name || 'Team Jamal Drenthe'} (
+                          {(linkedContact.team_status || 'active') === 'active' ? 'Actief' : 'Passief'})
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setViewingDeal(null);
+                          setSelectedContactId(linkedContact.id);
+                        }}
+                        className="h-8 rounded-full text-xs border-primary/30 text-primary hover:bg-primary/10 shrink-0"
+                      >
+                        <Eye className="h-3.5 w-3.5 mr-1" />
+                        Volledig Profiel &amp; Tags
+                      </Button>
+                    </div>
+                    {contactTags.length > 0 && (
+                      <div className="flex flex-wrap gap-1 pt-1">
+                        {contactTags.slice(0, 6).map((t) => (
+                          <Badge key={t} variant="outline" className="text-[10px] bg-background">
+                            {t}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               <div className="pt-2 flex items-center justify-between gap-2 border-t border-border/60">
                 <Button
                   variant="outline"
@@ -770,6 +834,13 @@ export function DealsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Volledig Contactprofiel & Tags Slide-Over */}
+      <Contact360View
+        contactId={selectedContactId}
+        isOpen={!!selectedContactId}
+        onClose={() => setSelectedContactId(null)}
+      />
     </div>
   );
 }

@@ -56,7 +56,18 @@ import {
   CheckCircle2,
   Tag,
   Copy,
+  Hash,
+  UserPlus,
+  X,
+  Users,
+  ShieldCheck,
+  Sparkles,
+  Crown,
+  UserCheck,
+  AlertCircle,
 } from 'lucide-react';
+import { formatCompanyTag } from '@/lib/companyAccess';
+import { isReferredByJamal } from '@/services/crmSearchEngine';
 
 interface Contact360ViewProps {
   contactId: string | null;
@@ -65,11 +76,38 @@ interface Contact360ViewProps {
 }
 
 export function Contact360View({ contactId, isOpen, onClose }: Contact360ViewProps) {
-  const { getContact360, deals, activities, updateContact, deleteContact, addActivity, addDeal } = useCRMStore();
+  const {
+    getContact360,
+    companies,
+    teams,
+    deals,
+    activities,
+    updateContact,
+    deleteContact,
+    addActivity,
+    addDeal,
+    addTagToContact,
+    removeTagFromContact,
+    addCompanyTagToContact,
+    removeCompanyTagFromContact,
+    inviteContactToCompany,
+    assignContactToTeam,
+    setContactTeamStatus,
+    setContactReferrer,
+    startTeamForContact,
+    requestTeamForContact,
+    approveTeamRequest,
+    rejectTeamRequest,
+  } = useCRMStore();
   const { getCallsByContact, campaigns } = useContactCenterStore();
   const { user, organization } = useAuthStore();
 
   const [activeTab, setActiveTab] = useState('overview');
+  const [newTagInput, setNewTagInput] = useState('');
+  const [newCompanyTagInput, setNewCompanyTagInput] = useState('');
+  const [selectedInviteCompanyId, setSelectedInviteCompanyId] = useState('');
+  const [customTeamNameInput, setCustomTeamNameInput] = useState('');
+  const [referrerInput, setReferrerInput] = useState('');
 
   // Modals state
   const [isDialerOpen, setIsDialerOpen] = useState(false);
@@ -114,6 +152,12 @@ export function Contact360View({ contactId, isOpen, onClose }: Contact360ViewPro
   const [editTitle, setEditTitle] = useState('');
   const [editStatus, setEditStatus] = useState<Contact['status']>('lead');
   const [editScore, setEditScore] = useState(70);
+  const [editTeamId, setEditTeamId] = useState('team_jamal_drenthe');
+  const [editTeamStatus, setEditTeamStatus] = useState<'active' | 'passive'>('active');
+  const [editReferrer, setEditReferrer] = useState('Jamal Drenthe');
+  const [editSource, setEditSource] = useState('');
+  const [editNotes, setEditNotes] = useState('');
+  const [editCity, setEditCity] = useState('');
 
   const contactDeals = useMemo(() => {
     return deals.filter((d) => d.contact_id === contactId);
@@ -131,6 +175,11 @@ export function Contact360View({ contactId, isOpen, onClose }: Contact360ViewPro
 
   if (!contact) return null;
 
+  const isJamalReferred = contact.can_start_team || isReferredByJamal(contact.referred_by_name);
+  const effectiveTeamStatus = contact.team_status || 'active';
+  const effectiveTeamName = contact.team_name || 'Team Jamal Drenthe';
+  const effectiveReferrer = contact.referred_by_name || 'Jamal Drenthe';
+
   // Open Edit Modal with pre-filled fields
   const handleOpenEdit = () => {
     setEditFirstName(contact.first_name || '');
@@ -141,11 +190,19 @@ export function Contact360View({ contactId, isOpen, onClose }: Contact360ViewPro
     setEditTitle(contact.title || '');
     setEditStatus(contact.status || 'lead');
     setEditScore(contact.score || 70);
+    setEditTeamId(contact.team_id || 'team_jamal_drenthe');
+    setEditTeamStatus(contact.team_status || 'active');
+    setEditReferrer(contact.referred_by_name || 'Jamal Drenthe');
+    setEditSource(contact.source || 'Referral / Recruit');
+    setEditNotes(contact.notes || '');
+    setEditCity(contact.address?.city || '');
     setIsEditModalOpen(true);
   };
 
   const handleSaveContactEdit = () => {
     if (!contactId) return;
+    const selectedTeam = teams.find((t) => t.id === editTeamId);
+    const jamalRef = isReferredByJamal(editReferrer);
     updateContact(contactId, {
       first_name: editFirstName,
       last_name: editLastName,
@@ -155,6 +212,17 @@ export function Contact360View({ contactId, isOpen, onClose }: Contact360ViewPro
       title: editTitle,
       status: editStatus,
       score: Number(editScore),
+      team_id: editTeamId,
+      team_name: selectedTeam ? selectedTeam.name : contact.team_name || 'Team Jamal Drenthe',
+      team_status: editTeamStatus,
+      referred_by_name: editReferrer.trim() || 'Jamal Drenthe',
+      can_start_team: jamalRef || contact.team_request_status === 'approved',
+      source: editSource.trim() || 'Referral / Recruit',
+      notes: editNotes.trim(),
+      address: {
+        ...(contact.address || {}),
+        city: editCity.trim(),
+      },
     });
 
     addActivity({
@@ -317,7 +385,7 @@ export function Contact360View({ contactId, isOpen, onClose }: Contact360ViewPro
                 <Avatar className="h-16 w-16 border-4 border-background shadow-md">
                   <AvatarImage src={contact.avatar} />
                   <AvatarFallback className="text-xl font-bold bg-primary/10 text-primary">
-                    {contact.first_name[0]}{contact.last_name[0]}
+                    {(contact.first_name || 'C')[0]}{(contact.last_name || contact.first_name?.slice(1) || 'R')[0]}
                   </AvatarFallback>
                 </Avatar>
                 <div>
@@ -325,10 +393,10 @@ export function Contact360View({ contactId, isOpen, onClose }: Contact360ViewPro
                     {contact.first_name} {contact.last_name}
                   </h2>
                   <p className="text-xs sm:text-sm text-muted-foreground">
-                    {contact.title ? `${contact.title}` : 'Geen functietitel'}
+                    {contact.title ? `${contact.title}` : 'Team Member / Recruit'}
                     {contact.company ? ` bij ${contact.company}` : ''}
                   </p>
-                  <div className="mt-2 flex items-center gap-2 flex-wrap">
+                  <div className="mt-2 flex items-center gap-1.5 flex-wrap">
                     <Badge
                       variant={
                         contact.status === 'customer'
@@ -341,6 +409,33 @@ export function Contact360View({ contactId, isOpen, onClose }: Contact360ViewPro
                     >
                       {contact.status}
                     </Badge>
+
+                    {/* Team & Actief/Passief Badge in Header */}
+                    <Badge
+                      variant="outline"
+                      className={
+                        effectiveTeamStatus === 'active'
+                          ? 'text-[11px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 flex items-center gap-1'
+                          : 'text-[11px] font-semibold bg-slate-500/10 text-slate-600 dark:text-slate-300 border-slate-500/30 flex items-center gap-1'
+                      }
+                    >
+                      <Users className="h-3 w-3" />
+                      <span>{effectiveTeamName}</span>
+                      <span className="opacity-70">•</span>
+                      <span>{effectiveTeamStatus === 'active' ? 'Actief Team' : 'Passief Team'}</span>
+                    </Badge>
+
+                    {/* Jamal Drenthe Referral / Teamleider Badge */}
+                    {isJamalReferred && (
+                      <Badge
+                        variant="outline"
+                        className="text-[11px] font-semibold bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-500/30 flex items-center gap-1"
+                      >
+                        <Crown className="h-3 w-3 text-violet-500" />
+                        <span>Via Jamal Drenthe • Mag Team Starten</span>
+                      </Badge>
+                    )}
+
                     <div className="flex items-center gap-1 text-xs text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-full">
                       <Star className="h-3.5 w-3.5 fill-yellow-500 text-yellow-500" />
                       <span className="font-semibold text-foreground">{contact.score}</span>
@@ -481,11 +576,419 @@ export function Contact360View({ contactId, isOpen, onClose }: Contact360ViewPro
             <ScrollArea className="flex-1 px-5 py-4">
               {/* TAB 1: OVERVIEW */}
               <TabsContent value="overview" className="mt-0 space-y-4">
-                {/* Contact Info Card */}
+                {/* 1. VOLLEDIGE TAGS & ZELF TAGS TOEVOEGEN CARD (Top priority so tags are always visible and editable everywhere) */}
+                <Card className="rounded-2xl border-primary/25 bg-primary/[0.02] shadow-xs">
+                  <CardHeader className="py-3 px-4 border-b border-border/40 flex flex-row items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Tag className="h-4 w-4 text-primary" />
+                      <CardTitle className="text-xs font-bold uppercase tracking-wider text-foreground">
+                        Alle Tags &amp; Zelf Tags Toevoegen
+                      </CardTitle>
+                    </div>
+                    <Badge variant="outline" className="text-[10px] bg-background">
+                      {Array.from(new Set([vvcTag || `vvc-${contact.id}`, ...(contact.tags || []), ...(contact.company_tags || [])])).length} tags
+                    </Badge>
+                  </CardHeader>
+                  <CardContent className="p-4 space-y-3 text-xs">
+                    {/* Bestaande tags met verwijder-knop */}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {Array.from(
+                        new Set([
+                          vvcTag || `vvc-${contact.id}`,
+                          ...(contact.company_tags || []),
+                          ...(contact.tags || []),
+                        ])
+                      )
+                        .filter(Boolean)
+                        .map((tag) => {
+                          const isVvc = tag.toLowerCase().startsWith('vvc-');
+                          const isComp = tag.startsWith('#');
+                          return (
+                            <Badge
+                              key={tag}
+                              variant="outline"
+                              className={
+                                isVvc
+                                  ? 'text-[11px] font-mono bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 py-0.5 px-2 flex items-center gap-1'
+                                  : isComp
+                                  ? 'text-[11px] font-mono bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-500/30 py-0.5 px-2 flex items-center gap-1'
+                                  : 'text-[11px] bg-background border-border py-0.5 px-2 flex items-center gap-1'
+                              }
+                            >
+                              <span>{tag}</span>
+                              {!isVvc && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    removeTagFromContact(contact.id, tag);
+                                    toast.info(`Tag "${tag}" verwijderd van ${contact.first_name}`);
+                                  }}
+                                  title="Tag verwijderen"
+                                  className="hover:text-red-500 ml-0.5"
+                                >
+                                  <X className="h-2.5 w-2.5" />
+                                </button>
+                              )}
+                            </Badge>
+                          );
+                        })}
+                    </div>
+
+                    {/* Zelf nieuwe tag toevoegen */}
+                    <div className="flex gap-1.5">
+                      <Input
+                        value={newTagInput}
+                        onChange={(e) => setNewTagInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && newTagInput.trim()) {
+                            e.preventDefault();
+                            addTagToContact(contact.id, newTagInput.trim());
+                            toast.success(`Tag "${newTagInput.trim()}" toegevoegd aan ${contact.first_name}`);
+                            setNewTagInput('');
+                          }
+                        }}
+                        placeholder="Typ een nieuwe tag (bijv. Closer, Salesmates, #vvc, VIP)..."
+                        className="h-8 text-xs rounded-xl bg-background"
+                      />
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          if (!newTagInput.trim()) return;
+                          addTagToContact(contact.id, newTagInput.trim());
+                          toast.success(`Tag "${newTagInput.trim()}" toegevoegd aan ${contact.first_name}`);
+                          setNewTagInput('');
+                        }}
+                        className="h-8 rounded-xl text-xs px-3 gap-1 shrink-0"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        <span>Tag Toevoegen</span>
+                      </Button>
+                    </div>
+
+                    {/* Snel-tags om met 1 klik toe te voegen */}
+                    <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                      <span className="text-[10px] text-muted-foreground mr-1">Snel toevoegen:</span>
+                      {[
+                        'Salesmates',
+                        'Actief Team',
+                        'Passief Team',
+                        'Teamleider',
+                        'Top Recruit',
+                        'Closer',
+                        'Door Jamal Drenthe',
+                        '#vvc',
+                        '#spontiva',
+                      ].map((preset) => (
+                        <button
+                          key={preset}
+                          type="button"
+                          onClick={() => {
+                            addTagToContact(contact.id, preset);
+                            toast.success(`Tag "${preset}" toegevoegd`);
+                          }}
+                          className="text-[10px] px-2 py-0.5 rounded-md border border-border/60 bg-background hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-colors"
+                        >
+                          + {preset}
+                        </button>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* 2. TEAM & REFERRAL INDELING CARD (Actief/Passief Team + Jamal Drenthe Team-Recht) */}
+                <Card className="rounded-2xl border-violet-500/30 bg-violet-500/[0.03] shadow-xs">
+                  <CardHeader className="py-3 px-4 border-b border-violet-500/20 flex flex-row items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Users className="h-4 w-4 text-violet-500" />
+                      <CardTitle className="text-xs font-bold uppercase tracking-wider text-violet-700 dark:text-violet-300">
+                        Team &amp; Referral Indeling
+                      </CardTitle>
+                    </div>
+                    <Badge
+                      variant="outline"
+                      className={
+                        effectiveTeamStatus === 'active'
+                          ? 'text-[10px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30'
+                          : 'text-[10px] bg-slate-500/10 text-slate-600 dark:text-slate-300 border-slate-500/30'
+                      }
+                    >
+                      {effectiveTeamStatus === 'active' ? '● Actief Team' : '○ Passief Team'}
+                    </Badge>
+                  </CardHeader>
+                  <CardContent className="p-4 space-y-3.5 text-xs">
+                    {/* Huidig Team & Actief/Passief Schakelaar */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <div className="space-y-1">
+                        <Label className="text-[11px] font-semibold text-muted-foreground">Ingedeeld in Team</Label>
+                        <select
+                          value={contact.team_id || 'team_jamal_drenthe'}
+                          onChange={(e) => {
+                            const chosen = teams.find((t) => t.id === e.target.value);
+                            if (chosen) {
+                              assignContactToTeam(contact.id, chosen.id, chosen.status);
+                              toast.success(`${contact.first_name} ingedeeld in ${chosen.name}`);
+                            }
+                          }}
+                          className="w-full h-8 rounded-xl border border-input bg-background px-2.5 text-xs font-medium"
+                        >
+                          {teams.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.name} ({t.status === 'active' ? 'Actief' : 'Passief'})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="space-y-1">
+                        <Label className="text-[11px] font-semibold text-muted-foreground">Team Status (Actief / Passief)</Label>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setContactTeamStatus(contact.id, 'active');
+                              toast.success(`${contact.first_name} staat nu op Actief Team`);
+                            }}
+                            className={`h-8 rounded-xl border text-xs font-semibold transition-all flex items-center justify-center gap-1 ${
+                              effectiveTeamStatus === 'active'
+                                ? 'border-emerald-500 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                                : 'border-border/60 bg-background text-muted-foreground hover:bg-muted/40'
+                            }`}
+                          >
+                            <Sparkles className="h-3 w-3" />
+                            <span>Actief Team</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setContactTeamStatus(contact.id, 'passive');
+                              toast.info(`${contact.first_name} staat nu op Passief Team`);
+                            }}
+                            className={`h-8 rounded-xl border text-xs font-semibold transition-all flex items-center justify-center gap-1 ${
+                              effectiveTeamStatus === 'passive'
+                                ? 'border-amber-500 bg-amber-500/15 text-amber-700 dark:text-amber-300'
+                                : 'border-border/60 bg-background text-muted-foreground hover:bg-muted/40'
+                            }`}
+                          >
+                            <Clock className="h-3 w-3" />
+                            <span>Passief Team</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Aangeleverd door (Referrer / Recruiter) */}
+                    <div className="p-2.5 rounded-xl bg-background border border-border/60 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5">
+                          <UserCheck className="h-3.5 w-3.5 text-violet-500" />
+                          <span className="text-[11px] font-semibold text-foreground">
+                            Aangeleverd door (Referral / Recruit):
+                          </span>
+                        </div>
+                        <Badge
+                          variant="outline"
+                          className={
+                            isJamalReferred
+                              ? 'text-[10px] bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-500/30 font-semibold'
+                              : 'text-[10px] bg-muted text-foreground'
+                          }
+                        >
+                          {effectiveReferrer}
+                        </Badge>
+                      </div>
+
+                      <div className="flex gap-1.5">
+                        <Input
+                          value={referrerInput}
+                          onChange={(e) => setReferrerInput(e.target.value)}
+                          placeholder={`Wijzig aanbrenger (huidig: ${effectiveReferrer})...`}
+                          className="h-7 text-xs rounded-lg"
+                        />
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            const nextRef = referrerInput.trim() || 'Jamal Drenthe';
+                            setContactReferrer(contact.id, nextRef);
+                            setReferrerInput('');
+                            toast.success(`Aanbrenger bijgewerkt naar ${nextRef}`);
+                          }}
+                          className="h-7 text-[11px] px-2.5 rounded-lg shrink-0"
+                        >
+                          Opslaan
+                        </Button>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                        <span className="text-[10px] text-muted-foreground mr-1">Kies direct:</span>
+                        {['Jamal Drenthe', 'Reyhan', 'Julius', 'Jayden', 'Deniz', 'Boas', 'Fawzan', 'Ricardo'].map(
+                          (leader) => (
+                            <button
+                              key={leader}
+                              type="button"
+                              onClick={() => {
+                                setContactReferrer(contact.id, leader);
+                                toast.success(`${contact.first_name} gemarkeerd als aangeleverd door ${leader}`);
+                              }}
+                              className={`text-[10px] px-2 py-0.5 rounded-md border transition-colors ${
+                                effectiveReferrer.toLowerCase().includes(leader.toLowerCase())
+                                  ? 'border-violet-500 bg-violet-500/15 text-violet-700 dark:text-violet-300 font-semibold'
+                                  : 'border-border/60 bg-muted/30 hover:bg-muted text-muted-foreground'
+                              }`}
+                            >
+                              {leader}
+                            </button>
+                          )
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Eigen Team Starten (Jamal Drenthe recht) vs Team Aanvragen */}
+                    <div
+                      className={`p-3 rounded-xl border space-y-2.5 ${
+                        isJamalReferred
+                          ? 'bg-emerald-500/5 border-emerald-500/30'
+                          : 'bg-amber-500/5 border-amber-500/30'
+                      }`}
+                    >
+                      {isJamalReferred ? (
+                        <>
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
+                              <div>
+                                <p className="text-xs font-bold text-emerald-700 dark:text-emerald-400">
+                                  Direct Team-Recht (Aangeleverd door Jamal Drenthe)
+                                </p>
+                                <p className="text-[11px] text-muted-foreground">
+                                  Deze persoon is door Jamal Drenthe aangeleverd en kan direct een eigen team starten.
+                                </p>
+                              </div>
+                            </div>
+                            {contact.team_role === 'leader' && (
+                              <Badge className="bg-emerald-600 text-white text-[10px] shrink-0">
+                                Teamleider
+                              </Badge>
+                            )}
+                          </div>
+
+                          <div className="flex gap-1.5 pt-1">
+                            <Input
+                              value={customTeamNameInput}
+                              onChange={(e) => setCustomTeamNameInput(e.target.value)}
+                              placeholder={contact.own_team_name || `Team ${contact.first_name}`}
+                              className="h-8 text-xs rounded-xl bg-background"
+                            />
+                            <Button
+                              size="sm"
+                              onClick={() => {
+                                const teamTitle = customTeamNameInput.trim() || `Team ${contact.first_name}`;
+                                const created = startTeamForContact(
+                                  contact.id,
+                                  teamTitle,
+                                  contact.team_status || 'active'
+                                );
+                                if (created.success) {
+                                  setCustomTeamNameInput('');
+                                  toast.success(`${contact.first_name} is nu Teamleider van "${created.team?.name || teamTitle}"!`);
+                                }
+                              }}
+                              className="h-8 rounded-xl text-xs px-3 bg-emerald-600 hover:bg-emerald-700 text-white gap-1 shrink-0"
+                            >
+                              <Crown className="h-3.5 w-3.5" />
+                              <span>{contact.team_role === 'leader' ? 'Team Hernoemen / Activeren' : 'Team Starten'}</span>
+                            </Button>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
+                              <div>
+                                <p className="text-xs font-bold text-amber-700 dark:text-amber-400">
+                                  Team Starten op Aanvraag (Niet direct door Jamal Drenthe aangeleverd)
+                                </p>
+                                <p className="text-[11px] text-muted-foreground">
+                                  Alleen personen aangeleverd door Jamal Drenthe kunnen direct een team starten. De rest vraagt het hier aan.
+                                </p>
+                              </div>
+                            </div>
+                            {contact.team_request_status === 'pending' && (
+                              <Badge variant="outline" className="text-[10px] border-amber-500 text-amber-700 dark:text-amber-300 shrink-0">
+                                Aanvraag Open
+                              </Badge>
+                            )}
+                          </div>
+
+                          {contact.team_request_status === 'pending' ? (
+                            <div className="flex items-center justify-between gap-2 pt-1 bg-background p-2.5 rounded-xl border border-amber-500/30">
+                              <div className="text-xs">
+                                <span className="font-semibold">Aangevraagd team: </span>
+                                <span className="text-amber-700 dark:text-amber-400 font-bold">
+                                  {contact.team_request_name || `Team ${contact.first_name}`}
+                                </span>
+                              </div>
+                              <div className="flex gap-1.5">
+                                <Button
+                                  size="sm"
+                                  onClick={() => {
+                                    const created = approveTeamRequest(contact.id);
+                                    if (created) {
+                                      toast.success(`Teamaanvraag goedgekeurd! "${created.name}" is gestart.`);
+                                    }
+                                  }}
+                                  className="h-7 text-[11px] px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white"
+                                >
+                                  Goedkeuren
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    rejectTeamRequest(contact.id);
+                                    toast.info('Teamaanvraag afgewezen');
+                                  }}
+                                  className="h-7 text-[11px] px-2.5 rounded-lg text-destructive"
+                                >
+                                  Afwijzen
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex gap-1.5 pt-1">
+                              <Input
+                                value={customTeamNameInput}
+                                onChange={(e) => setCustomTeamNameInput(e.target.value)}
+                                placeholder={`Gewenste teamnaam (bijv. Team ${contact.first_name})`}
+                                className="h-8 text-xs rounded-xl bg-background"
+                              />
+                              <Button
+                                size="sm"
+                                onClick={() => {
+                                  const reqName = customTeamNameInput.trim() || `Team ${contact.first_name}`;
+                                  requestTeamForContact(contact.id, reqName);
+                                  setCustomTeamNameInput('');
+                                  toast.success(`Teamaanvraag "${reqName}" ingediend voor goedkeuring!`);
+                                }}
+                                className="h-8 rounded-xl text-xs px-3 bg-amber-600 hover:bg-amber-700 text-white gap-1 shrink-0"
+                              >
+                                <Users className="h-3.5 w-3.5" />
+                                <span>Team Aanvragen</span>
+                              </Button>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* 3. VOLLEDIGE CONTACT INFORMATIE CARD */}
                 <Card className="rounded-2xl border-border/60 shadow-xs">
                   <CardHeader className="py-3.5 px-4 border-b border-border/40 flex flex-row items-center justify-between">
                     <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                      Contact Informatie
+                      Volledige Contactgegevens
                     </CardTitle>
                     <Button
                       variant="ghost"
@@ -497,11 +1000,27 @@ export function Contact360View({ contactId, isOpen, onClose }: Contact360ViewPro
                       <span>Wijzigen</span>
                     </Button>
                   </CardHeader>
-                  <CardContent className="p-4 space-y-3 text-xs sm:text-sm">
-                    <div className="flex items-center justify-between gap-3 p-2 rounded-xl bg-muted/30">
+                  <CardContent className="p-4 space-y-2.5 text-xs sm:text-sm">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="p-2.5 rounded-xl bg-muted/30">
+                        <span className="text-[10px] uppercase text-muted-foreground block">Volledige Naam</span>
+                        <span className="font-semibold text-foreground">
+                          {contact.first_name} {contact.last_name}
+                        </span>
+                      </div>
+                      <div className="p-2.5 rounded-xl bg-muted/30">
+                        <span className="text-[10px] uppercase text-muted-foreground block">CRM Contact ID</span>
+                        <span className="font-mono text-xs text-foreground">{contact.id}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-muted/30">
                       <div className="flex items-center gap-2.5 truncate">
                         <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
-                        <span className="truncate">{contact.email || 'Geen email'}</span>
+                        <div>
+                          <span className="text-[10px] uppercase text-muted-foreground block">E-mailadres</span>
+                          <span className="truncate font-medium">{contact.email || 'Geen e-mailadres ingevuld'}</span>
+                        </div>
                       </div>
                       {contact.email && (
                         <Button
@@ -515,12 +1034,17 @@ export function Contact360View({ contactId, isOpen, onClose }: Contact360ViewPro
                       )}
                     </div>
 
-                    <div className="flex items-center justify-between gap-3 p-2 rounded-xl bg-muted/30">
+                    <div className="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-muted/30">
                       <div className="flex items-center gap-2.5 truncate">
                         <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
-                        <span className="truncate">{contact.phone || 'Geen telefoon'}</span>
+                        <div>
+                          <span className="text-[10px] uppercase text-muted-foreground block">Telefoon / Mobiel</span>
+                          <span className="truncate font-medium">
+                            {contact.phone || contact.mobile || 'Geen telefoonnummer'}
+                          </span>
+                        </div>
                       </div>
-                      {contact.phone && (
+                      {(contact.phone || contact.mobile) && (
                         <Button
                           size="sm"
                           variant="ghost"
@@ -532,17 +1056,50 @@ export function Contact360View({ contactId, isOpen, onClose }: Contact360ViewPro
                       )}
                     </div>
 
-                    {contact.company && (
-                      <div className="flex items-center gap-2.5 p-2 rounded-xl bg-muted/30">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-muted/30">
                         <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
-                        <span>{contact.company}</span>
+                        <div>
+                          <span className="text-[10px] uppercase text-muted-foreground block">Bedrijf</span>
+                          <span className="font-medium">{contact.company || 'VVC / Salesmates'}</span>
+                        </div>
                       </div>
-                    )}
+                      <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-muted/30">
+                        <Briefcase className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <div>
+                          <span className="text-[10px] uppercase text-muted-foreground block">Functie / Rol</span>
+                          <span className="font-medium">{contact.title || 'Team Member'}</span>
+                        </div>
+                      </div>
+                    </div>
 
-                    {contact.address?.city && (
-                      <div className="flex items-center gap-2.5 p-2 rounded-xl bg-muted/30">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-muted/30">
                         <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
-                        <span>{contact.address.city}, {contact.address.state}</span>
+                        <div>
+                          <span className="text-[10px] uppercase text-muted-foreground block">Locatie / Adres</span>
+                          <span className="font-medium">
+                            {contact.address?.city
+                              ? `${contact.address.street ? `${contact.address.street}, ` : ''}${contact.address.city}${
+                                  contact.address.country ? `, ${contact.address.country}` : ''
+                                }`
+                              : 'Nederland'}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-muted/30">
+                        <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <div>
+                          <span className="text-[10px] uppercase text-muted-foreground block">Bron &amp; Aanmelding</span>
+                          <span className="font-medium">{contact.source || 'Referral / Recruit'}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {contact.notes && (
+                      <div className="p-2.5 rounded-xl bg-muted/30">
+                        <span className="text-[10px] uppercase text-muted-foreground block mb-0.5">Notities / Dossier</span>
+                        <p className="text-xs text-foreground whitespace-pre-wrap">{contact.notes}</p>
                       </div>
                     )}
 
@@ -559,47 +1116,6 @@ export function Contact360View({ contactId, isOpen, onClose }: Contact360ViewPro
                         </a>
                       </div>
                     )}
-
-                    {/* Standaard gekoppelde VVC Tag & Contact Tags in het Profiel */}
-                    <div className="p-2.5 rounded-xl bg-amber-500/5 border border-amber-500/20 space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <Tag className="h-4 w-4 text-amber-500 shrink-0" />
-                          <span className="text-xs font-semibold text-foreground">Standaard VVC Tag:</span>
-                          <span className="font-mono text-xs font-bold text-amber-700 dark:text-amber-400">
-                            {vvcTag || `vvc-${contact.id}`}
-                          </span>
-                        </div>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => {
-                            const tagToCopy = vvcTag || `vvc-${contact.id}`;
-                            navigator.clipboard.writeText(tagToCopy);
-                            toast.success(`VVC tag gekopieerd: ${tagToCopy}`);
-                          }}
-                          className="h-6 text-[11px] px-2 text-amber-700 dark:text-amber-400 hover:bg-amber-500/15 gap-1"
-                        >
-                          <Copy className="h-3 w-3" />
-                          <span>Kopieer</span>
-                        </Button>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-                        {Array.from(new Set([vvcTag || `vvc-${contact.id}`, ...(contact.tags || [])])).map((tag) => (
-                          <Badge
-                            key={tag}
-                            variant="outline"
-                            className={
-                              tag.toLowerCase().startsWith('vvc-')
-                                ? 'text-[10px] font-mono bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30'
-                                : 'text-[10px] bg-background'
-                            }
-                          >
-                            {tag}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
                   </CardContent>
                 </Card>
 
@@ -643,6 +1159,104 @@ export function Contact360View({ contactId, isOpen, onClose }: Contact360ViewPro
                     <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-0.5">
                       <span className="font-mono text-[10px]">GET /v1/contacts?tag={vvcTag || 'vvc-id'}</span>
                       <span className="text-emerald-600 dark:text-emerald-400 font-medium">● Actief Verbonden</span>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Bedrijfstags & Uitnodigen bij Bedrijf Card */}
+                <Card className="rounded-2xl border-sky-500/30 bg-sky-500/[0.04] shadow-xs">
+                  <CardHeader className="py-3 px-4 border-b border-sky-500/20 flex flex-row items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Hash className="h-3.5 w-3.5 text-sky-500" />
+                      <CardTitle className="text-xs font-bold uppercase tracking-wider text-sky-700 dark:text-sky-400">
+                        Bedrijfstags &amp; Medewerker Uitnodigen
+                      </CardTitle>
+                    </div>
+                    <Badge variant="outline" className="text-[10px] bg-background border-sky-500/30 text-sky-600 dark:text-sky-400">
+                      Vindbaar op tag
+                    </Badge>
+                  </CardHeader>
+                  <CardContent className="p-4 space-y-3 text-xs">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {Array.from(
+                        new Set([
+                          ...(contact.company_tags || []),
+                          ...(contact.tags || []).filter((t) => t.startsWith('#')),
+                        ])
+                      ).map((ct) => (
+                        <Badge
+                          key={ct}
+                          variant="outline"
+                          className="font-mono text-[11px] bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-500/30 py-0.5 px-2 flex items-center gap-1"
+                        >
+                          <span>{ct}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              removeCompanyTagFromContact(contact.id, ct);
+                              toast.info(`Bedrijfstag ${ct} verwijderd`);
+                            }}
+                            className="hover:text-red-500"
+                          >
+                            <X className="h-2.5 w-2.5" />
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+
+                    <div className="flex gap-1.5">
+                      <Input
+                        value={newCompanyTagInput}
+                        onChange={(e) => setNewCompanyTagInput(e.target.value)}
+                        placeholder="Voeg bedrijfstag toe (bijv. #spontiva, #vvc)..."
+                        className="h-8 text-xs rounded-xl"
+                      />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          if (!newCompanyTagInput.trim()) return;
+                          const formatted = formatCompanyTag(newCompanyTagInput);
+                          addCompanyTagToContact(contact.id, formatted);
+                          setNewCompanyTagInput('');
+                          toast.success(`Bedrijfstag ${formatted} toegevoegd aan ${contact.first_name}`);
+                        }}
+                        className="h-8 rounded-xl text-xs px-3 border-sky-500/30 text-sky-600 dark:text-sky-400"
+                      >
+                        <Plus className="h-3.5 w-3.5 mr-1" />
+                        Tag
+                      </Button>
+                    </div>
+
+                    <div className="pt-2 border-t border-sky-500/20 flex items-center gap-1.5">
+                      <select
+                        value={selectedInviteCompanyId || companies[0]?.id || ''}
+                        onChange={(e) => setSelectedInviteCompanyId(e.target.value)}
+                        className="flex-1 h-8 rounded-xl border border-input bg-background px-2.5 text-xs"
+                      >
+                        {companies.map((comp) => (
+                          <option key={comp.id} value={comp.id}>
+                            {comp.name} ({comp.company_tag || formatCompanyTag(comp.name)})
+                          </option>
+                        ))}
+                      </select>
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          const targetCompanyId = selectedInviteCompanyId || companies[0]?.id;
+                          if (!targetCompanyId) return;
+                          const inv = inviteContactToCompany(targetCompanyId, contact.id, 'Medewerker');
+                          if (inv) {
+                            toast.success(
+                              `${contact.first_name} ${contact.last_name} uitgenodigd voor ${inv.company_name} (${inv.company_tag})!`
+                            );
+                          }
+                        }}
+                        className="h-8 rounded-xl text-xs px-3 bg-sky-600 hover:bg-sky-700 text-white gap-1 shrink-0"
+                      >
+                        <UserPlus className="h-3.5 w-3.5" />
+                        <span>Uitnodigen</span>
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>
@@ -700,24 +1314,6 @@ export function Contact360View({ contactId, isOpen, onClose }: Contact360ViewPro
                     </div>
                   </CardContent>
                 </Card>
-
-                {/* Tags */}
-                {contact.tags && contact.tags.length > 0 && (
-                  <Card className="rounded-2xl border-border/60 shadow-xs">
-                    <CardHeader className="py-3 px-4 border-b border-border/40">
-                      <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                        Labels &amp; Tags
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-4 flex flex-wrap gap-1.5">
-                      {contact.tags.map((tag) => (
-                        <Badge key={tag} variant="secondary" className="rounded-md text-xs font-medium">
-                          {tag}
-                        </Badge>
-                      ))}
-                    </CardContent>
-                  </Card>
-                )}
               </TabsContent>
 
               {/* TAB 2: TIMELINE */}
@@ -1264,6 +1860,7 @@ export function Contact360View({ contactId, isOpen, onClose }: Contact360ViewPro
                   <option value="lead">Lead</option>
                   <option value="prospect">Prospect</option>
                   <option value="customer">Klant</option>
+                  <option value="partner">Partner / Teamleider</option>
                   <option value="churned">Inactief / Churned</option>
                 </select>
               </div>
@@ -1278,6 +1875,65 @@ export function Contact360View({ contactId, isOpen, onClose }: Contact360ViewPro
                   className="text-xs h-9"
                 />
               </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Team Indeling</Label>
+                <select
+                  value={editTeamId}
+                  onChange={(e) => setEditTeamId(e.target.value)}
+                  className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs"
+                >
+                  {teams.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Team Status (Actief / Passief)</Label>
+                <select
+                  value={editTeamStatus}
+                  onChange={(e) => setEditTeamStatus(e.target.value as 'active' | 'passive')}
+                  className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs"
+                >
+                  <option value="active">Actief Team</option>
+                  <option value="passive">Passief Team</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Aangeleverd door (Referrer / Recruiter)</Label>
+                <Input
+                  value={editReferrer}
+                  onChange={(e) => setEditReferrer(e.target.value)}
+                  placeholder="Bijv. Jamal Drenthe, Reyhan, Julius..."
+                  className="text-xs h-9"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Woonplaats / Regio</Label>
+                <Input
+                  value={editCity}
+                  onChange={(e) => setEditCity(e.target.value)}
+                  placeholder="Bijv. Amsterdam, Rotterdam..."
+                  className="text-xs h-9"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Notities / Dossier</Label>
+              <Textarea
+                value={editNotes}
+                onChange={(e) => setEditNotes(e.target.value)}
+                placeholder="Notities over dit contact, teamrol of afspraken..."
+                className="min-h-[70px] text-xs resize-none"
+              />
             </div>
 
             <div className="space-y-1">

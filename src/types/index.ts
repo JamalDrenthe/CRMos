@@ -4,14 +4,24 @@
 
 // ===== User & Organization =====
 export const CRMOS_CORE_COMPANIES = [
-  'crmos',
-  'crmos.one',
   'vvc',
   'verdienende vrienden club',
+  'vvc (verdienende vrienden club)',
   'quantum initium',
+  'immigratiepunt',
+  'spontiva',
+  'investbotiq',
+  'boostplug',
+  'crmos',
+  'crmos.one',
+  'zheavenzy',
+  'logs.rent',
   'logs rent',
   'djobba',
+  'djobba.works',
   'trusting work',
+  'woningvry',
+  'xabi world',
 ] as const;
 
 export type CoreEcosystemCompany = typeof CRMOS_CORE_COMPANIES[number];
@@ -22,6 +32,21 @@ export function isCoreEcosystemCompany(name?: string): boolean {
   return CRMOS_CORE_COMPANIES.some(c => n === c || n.includes(c) || c.includes(n));
 }
 
+export interface CompanyInvitation {
+  id: string;
+  company_id: string;
+  company_name: string;
+  company_tag: string;
+  contact_id: string;
+  contact_name: string;
+  contact_email: string;
+  vvc_tag?: string;
+  role?: string;
+  invited_by_name: string;
+  status: 'pending' | 'accepted' | 'declined';
+  created_at: string;
+}
+
 export interface User {
   id: string;
   email: string;
@@ -30,6 +55,8 @@ export interface User {
   role: 'admin' | 'manager' | 'agent' | 'recruiter';
   org_id: string;
   company_name?: string;
+  company_tags?: string[];
+  company_invitations?: CompanyInvitation[];
   is_super_admin?: boolean;
   allowed_companies?: string[];
   phone?: string;
@@ -68,6 +95,24 @@ export interface OrganizationSettings {
 }
 
 // ===== Recruitment (ATS) =====
+export type TeamStatus = 'active' | 'passive';
+export type TeamRole = 'leader' | 'member';
+export type TeamRequestStatus = 'none' | 'pending' | 'approved' | 'rejected';
+
+export interface CRMTeam {
+  id: string;
+  name: string;
+  leader_id: string;
+  leader_name: string;
+  referred_by_name: string;
+  status: TeamStatus;
+  member_ids: string[];
+  company_name?: string;
+  description?: string;
+  created_at: string;
+  updated_at?: string;
+}
+
 export interface Candidate {
   id: string;
   org_id?: string;
@@ -75,6 +120,17 @@ export interface Candidate {
   allowed_companies?: string[];
   is_crmos_core?: boolean;
   vvc_tag?: string;
+  company_tags?: string[];
+  tags?: string[];
+  team_id?: string;
+  team_name?: string;
+  team_status?: TeamStatus;
+  team_role?: TeamRole;
+  referred_by_name?: string;
+  referred_by_id?: string;
+  can_start_team?: boolean;
+  team_request_status?: TeamRequestStatus;
+  team_request_name?: string;
   first_name: string;
   last_name: string;
   email: string;
@@ -133,6 +189,23 @@ export interface Contact {
   company_name?: string;
   allowed_companies?: string[];
   vvc_tag?: string;
+  company_tags?: string[];
+  invited_companies?: string[];
+  member_companies?: string[];
+  company_invitations?: CompanyInvitation[];
+  // Team & Referral / Recruit fields
+  team_id?: string;
+  team_name?: string;
+  team_status?: TeamStatus;
+  team_role?: TeamRole;
+  referred_by_name?: string;
+  referred_by_id?: string;
+  can_start_team?: boolean;
+  team_request_status?: TeamRequestStatus;
+  team_request_name?: string;
+  own_team_id?: string;
+  own_team_name?: string;
+  notes?: string;
   first_name: string;
   last_name: string;
   email: string;
@@ -189,6 +262,11 @@ export interface Company {
   org_id?: string;
   company_name?: string;
   allowed_companies?: string[];
+  is_crmos_core?: boolean;
+  company_tag?: string;
+  company_tags?: string[];
+  invited_member_ids?: string[];
+  member_ids?: string[];
   name: string;
   domain?: string;
   industry?: string;

@@ -6,9 +6,13 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useCRMStore } from '@/stores/crmStore';
 import { getVvcTag } from '@/services/vvcTagService';
+import {
+  smartSearchContacts,
+  smartSearchCompanies,
+  isReferredByJamal,
+} from '@/services/crmSearchEngine';
 import { Contact360View } from '@/components/360-view/Contact360View';
 import { Company360View } from '@/components/360-view/Company360View';
-import { toast } from 'sonner';
 import {
   Search,
   Star,
@@ -16,7 +20,6 @@ import {
   Euro,
   Phone,
   Mail,
-  Calendar,
   Building2,
   Users,
   MapPin,
@@ -24,8 +27,8 @@ import {
   ChevronRight,
   Sparkles,
   ArrowUpRight,
-  Tag,
-  Copy,
+  Crown,
+  Plus,
 } from 'lucide-react';
 
 const PAGE_SIZE = 24;
@@ -133,32 +136,13 @@ export function View360Page() {
     return metrics;
   }, [contacts, deals, activities]);
 
-  // 3. Memoized Filtering using Deferred Query
+  // 3. Memoized Filtering using Smart Search Engine & Deferred Query
   const filteredCompanies = useMemo(() => {
-    const q = deferredQuery.trim().toLowerCase();
-    if (!q) return companies;
-    return companies.filter(
-      (company) =>
-        (company.name && company.name.toLowerCase().includes(q)) ||
-        (company.industry && company.industry.toLowerCase().includes(q)) ||
-        (company.domain && company.domain.toLowerCase().includes(q)) ||
-        (company.address?.city && company.address.city.toLowerCase().includes(q)) ||
-        (company.address?.street && company.address.street.toLowerCase().includes(q))
-    );
+    return smartSearchCompanies(companies, deferredQuery);
   }, [companies, deferredQuery]);
 
   const filteredContacts = useMemo(() => {
-    const q = deferredQuery.trim().toLowerCase();
-    if (!q) return contacts;
-    return contacts.filter(
-      (contact) =>
-        (contact.first_name && contact.first_name.toLowerCase().includes(q)) ||
-        (contact.last_name && contact.last_name.toLowerCase().includes(q)) ||
-        (contact.email && contact.email.toLowerCase().includes(q)) ||
-        (contact.company && contact.company.toLowerCase().includes(q)) ||
-        (contact.vvc_tag && contact.vvc_tag.toLowerCase().includes(q)) ||
-        (contact.tags && contact.tags.some((t) => t.toLowerCase().includes(q)))
-    );
+    return smartSearchContacts(contacts, deferredQuery);
   }, [contacts, deferredQuery]);
 
   // 4. Pagination Calculation
@@ -328,18 +312,30 @@ export function View360Page() {
               meetings_held: 0,
             };
 
+            const contactVvcTag = getVvcTag(contact);
+            const allTags = Array.from(
+              new Set([
+                ...(contactVvcTag ? [contactVvcTag] : []),
+                ...(contact.company_tags || []),
+                ...(contact.tags || []),
+              ])
+            ).filter(Boolean);
+            const isJamalRef = contact.can_start_team || isReferredByJamal(contact.referred_by_name);
+            const teamStatus = contact.team_status || 'active';
+
             return (
               <Card
                 key={contact.id}
                 className="cursor-pointer hover:shadow-lg transition-all rounded-2xl border bg-card hover:border-primary/40 group"
                 onClick={() => setSelectedContactId(contact.id)}
               >
-                <CardContent className="p-5">
+                <CardContent className="p-5 space-y-3">
                   <div className="flex items-start gap-3.5">
                     <Avatar className="h-12 w-12 rounded-xl ring-2 ring-background group-hover:scale-105 transition-transform">
                       <AvatarImage src={contact.avatar} />
                       <AvatarFallback className="text-base rounded-xl font-bold bg-primary/10 text-primary">
-                        {contact.first_name?.[0] || '?'}{contact.last_name?.[0] || ''}
+                        {contact.first_name?.[0] || '?'}
+                        {(contact.last_name || contact.first_name?.slice(1) || '')[0] || ''}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
@@ -349,28 +345,30 @@ export function View360Page() {
                         </h3>
                         <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                       </div>
-                      <p className="text-xs text-muted-foreground truncate">{contact.title || 'Geen functie'}</p>
-                      <p className="text-xs text-sky-600 dark:text-sky-400 font-medium truncate">{contact.company || 'Geen bedrijf'}</p>
-                      {(() => {
-                        const contactVvcTag = getVvcTag(contact);
-                        if (!contactVvcTag) return null;
-                        return (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigator.clipboard.writeText(contactVvcTag);
-                              toast.success(`VVC API Tag gekopieerd: ${contactVvcTag}`);
-                            }}
-                            title="Klik om de VVC API Tag van dit contact te kopiëren"
-                            className="mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-mono text-[10px] font-medium bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/25 hover:bg-amber-500/20 transition-colors cursor-pointer"
+                      <p className="text-xs text-muted-foreground truncate">
+                        {contact.title || 'Team Member'} • {contact.company || 'VVC'}
+                      </p>
+                      <div className="flex flex-wrap items-center gap-1 mt-1.5">
+                        <Badge
+                          variant="outline"
+                          className={
+                            teamStatus === 'active'
+                              ? 'text-[10px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 font-semibold'
+                              : 'text-[10px] bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 font-semibold'
+                          }
+                        >
+                          {contact.team_name || 'Team Jamal Drenthe'} ({teamStatus === 'active' ? 'Actief' : 'Passief'})
+                        </Badge>
+                        {isJamalRef && (
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-500/30 flex items-center gap-0.5"
                           >
-                            <Tag className="h-2.5 w-2.5 text-amber-500 shrink-0" />
-                            <span>{contactVvcTag}</span>
-                            <Copy className="h-2.5 w-2.5 opacity-60" />
-                          </button>
-                        );
-                      })()}
+                            <Crown className="h-2.5 w-2.5" />
+                            <span>Via Jamal Drenthe</span>
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0 bg-amber-500/10 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-lg border border-amber-500/20">
                       <Star className="h-3.5 w-3.5 fill-amber-500 text-amber-500" />
@@ -378,7 +376,57 @@ export function View360Page() {
                     </div>
                   </div>
 
-                  <div className="mt-4 grid grid-cols-2 gap-3 pt-3 border-t">
+                  {/* Direct Phone & Email summary */}
+                  <div className="text-xs text-muted-foreground space-y-1 bg-muted/30 p-2.5 rounded-xl">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="flex items-center gap-1.5 font-medium text-foreground truncate">
+                        <Phone className="h-3 w-3 text-emerald-500 shrink-0" />
+                        {contact.phone || 'Geen telefoonnummer'}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground">
+                        Via: {contact.referred_by_name || 'Jamal Drenthe'}
+                      </span>
+                    </div>
+                    {contact.email && (
+                      <div className="flex items-center gap-1.5 truncate">
+                        <Mail className="h-3 w-3 text-primary shrink-0" />
+                        <span className="truncate">{contact.email}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Tags strip */}
+                  <div className="flex flex-wrap items-center gap-1">
+                    {allTags.slice(0, 4).map((tag) => (
+                      <Badge
+                        key={tag}
+                        variant="outline"
+                        className={
+                          tag.toLowerCase().startsWith('vvc-')
+                            ? 'text-[10px] font-mono bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/25'
+                            : tag.startsWith('#')
+                            ? 'text-[10px] font-mono bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-500/25'
+                            : 'text-[10px] bg-background'
+                        }
+                      >
+                        {tag}
+                      </Badge>
+                    ))}
+                    {allTags.length > 4 && (
+                      <Badge variant="secondary" className="text-[10px]">
+                        +{allTags.length - 4}
+                      </Badge>
+                    )}
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] border-dashed border-primary/40 text-primary flex items-center gap-0.5"
+                    >
+                      <Plus className="h-2.5 w-2.5" />
+                      <span>Tag toevoegen</span>
+                    </Badge>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 pt-2 border-t">
                     <div className="flex items-center gap-2">
                       <Euro className="h-4 w-4 text-emerald-500 shrink-0" />
                       <div>
@@ -393,21 +441,6 @@ export function View360Page() {
                         <p className="text-[10px] text-muted-foreground">Interacties</p>
                       </div>
                     </div>
-                  </div>
-
-                  <div className="mt-3 flex gap-2">
-                    <Badge variant="outline" className="flex items-center gap-1 text-[10px]">
-                      <Mail className="h-3 w-3" />
-                      {metrics.emails_sent}
-                    </Badge>
-                    <Badge variant="outline" className="flex items-center gap-1 text-[10px]">
-                      <Phone className="h-3 w-3" />
-                      {metrics.calls_made}
-                    </Badge>
-                    <Badge variant="outline" className="flex items-center gap-1 text-[10px]">
-                      <Calendar className="h-3 w-3" />
-                      {metrics.meetings_held}
-                    </Badge>
                   </div>
                 </CardContent>
               </Card>

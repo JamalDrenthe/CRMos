@@ -236,7 +236,27 @@
   }
 }
 
+@keyframes marquee-smooth {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-marquee-smooth {
+  display: flex;
+  width: max-content;
+  animation: marquee-smooth 36s linear infinite;
+}
+
+.animate-marquee-smooth:hover {
+  animation-play-state: paused;
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .animate-marquee-smooth,
   .crmos-anim-orbit,
   .crmos-anim-orbit-reverse,
   .crmos-anim-glow,

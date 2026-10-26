@@ -70,6 +70,17 @@ export function Navbar() {
           >
             {t('Pricing')}
           </Link>
+          <Link
+            to="/careers"
+            className={`transition-colors hover:text-foreground flex items-center gap-1.5 ${
+              isCurrent('/careers') || isCurrent('/vacatures') ? 'text-foreground font-semibold' : 'text-muted-foreground'
+            }`}
+          >
+            <span>Vacatures</span>
+            <span className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-500 border border-emerald-500/20">
+              13 Jobs
+            </span>
+          </Link>
           <a
             href="/#features"
             className="text-muted-foreground transition-colors hover:text-foreground"
@@ -175,6 +186,16 @@ export function Navbar() {
               className="py-1 text-muted-foreground hover:text-foreground transition-colors"
             >
               {t('Pricing')}
+            </Link>
+            <Link
+              to="/careers"
+              onClick={() => setMobileMenuOpen(false)}
+              className="py-1 text-primary font-medium hover:text-primary transition-colors flex items-center justify-between"
+            >
+              <span>Vacatures (13 No Cure No Pay)</span>
+              <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-500 border border-emerald-500/20">
+                100% Remote
+              </span>
             </Link>
             <a
               href="/#features"

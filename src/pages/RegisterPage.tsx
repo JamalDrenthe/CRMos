@@ -171,32 +171,33 @@ export function RegisterPage() {
   };
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-gradient-to-b from-background via-muted/20 to-background p-4 sm:p-6 py-12 overflow-hidden">
-      {/* Apple-style background glow */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[350px] bg-primary/5 blur-[140px] rounded-full pointer-events-none" />
+    <div className="relative min-h-[100dvh] flex flex-col justify-between bg-background selection:bg-primary/20 selection:text-primary">
+      {/* Apple-style background ambient illumination glow */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] max-w-[90vw] h-[360px] bg-primary/10 dark:bg-blue-600/10 blur-[150px] rounded-full pointer-events-none -z-10" />
 
-      {/* Top right language and theme controls */}
-      <div className="absolute top-5 right-5 flex items-center gap-2">
-        <LanguageToggle />
-        <ThemeToggle />
-      </div>
-
-      {/* Top left back to website link */}
-      <div className="absolute top-5 left-5">
+      {/* Top Navigation Bar - Responsive, Never Overlaps */}
+      <header className="w-full flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-5 z-20">
         <Link
           to="/"
-          className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors py-1 px-2.5 rounded-full hover:bg-muted/50"
+          className="inline-flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-all py-1.5 px-3 rounded-full bg-background/80 dark:bg-white/5 hover:bg-muted/60 dark:hover:bg-white/10 border border-border/50 dark:border-white/10 backdrop-blur-md shadow-xs active:scale-[0.97]"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          <span>{t('Back to website')}</span>
+          <span className="hidden sm:inline">{t('Back to website')}</span>
+          <span className="sm:hidden">{t('Terug')}</span>
         </Link>
-      </div>
 
-      <div className="w-full max-w-[460px] mt-6 relative z-10">
+        <div className="flex items-center gap-2 sm:gap-2.5">
+          <LanguageToggle />
+          <ThemeToggle />
+        </div>
+      </header>
+
+      {/* Main Content Area */}
+      <main className="flex-1 flex flex-col items-center justify-center px-4 py-4 sm:py-8 z-10 w-full max-w-[460px] mx-auto">
         {/* Brand Logo & Header */}
-        <div className="mb-6 flex flex-col items-center justify-center text-center">
-          <Link to="/" className="transition-transform duration-200 hover:scale-[1.03]">
-            <CRMosLogo size="lg" showTagline={true} />
+        <div className="mb-4 sm:mb-6 flex flex-col items-center justify-center text-center">
+          <Link to="/" className="transition-transform duration-200 hover:scale-[1.02] active:scale-[0.98]">
+            <CRMosLogo size="md" showTagline={true} />
           </Link>
           {selectedPlan && (
             <Badge variant="outline" className="mt-3 rounded-full px-3 py-0.5 text-[11px] bg-primary/10 text-primary border-primary/20 capitalize font-medium">
@@ -205,8 +206,8 @@ export function RegisterPage() {
           )}
         </div>
 
-        <Card className="rounded-3xl border border-border/50 bg-card/85 backdrop-blur-2xl shadow-2xl overflow-hidden">
-          <CardHeader className="space-y-1.5 text-center pb-4 pt-6">
+        <Card className="w-full rounded-[1.75rem] sm:rounded-[2rem] border border-border/60 dark:border-white/10 bg-card/90 dark:bg-[#121215]/85 backdrop-blur-2xl shadow-xl dark:shadow-[0_20px_60px_-15px_rgba(0,0,0,0.8)] overflow-hidden">
+          <CardHeader className="space-y-1.5 text-center pb-4 pt-6 px-5 sm:px-7">
             <CardTitle className="text-2xl font-semibold tracking-tight">
               {t('Create your CRMos Account')}
             </CardTitle>
@@ -494,11 +495,12 @@ export function RegisterPage() {
             </div>
           </CardContent>
         </Card>
+      </main>
 
-        <p className="mt-6 text-center text-[11px] text-muted-foreground/75">
-          CRMos &bull; Powered by Google Cloud &amp; Firestore
-        </p>
-      </div>
+      {/* Footer Branding */}
+      <footer className="py-4 pb-6 sm:pb-8 text-center text-[11px] text-muted-foreground/75 z-10 px-4">
+        CRMos &bull; Powered by Google Cloud &amp; Firestore
+      </footer>
     </div>
   );
 }

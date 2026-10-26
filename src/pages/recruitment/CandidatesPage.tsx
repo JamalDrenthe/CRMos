@@ -5,10 +5,12 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { DataTable } from '@/components/common/DataTable';
+import { Contact360View } from '@/components/360-view/Contact360View';
 import { useRecruitmentStore } from '@/stores/recruitmentStore';
 import { useCRMStore } from '@/stores/crmStore';
 import { useAuthStore } from '@/stores/authStore';
 import { filterRecordsForUser, isCoreEcosystemCompany } from '@/lib/companyAccess';
+import { smartSearchCandidates } from '@/services/crmSearchEngine';
 import type { Candidate } from '@/types';
 import { getVvcTag } from '@/services/vvcTagService';
 import {
@@ -59,8 +61,8 @@ const stages = [
 ];
 
 export function CandidatesPage() {
-  const { candidates, moveCandidate, addCandidate, deleteCandidate, ensureVvcTagsOnAllCandidates } = useRecruitmentStore();
-  const { addActivity, addContact } = useCRMStore();
+  const { candidates, moveCandidate, addCandidate, updateCandidate, deleteCandidate, ensureVvcTagsOnAllCandidates } = useRecruitmentStore();
+  const { contacts, addActivity, addContact, addTagToContact } = useCRMStore();
   const { user, organization, adminCompanyFilter } = useAuthStore();
 
   const isSuperAdmin =
@@ -77,6 +79,8 @@ export function CandidatesPage() {
   const [pageSize, setPageSize] = useState(25);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [viewingCandidate, setViewingCandidate] = useState<Candidate | null>(null);
+  const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
+  const [newCandidateTag, setNewCandidateTag] = useState('');
   const [interviewCandidate, setInterviewCandidate] = useState<Candidate | null>(null);
   const [interviewData, setInterviewData] = useState({
     title: 'Sollicitatiegesprek',
@@ -103,15 +107,7 @@ export function CandidatesPage() {
   );
 
   const filteredCandidates = useMemo(() => {
-    const q = searchQuery.toLowerCase();
-    return accessibleCandidates.filter(
-      (candidate) =>
-        candidate.first_name.toLowerCase().includes(q) ||
-        candidate.last_name.toLowerCase().includes(q) ||
-        candidate.email.toLowerCase().includes(q) ||
-        candidate.vvc_tag?.toLowerCase().includes(q) ||
-        (candidate.skills && candidate.skills.some((s) => s.toLowerCase().includes(q)))
-    );
+    return smartSearchCandidates(accessibleCandidates, searchQuery);
   }, [accessibleCandidates, searchQuery]);
 
   const vvcTaggedCandidatesCount = useMemo(
@@ -905,6 +901,112 @@ export function CandidatesPage() {
                 </div>
               )}
 
+              {/* Volledige Tags & Zelf Tags Toevoegen + Gekoppeld CRM Contact */}
+              {(() => {
+                const candTag = getVvcTag(viewingCandidate) || `vvc-cand-${viewingCandidate.id}`;
+                const linkedContact = contacts.find(
+                  (c) =>
+                    c.id === `contact_cand_${viewingCandidate.id}` ||
+                    c.vvc_tag === candTag ||
+                    (viewingCandidate.email &&
+                      c.email?.toLowerCase() === viewingCandidate.email.toLowerCase())
+                );
+                const allTags = Array.from(
+                  new Set([
+                    candTag,
+                    ...(viewingCandidate.tags || []),
+                    ...(viewingCandidate.skills || []),
+                    ...(linkedContact?.tags || []),
+                    ...(linkedContact?.company_tags || []),
+                  ])
+                ).filter(Boolean);
+
+                return (
+                  <div className="p-3.5 rounded-xl border border-primary/25 bg-primary/[0.03] space-y-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-primary block">
+                          Alle Tags &amp; Team Indeling
+                        </span>
+                        <p className="text-xs font-medium text-foreground">
+                          {linkedContact
+                            ? `${linkedContact.team_name || 'Team Jamal Drenthe'} (${
+                                (linkedContact.team_status || 'active') === 'active'
+                                  ? 'Actief Team'
+                                  : 'Passief Team'
+                              }) • Via ${linkedContact.referred_by_name || 'Jamal Drenthe'}`
+                            : 'Gekoppeld aan Referral Netwerk'}
+                        </p>
+                      </div>
+                      {linkedContact && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setViewingCandidate(null);
+                            setSelectedContactId(linkedContact.id);
+                          }}
+                          className="h-7 rounded-full text-xs border-primary/30 text-primary hover:bg-primary/10 shrink-0"
+                        >
+                          <Eye className="h-3 w-3 mr-1" />
+                          360° Contact &amp; Team
+                        </Button>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap gap-1">
+                      {allTags.map((tag) => (
+                        <Badge key={tag} variant="outline" className="text-[10px] bg-background">
+                          {tag}
+                        </Badge>
+                      ))}
+                    </div>
+
+                    <div className="flex gap-1.5">
+                      <Input
+                        value={newCandidateTag}
+                        onChange={(e) => setNewCandidateTag(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && newCandidateTag.trim()) {
+                            e.preventDefault();
+                            const t = newCandidateTag.trim();
+                            const nextTags = Array.from(new Set([...(viewingCandidate.tags || []), t]));
+                            updateCandidate(viewingCandidate.id, { tags: nextTags });
+                            setViewingCandidate({ ...viewingCandidate, tags: nextTags });
+                            if (linkedContact) {
+                              addTagToContact(linkedContact.id, t);
+                            }
+                            setNewCandidateTag('');
+                            toast.success(`Tag "${t}" toegevoegd`);
+                          }
+                        }}
+                        placeholder="Voeg zelf een tag toe (bijv. Closer, #vvc, Actief Team)..."
+                        className="h-8 text-xs rounded-xl bg-background"
+                      />
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          if (!newCandidateTag.trim()) return;
+                          const t = newCandidateTag.trim();
+                          const nextTags = Array.from(new Set([...(viewingCandidate.tags || []), t]));
+                          updateCandidate(viewingCandidate.id, { tags: nextTags });
+                          setViewingCandidate({ ...viewingCandidate, tags: nextTags });
+                          if (linkedContact) {
+                            addTagToContact(linkedContact.id, t);
+                          }
+                          setNewCandidateTag('');
+                          toast.success(`Tag "${t}" toegevoegd`);
+                        }}
+                        className="h-8 text-xs rounded-xl gap-1 shrink-0"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        <span>Tag</span>
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Direct Quick Actions Bar */}
               <div className="flex flex-wrap items-center gap-2 pt-2">
                 {viewingCandidate.phone && (
@@ -1046,6 +1148,13 @@ export function CandidatesPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Volledig Contactprofiel & Tags Slide-Over */}
+      <Contact360View
+        contactId={selectedContactId}
+        isOpen={!!selectedContactId}
+        onClose={() => setSelectedContactId(null)}
+      />
     </div>
   );
 }

@@ -38,9 +38,13 @@ import {
   Tag,
   Copy,
   ExternalLink,
+  Hash,
+  Plus,
+  X,
+  UserPlus,
 } from 'lucide-react';
 import { isCoreEcosystemCompany } from '@/types';
-import { CORE_PARTNER_OPTIONS } from '@/lib/companyAccess';
+import { CORE_PARTNER_OPTIONS, formatCompanyTag } from '@/lib/companyAccess';
 import { seedDemoDataToFirestore, purgeDemoAndMockDataFromFirestore } from '@/services/firestoreService';
 import { syncVvcRecordToCloud } from '@/services/vvcTagService';
 import { useCRMStore } from '@/stores/crmStore';
@@ -53,7 +57,18 @@ export function SettingsPage() {
   const { user, logout, updateUser } = useAuthStore();
   const { theme, setTheme } = useThemeStore();
   const { language, setLanguage, t } = useLanguageStore();
-  const { contacts, addContact, updateContact, clearLocalStore: clearCRM } = useCRMStore();
+  const {
+    contacts,
+    companies,
+    addContact,
+    updateContact,
+    addCompanyTagToContact,
+    removeCompanyTagFromContact,
+    acceptCompanyInvitation,
+    clearLocalStore: clearCRM,
+  } = useCRMStore();
+
+  const [newCompanyTagInput, setNewCompanyTagInput] = useState('');
 
   const cleanUserSeed = (user?.id || user?.email?.split('@')[0] || 'user1')
     .toLowerCase()
@@ -67,6 +82,59 @@ export function SettingsPage() {
       (user?.email && c.email.toLowerCase() === user.email.toLowerCase()) ||
       (c.vvc_tag && c.vvc_tag.toLowerCase() === profileVvcTag.toLowerCase())
   );
+
+  const defaultUserCompanyTag = formatCompanyTag(user?.company_name || 'CRMos');
+  const activeCompanyTags = Array.from(
+    new Set([
+      defaultUserCompanyTag,
+      ...(user?.company_tags || []),
+      ...(linkedCrmContact?.company_tags || []),
+      ...(linkedCrmContact?.tags || []).filter((t) => t.startsWith('#')),
+    ])
+  ).filter(Boolean);
+
+  const accountInvitations = [
+    ...(linkedCrmContact?.company_invitations || []),
+    ...(user?.company_invitations || []).filter(
+      (inv) => !(linkedCrmContact?.company_invitations || []).some((ci) => ci.id === inv.id)
+    ),
+  ];
+
+  const handleAddAccountCompanyTag = (rawTag: string) => {
+    const formatted = formatCompanyTag(rawTag);
+    if (!formatted || formatted === '#') {
+      toast.error('Voer een geldige bedrijfstag in (bijv. #spontiva of #vvc)');
+      return;
+    }
+    const nextTags = Array.from(new Set([...activeCompanyTags, formatted]));
+    updateUser({ company_tags: nextTags });
+
+    if (linkedCrmContact) {
+      addCompanyTagToContact(linkedCrmContact.id, formatted);
+    }
+    setNewCompanyTagInput('');
+    toast.success(`Bedrijfstag ${formatted} toegevoegd aan je account & CRM profiel!`);
+  };
+
+  const handleRemoveAccountCompanyTag = (tagToRemove: string) => {
+    const nextTags = activeCompanyTags.filter((t) => t.toLowerCase() !== tagToRemove.toLowerCase());
+    updateUser({ company_tags: nextTags });
+    if (linkedCrmContact) {
+      removeCompanyTagFromContact(linkedCrmContact.id, tagToRemove);
+    }
+    toast.info(`Bedrijfstag ${tagToRemove} verwijderd van je profiel`);
+  };
+
+  const handleAcceptInvitation = (invitationId: string, companyNameForToast: string) => {
+    if (linkedCrmContact) {
+      acceptCompanyInvitation(linkedCrmContact.id, invitationId);
+    }
+    const updatedUserInvites = (user?.company_invitations || []).map((inv) =>
+      inv.id === invitationId ? { ...inv, status: 'accepted' as const } : inv
+    );
+    updateUser({ company_invitations: updatedUserInvites });
+    toast.success(`Uitnodiging van ${companyNameForToast} geaccepteerd! Je bent nu gekoppeld als medewerker.`);
+  };
 
   const [firstName, setFirstName] = useState(user?.name?.split(' ')[0] || 'Jamal');
   const [lastName, setLastName] = useState(user?.name?.split(' ').slice(1).join(' ') || 'Drenthe');
@@ -291,6 +359,20 @@ export function SettingsPage() {
                   Opgeslagen als CRM Contact
                 </span>
               </div>
+              {activeCompanyTags.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                  <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Bedrijfstags:</span>
+                  {activeCompanyTags.map((ct) => (
+                    <Badge
+                      key={ct}
+                      variant="outline"
+                      className="text-[10px] font-mono bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/30 py-0 px-2"
+                    >
+                      {ct}
+                    </Badge>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
@@ -472,6 +554,188 @@ export function SettingsPage() {
                   GET /api/vvc/lookup?tag={profileVvcTag}
                 </span>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Mijn Bedrijfstags & Bedrijfsuitnodigingen Card */}
+          <Card className="rounded-3xl border-sky-500/30 bg-sky-500/[0.04] backdrop-blur-xl shadow-xs">
+            <CardHeader className="p-5 sm:p-6 pb-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-2xl bg-sky-500/15 text-sky-600 dark:text-sky-400">
+                    <Hash className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base sm:text-lg font-bold flex items-center gap-2">
+                      <span>Mijn Bedrijfstags &amp; Medewerker-Vindbaarheid</span>
+                      <Badge variant="outline" className="bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/30 text-[11px]">
+                        {activeCompanyTags.length} {activeCompanyTags.length === 1 ? 'Tag Actief' : 'Tags Actief'}
+                      </Badge>
+                    </CardTitle>
+                    <CardDescription className="text-xs text-muted-foreground mt-0.5">
+                      Voeg bedrijfstags toe aan je account zodat bedrijven in het CRM (zoals VVC, Spontiva, Investbotiq, etc.) jou via zoeken kunnen terugvinden en uitnodigen om bij hun bedrijf te komen.
+                    </CardDescription>
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => navigate('/crm/companies')}
+                  className="rounded-full text-xs gap-1.5 h-8 border-sky-500/30 hover:bg-sky-500/10"
+                >
+                  <Building2 className="h-3.5 w-3.5 text-sky-500" />
+                  <span>Naar Bedrijvenoverzicht</span>
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="p-5 sm:p-6 pt-0 space-y-4">
+              {/* Huidige Bedrijfstags op Account */}
+              <div className="p-3.5 rounded-2xl bg-background/80 border border-sky-500/25 space-y-2.5">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block">
+                  Jouw Actieve Bedrijfstags (Zichtbaar voor Bedrijven bij Medewerkers Zoeken)
+                </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  {activeCompanyTags.map((tag) => (
+                    <Badge
+                      key={tag}
+                      variant="outline"
+                      className="text-xs font-mono font-semibold bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-500/30 py-1 px-2.5 flex items-center gap-1.5"
+                    >
+                      <span>{tag}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveAccountCompanyTag(tag)}
+                        title={`Verwijder ${tag}`}
+                        className="hover:text-red-500 transition-colors"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+
+              {/* Nieuwe Bedrijfstag Handmatig Toevoegen */}
+              <div className="flex flex-col sm:flex-row gap-2">
+                <div className="relative flex-1">
+                  <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input
+                    value={newCompanyTagInput}
+                    onChange={(e) => setNewCompanyTagInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && newCompanyTagInput.trim()) {
+                        e.preventDefault();
+                        handleAddAccountCompanyTag(newCompanyTagInput);
+                      }
+                    }}
+                    placeholder="Voeg een bedrijfstag toe (bijv. #spontiva, #investbotiq, #vvc of eigen bedrijfsnaam)..."
+                    className="pl-8 h-9 text-xs rounded-xl"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => handleAddAccountCompanyTag(newCompanyTagInput)}
+                  className="rounded-xl h-9 px-4 text-xs font-semibold gap-1.5 bg-sky-600 hover:bg-sky-700 text-white"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>Bedrijfstag Toevoegen</span>
+                </Button>
+              </div>
+
+              {/* Snelkiezer: Alle 13 CRMos Ecosysteem Bedrijven + Toegevoegde CRM Bedrijven */}
+              <div className="space-y-2">
+                <span className="text-[11px] font-semibold text-muted-foreground block">
+                  Snel toevoegen vanuit geregistreerde CRM Bedrijven ({companies.length}):
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {companies.slice(0, 20).map((comp) => {
+                    const compTag = comp.company_tag || formatCompanyTag(comp.name);
+                    const isAdded = activeCompanyTags.some((t) => t.toLowerCase() === compTag.toLowerCase());
+                    return (
+                      <button
+                        key={comp.id}
+                        type="button"
+                        onClick={() => {
+                          if (isAdded) {
+                            handleRemoveAccountCompanyTag(compTag);
+                          } else {
+                            handleAddAccountCompanyTag(compTag);
+                          }
+                        }}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all cursor-pointer ${
+                          isAdded
+                            ? 'bg-sky-500/20 text-sky-700 dark:text-sky-300 border-sky-500/40 font-semibold shadow-2xs'
+                            : 'bg-background/70 text-muted-foreground border-border/60 hover:border-sky-500/40 hover:text-foreground'
+                        }`}
+                      >
+                        <span className="font-mono text-[10px] text-sky-500">{compTag}</span>
+                        <span>({comp.name})</span>
+                        {isAdded ? (
+                          <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" />
+                        ) : (
+                          <Plus className="h-3 w-3 opacity-60 shrink-0" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Openstaande & Geaccepteerde Bedrijfsuitnodigingen */}
+              {accountInvitations.length > 0 && (
+                <div className="pt-2 border-t border-sky-500/20 space-y-2">
+                  <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                    <UserPlus className="h-3.5 w-3.5 text-emerald-500" />
+                    <span>Bedrijfsuitnodigingen voor jouw account ({accountInvitations.length})</span>
+                  </span>
+                  <div className="grid gap-2">
+                    {accountInvitations.map((inv) => (
+                      <div
+                        key={inv.id}
+                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-2xl bg-background/90 border border-border/60"
+                      >
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-foreground">{inv.company_name}</span>
+                            <Badge variant="outline" className="font-mono text-[10px] bg-sky-500/10 text-sky-600 border-sky-500/30">
+                              {inv.company_tag}
+                            </Badge>
+                            <Badge
+                              variant="outline"
+                              className={
+                                inv.status === 'accepted'
+                                  ? 'text-[10px] bg-emerald-500/10 text-emerald-600 border-emerald-500/30'
+                                  : 'text-[10px] bg-amber-500/10 text-amber-600 border-amber-500/30'
+                              }
+                            >
+                              {inv.status === 'accepted' ? 'Lid / Medewerker' : 'Uitgenodigd'}
+                            </Badge>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground">
+                            Rol: <strong className="text-foreground">{inv.role || 'Medewerker'}</strong> • Uitgenodigd door {inv.invited_by_name}
+                          </p>
+                        </div>
+                        {inv.status !== 'accepted' ? (
+                          <Button
+                            size="sm"
+                            onClick={() => handleAcceptInvitation(inv.id, inv.company_name)}
+                            className="rounded-full h-8 px-3.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
+                          >
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            <span>Uitnodiging Accepteren</span>
+                          </Button>
+                        ) : (
+                          <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            Aangesloten bij bedrijf
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 

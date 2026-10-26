@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,7 +9,7 @@ import { isFirebaseConfigured, sendPasswordReset } from '@/lib/firebase';
 import { ThemeToggle } from '@/components/common/ThemeToggle';
 import { LanguageToggle } from '@/components/common/LanguageToggle';
 import { useTranslation } from '@/stores/languageStore';
-import { Eye, EyeOff, Loader2, AlertCircle, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { Eye, EyeOff, Loader2, AlertCircle, ArrowLeft, CheckCircle2, Sparkles, ShieldCheck } from 'lucide-react';
 import { CRMosLogo } from '@/components/common/CRMosLogo';
 
 export function LoginPage() {
@@ -76,48 +76,63 @@ export function LoginPage() {
     }
   };
 
+  const handleApplyDemo = (demoEmail: string) => {
+    setEmail(demoEmail);
+    setPassword('password');
+    setError('');
+  };
+
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-gradient-to-b from-background via-muted/20 to-background p-4 sm:p-6 overflow-hidden">
-      {/* Apple-style background glow */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[350px] bg-primary/5 blur-[140px] rounded-full pointer-events-none" />
+    <div className="relative min-h-[100dvh] flex flex-col justify-between bg-background selection:bg-primary/20 selection:text-primary">
+      {/* Apple-style background ambient illumination glow */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] max-w-[90vw] h-[360px] bg-primary/10 dark:bg-blue-600/10 blur-[150px] rounded-full pointer-events-none -z-10" />
+      <div className="absolute bottom-10 right-10 w-[400px] h-[300px] bg-purple-500/5 blur-[140px] rounded-full pointer-events-none -z-10" />
 
-      {/* Top right language and theme controls */}
-      <div className="absolute top-5 right-5 flex items-center gap-2">
-        <LanguageToggle />
-        <ThemeToggle />
-      </div>
-
-      {/* Top left back to website link */}
-      <div className="absolute top-5 left-5">
+      {/* Top Navigation Bar - Responsive, Never Overlaps */}
+      <header className="w-full flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-5 z-20">
         <Link
           to="/"
-          className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors py-1 px-2.5 rounded-full hover:bg-muted/50"
+          className="inline-flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-all py-1.5 px-3 rounded-full bg-background/80 dark:bg-white/5 hover:bg-muted/60 dark:hover:bg-white/10 border border-border/50 dark:border-white/10 backdrop-blur-md shadow-xs active:scale-[0.97]"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          <span>{t('Back to website')}</span>
+          <span className="hidden sm:inline">{t('Back to website')}</span>
+          <span className="sm:hidden">{t('Terug')}</span>
         </Link>
-      </div>
 
-      <div className="w-full max-w-[420px] relative z-10">
+        <div className="flex items-center gap-2 sm:gap-2.5">
+          <LanguageToggle />
+          <ThemeToggle />
+        </div>
+      </header>
+
+      {/* Main Content Form Area */}
+      <main className="flex-1 flex flex-col items-center justify-center px-4 py-4 sm:py-8 z-10 w-full max-w-[430px] mx-auto">
         {/* Brand Logo Header */}
-        <div className="mb-6 flex flex-col items-center justify-center text-center">
-          <Link to="/" className="transition-transform duration-200 hover:scale-[1.03]">
-            <CRMosLogo size="lg" showTagline={true} />
+        <div className="mb-4 sm:mb-6 flex flex-col items-center justify-center text-center">
+          <Link
+            to="/"
+            className="transition-transform duration-200 hover:scale-[1.02] active:scale-[0.98]"
+          >
+            <CRMosLogo size="md" showTagline={true} />
           </Link>
         </div>
 
-        <Card className="rounded-3xl border border-border/50 bg-card/85 backdrop-blur-2xl shadow-2xl overflow-hidden">
-          <CardHeader className="space-y-1.5 text-center pb-4 pt-6">
-            <CardTitle className="text-2xl font-semibold tracking-tight">{t('Welcome to CRMos')}</CardTitle>
-            <CardDescription className="text-xs sm:text-sm text-muted-foreground">
+        {/* Apple Glass Card */}
+        <Card className="w-full rounded-[1.75rem] sm:rounded-[2rem] border border-border/60 dark:border-white/10 bg-card/90 dark:bg-[#121215]/85 backdrop-blur-2xl shadow-xl dark:shadow-[0_20px_60px_-15px_rgba(0,0,0,0.8)] overflow-hidden">
+          <CardHeader className="space-y-1.5 text-center pb-4 pt-6 px-5 sm:px-7">
+            <CardTitle className="text-2xl sm:text-[1.75rem] font-bold tracking-tight text-foreground">
+              {t('Welcome to CRMos')}
+            </CardTitle>
+            <CardDescription className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
               {t('Log in to your account with Google or your credentials')}
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4 px-6 pb-6">
+
+          <CardContent className="space-y-4 px-5 sm:px-7 pb-6">
             {error && (
-              <div className="flex items-start gap-2 rounded-xl bg-destructive/10 p-3 text-xs text-destructive border border-destructive/20">
+              <div className="flex items-start gap-2.5 rounded-2xl bg-destructive/10 p-3.5 text-xs text-destructive border border-destructive/20 animate-in fade-in duration-200">
                 <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-                <span>{error}</span>
+                <span className="leading-relaxed">{error}</span>
               </div>
             )}
 
@@ -125,14 +140,14 @@ export function LoginPage() {
             <Button
               type="button"
               variant="outline"
-              className="w-full h-11 rounded-full border-border/70 bg-background/80 hover:bg-accent/80 font-medium text-xs sm:text-sm transition-all shadow-sm flex items-center justify-center gap-2.5 hover:scale-[1.01] active:scale-[0.99]"
+              className="w-full h-11 rounded-full border-border/80 dark:border-white/15 bg-background/80 dark:bg-white/5 hover:bg-muted/80 dark:hover:bg-white/10 font-medium text-xs sm:text-sm transition-all shadow-xs flex items-center justify-center gap-2.5 hover:scale-[1.01] active:scale-[0.99]"
               onClick={handleGoogleSignIn}
               disabled={isGoogleLoading || isLoading}
             >
               {isGoogleLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin text-primary" />
               ) : (
-                <svg className="h-4 w-4" viewBox="0 0 24 24">
+                <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24">
                   <path
                     fill="#4285F4"
                     d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -155,23 +170,29 @@ export function LoginPage() {
             </Button>
 
             {!hasFirebase && (
-              <p className="text-[11px] text-center text-muted-foreground bg-muted/40 p-2 rounded border border-muted">
+              <p className="text-[11px] text-center text-muted-foreground bg-muted/40 p-2 rounded-xl border border-muted">
                 {t('Tip: Add Firebase credentials in .env')}
               </p>
             )}
 
-            <div className="relative">
+            {/* Apple Divider */}
+            <div className="relative my-1">
               <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t border-muted" />
+                <span className="w-full border-t border-border/60 dark:border-white/10" />
               </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-card px-2 text-muted-foreground">{t('Or with email')}</span>
+              <div className="relative flex justify-center text-[10px] font-semibold uppercase tracking-wider">
+                <span className="bg-card dark:bg-[#121215] px-3 text-muted-foreground">
+                  {t('Or with email')}
+                </span>
               </div>
             </div>
 
+            {/* Form */}
             <form onSubmit={handleSubmit} className="space-y-3.5">
               <div className="space-y-1.5">
-                <Label htmlFor="email" className="text-xs font-medium text-foreground">{t('Email')}</Label>
+                <Label htmlFor="email" className="text-xs font-semibold text-foreground">
+                  {t('Email')}
+                </Label>
                 <Input
                   id="email"
                   type="email"
@@ -179,13 +200,16 @@ export function LoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="h-10 rounded-xl bg-background/60 border-border/70 text-xs sm:text-sm focus-visible:ring-1"
+                  autoComplete="email"
+                  className="h-10.5 rounded-xl bg-background/70 dark:bg-black/30 border-border/70 dark:border-white/10 text-xs sm:text-sm focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:border-primary transition-all"
                 />
               </div>
 
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="password" className="text-xs font-medium text-foreground">{t('Password')}</Label>
+                  <Label htmlFor="password" className="text-xs font-semibold text-foreground">
+                    {t('Password')}
+                  </Label>
                   <button
                     type="button"
                     onClick={() => {
@@ -207,12 +231,14 @@ export function LoginPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    className="h-10 rounded-xl bg-background/60 border-border/70 text-xs sm:text-sm pr-10 focus-visible:ring-1"
+                    autoComplete="current-password"
+                    className="h-10.5 rounded-xl bg-background/70 dark:bg-black/30 border-border/70 dark:border-white/10 text-xs sm:text-sm pr-10 focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:border-primary transition-all"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1 transition-colors"
+                    aria-label="Wachtwoord zichtbaarheid"
                   >
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
@@ -221,7 +247,7 @@ export function LoginPage() {
 
               <Button
                 type="submit"
-                className="w-full h-11 rounded-full font-medium text-xs sm:text-sm shadow-sm transition-all hover:scale-[1.01] active:scale-[0.99]"
+                className="w-full h-11 rounded-full font-semibold text-xs sm:text-sm shadow-md shadow-primary/20 bg-primary text-primary-foreground hover:bg-primary/95 transition-all hover:scale-[1.01] active:scale-[0.98]"
                 disabled={isLoading || isGoogleLoading}
               >
                 {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
@@ -231,7 +257,7 @@ export function LoginPage() {
 
             {/* Apple-style Password Reset Drawer/Modal */}
             {showResetModal && (
-              <div className="rounded-2xl border border-primary/20 bg-background/95 p-4 shadow-xl backdrop-blur-xl animate-in fade-in slide-in-from-top-2">
+              <div className="rounded-2xl border border-primary/25 bg-background/95 dark:bg-neutral-900/95 p-4 shadow-xl backdrop-blur-xl animate-in fade-in slide-in-from-top-2">
                 <div className="flex items-center justify-between pb-2 border-b border-border/40">
                   <h4 className="font-semibold text-xs sm:text-sm text-foreground">
                     {t('Reset Password')}
@@ -239,7 +265,7 @@ export function LoginPage() {
                   <button
                     type="button"
                     onClick={() => setShowResetModal(false)}
-                    className="text-xs text-muted-foreground hover:text-foreground"
+                    className="h-6 w-6 rounded-full flex items-center justify-center text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50"
                   >
                     ✕
                   </button>
@@ -323,48 +349,71 @@ export function LoginPage() {
               </div>
             )}
 
+            {/* Registration link */}
             <div className="text-center pt-1">
               <p className="text-xs text-muted-foreground">
                 {t("Don't have an account yet?")}{' '}
-                <Link to="/register" className="font-semibold text-primary hover:underline">
+                <Link
+                  to="/register"
+                  className="font-semibold text-primary hover:underline transition-colors"
+                >
                   {t('Start for Free')}
                 </Link>
               </p>
             </div>
 
-            <div className="text-center text-[11px] text-muted-foreground pt-2">
-              <p>{t('Demo credentials (any email/password works)')}</p>
-            </div>
+            {/* Quick Demo Section (Apple Segmented Style) */}
+            <div className="pt-2 border-t border-border/40 dark:border-white/10 space-y-2">
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="font-semibold text-muted-foreground flex items-center gap-1">
+                  <Sparkles className="h-3 w-3 text-amber-500" />
+                  <span>Demo-accounts</span>
+                </span>
+                <span className="text-[10px] text-muted-foreground/80">Willekeurig wachtwoord</span>
+              </div>
 
-            <div className="grid grid-cols-2 gap-2.5 pt-0.5">
-              <button
-                type="button"
-                onClick={() => {
-                  setEmail('info@jamaldrenthe.com');
-                  setPassword('password');
-                }}
-                className="rounded-full border border-border/60 bg-background/50 py-1.5 px-3 text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-accent/60 transition-colors"
-              >
-                Jamal Drenthe (Admin)
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setEmail('agent@crmos.nl');
-                  setPassword('password');
-                }}
-                className="rounded-full border border-border/60 bg-background/50 py-1.5 px-3 text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-accent/60 transition-colors"
-              >
-                {t('Use Agent Account')}
-              </button>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleApplyDemo('info@jamaldrenthe.com')}
+                  className={`group relative rounded-xl border p-2.5 text-left transition-all hover:scale-[1.01] active:scale-[0.98] ${
+                    email === 'info@jamaldrenthe.com'
+                      ? 'border-primary/50 bg-primary/10 text-foreground'
+                      : 'border-border/60 dark:border-white/10 bg-background/50 dark:bg-white/5 hover:bg-muted/60 dark:hover:bg-white/10 text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-xs text-foreground truncate">Jamal Drenthe</span>
+                    <ShieldCheck className="h-3 w-3 text-blue-500 shrink-0" />
+                  </div>
+                  <span className="text-[10px] text-muted-foreground block truncate">Super Admin</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleApplyDemo('agent@crmos.nl')}
+                  className={`group relative rounded-xl border p-2.5 text-left transition-all hover:scale-[1.01] active:scale-[0.98] ${
+                    email === 'agent@crmos.nl'
+                      ? 'border-primary/50 bg-primary/10 text-foreground'
+                      : 'border-border/60 dark:border-white/10 bg-background/50 dark:bg-white/5 hover:bg-muted/60 dark:hover:bg-white/10 text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-xs text-foreground truncate">Agent Demo</span>
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
+                  </div>
+                  <span className="text-[10px] text-muted-foreground block truncate">Buitendienst / Call</span>
+                </button>
+              </div>
             </div>
           </CardContent>
         </Card>
+      </main>
 
-        <p className="mt-6 text-center text-[11px] text-muted-foreground/75">
-          CRMos &bull; Powered by Google Cloud &amp; Firestore
-        </p>
-      </div>
+      {/* Footer Branding */}
+      <footer className="py-4 pb-6 sm:pb-8 text-center text-[11px] text-muted-foreground/75 z-10 px-4">
+        CRMos &bull; Powered by Google Cloud &amp; Firestore
+      </footer>
     </div>
   );
 }

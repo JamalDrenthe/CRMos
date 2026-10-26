@@ -2,11 +2,15 @@ import { useState, useMemo } from 'react';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useCRMStore } from '@/stores/crmStore';
 import { useD2DStore } from '@/stores/d2dStore';
 import { useQuotesStore } from '@/stores/quotesStore';
+import { formatCompanyTag } from '@/lib/companyAccess';
+import { toast } from 'sonner';
 import {
   Building2,
   MapPin,
@@ -16,6 +20,9 @@ import {
   Layers,
   CheckCircle2,
   Clock,
+  Hash,
+  UserPlus,
+  Search,
 } from 'lucide-react';
 
 interface Company360ViewProps {
@@ -26,22 +33,30 @@ interface Company360ViewProps {
 }
 
 export function Company360View({ companyId, isOpen, onClose, onSelectContact }: Company360ViewProps) {
-  const { companies, contacts, deals } = useCRMStore();
+  const { companies, contacts, deals, inviteContactToCompany } = useCRMStore();
   const { pins } = useD2DStore();
   const { quotes } = useQuotesStore();
   const [activeTab, setActiveTab] = useState<'overview' | 'deals' | 'contacts' | 'specs'>('overview');
+  const [employeeQuery, setEmployeeQuery] = useState('');
 
   const company = useMemo(() => {
     return companies.find((c) => c.id === companyId) || null;
   }, [companyId, companies]);
 
-  // Find linked contacts
+  const companyTag = useMemo(() => {
+    return company ? company.company_tag || formatCompanyTag(company.name) : '#crmos';
+  }, [company]);
+
+  // Find linked contacts (including those matched by #bedrijfstag)
   const linkedContacts = useMemo(() => {
     if (!company) return [];
+    const tagLower = (company.company_tag || formatCompanyTag(company.name)).toLowerCase();
     return contacts.filter(
       (c) =>
         c.company_id === company.id ||
-        (c.company && c.company.toLowerCase() === company.name.toLowerCase())
+        (c.company && c.company.toLowerCase() === company.name.toLowerCase()) ||
+        (c.company_tags || []).some((t) => t.toLowerCase() === tagLower) ||
+        (c.tags || []).some((t) => t.toLowerCase() === tagLower)
     );
   }, [company, contacts]);
 
@@ -128,6 +143,9 @@ export function Company360View({ companyId, isOpen, onClose, onSelectContact }: 
 
           {/* Quick Info Badges */}
           <div className="flex flex-wrap items-center gap-2 pt-1">
+            <Badge variant="outline" className="text-xs font-mono font-semibold bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/30">
+              {companyTag}
+            </Badge>
             {company.industry && (
               <Badge variant="outline" className="text-xs font-medium">
                 {company.industry}
@@ -355,10 +373,69 @@ export function Company360View({ companyId, isOpen, onClose, onSelectContact }: 
           )}
 
           {activeTab === 'contacts' && (
-            <div className="space-y-3">
+            <div className="space-y-4">
+              {/* Zoek op Bedrijfstag & Uitnodigen sectie */}
+              <div className="p-3.5 rounded-2xl border border-sky-500/30 bg-sky-500/[0.04] space-y-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                    <Hash className="h-3.5 w-3.5 text-sky-500" />
+                    <span>Medewerkers zoeken &amp; uitnodigen ({companyTag})</span>
+                  </span>
+                </div>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input
+                    value={employeeQuery}
+                    onChange={(e) => setEmployeeQuery(e.target.value)}
+                    placeholder={`Zoek accounts op ${companyTag}, naam of e-mail om uit te nodigen...`}
+                    className="pl-8 h-8 text-xs rounded-xl"
+                  />
+                </div>
+                {employeeQuery.trim() && (
+                  <div className="space-y-1.5 pt-1 max-h-48 overflow-y-auto">
+                    {contacts
+                      .filter((c) => {
+                        const q = employeeQuery.trim().toLowerCase();
+                        return (
+                          `${c.first_name} ${c.last_name}`.toLowerCase().includes(q) ||
+                          c.email.toLowerCase().includes(q) ||
+                          (c.company_tags || []).some((t) => t.toLowerCase().includes(q)) ||
+                          (c.tags || []).some((t) => t.toLowerCase().includes(q))
+                        );
+                      })
+                      .slice(0, 8)
+                      .map((c) => (
+                        <div
+                          key={c.id}
+                          className="p-2 rounded-xl bg-background border flex items-center justify-between gap-2 text-xs"
+                        >
+                          <div className="truncate">
+                            <span className="font-semibold">{c.first_name} {c.last_name}</span>
+                            <span className="text-muted-foreground ml-1.5">({c.email})</span>
+                          </div>
+                          <Button
+                            size="sm"
+                            onClick={() => {
+                              const inv = inviteContactToCompany(company.id, c.id, 'Medewerker');
+                              if (inv) {
+                                toast.success(`${c.first_name} ${c.last_name} uitgenodigd voor ${company.name}!`);
+                                setEmployeeQuery('');
+                              }
+                            }}
+                            className="h-7 rounded-full text-[11px] px-2.5 bg-sky-600 hover:bg-sky-700 text-white gap-1 shrink-0"
+                          >
+                            <UserPlus className="h-3 w-3" />
+                            <span>Uitnodigen</span>
+                          </Button>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+
               {linkedContacts.length === 0 ? (
                 <div className="p-8 text-center text-xs text-muted-foreground border rounded-2xl">
-                  Geen individuele contactpersonen geregistreerd onder dit bedrijf.
+                  Geen individuele contactpersonen geregistreerd onder dit bedrijf of met bedrijfstag {companyTag}.
                 </div>
               ) : (
                 linkedContacts.map((c) => (
@@ -375,7 +452,12 @@ export function Company360View({ companyId, isOpen, onClose, onSelectContact }: 
                         {c.first_name[0]}{c.last_name[0]}
                       </div>
                       <div>
-                        <p className="font-semibold text-sm">{c.first_name} {c.last_name}</p>
+                        <div className="flex items-center gap-1.5">
+                          <p className="font-semibold text-sm">{c.first_name} {c.last_name}</p>
+                          <Badge variant="outline" className="font-mono text-[10px] bg-sky-500/10 text-sky-600 border-sky-500/30">
+                            {companyTag}
+                          </Badge>
+                        </div>
                         <p className="text-xs text-muted-foreground">{c.title || c.email}</p>
                       </div>
                     </div>

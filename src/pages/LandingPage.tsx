@@ -1,10 +1,17 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { cn } from '@/lib/utils';
 import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
 import { Button } from '@/components/ui/button';
 import { useTranslation } from '@/stores/languageStore';
 import { CRMosLogo } from '@/components/common/CRMosLogo';
+import {
+  EcosystemLogosMarquee,
+  EcosystemShowcaseSection,
+  CompanyLogoSvg,
+  type EcosystemCompanyData,
+} from '@/components/common/CompanyLogos';
 import {
   Users,
   Phone,
@@ -17,6 +24,7 @@ import {
   MapPin,
   TrendingUp,
   Database,
+  ExternalLink,
 } from 'lucide-react';
 
 export function LandingPage() {
@@ -25,6 +33,7 @@ export function LandingPage() {
   const [activeTab, setActiveTab] = useState<'crm' | 'ats' | 'contact' | 'gamification'>('crm');
   const [activeChainStep, setActiveChainStep] = useState<number>(1);
   const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
+  const [heroSelectedCompany, setHeroSelectedCompany] = useState<EcosystemCompanyData | null>(null);
 
   const testimonials = [
     {
@@ -236,6 +245,16 @@ export function LandingPage() {
                 <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
                 <span>Google Cloud Firestore Realtime Sync</span>
               </div>
+            </div>
+
+            {/* ================================================================= */}
+            {/* 13 ECOSYSTEM COMPANIES LOGO TICKER */}
+            {/* ================================================================= */}
+            <div className="mt-12 max-w-6xl mx-auto space-y-2.5">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground/70 text-center">
+                Verbonden met het CRMos ecosysteem van 13 toonaangevende bedrijven
+              </p>
+              <EcosystemLogosMarquee onSelectCompany={(comp) => setHeroSelectedCompany(comp)} />
             </div>
 
             {/* ================================================================= */}
@@ -820,6 +839,11 @@ export function LandingPage() {
         </section>
 
         {/* ===================================================================== */}
+        {/* 13 ECOSYSTEM COMPANIES SHOWCASE SECTION */}
+        {/* ===================================================================== */}
+        <EcosystemShowcaseSection />
+
+        {/* ===================================================================== */}
         {/* 8 PILLARS: FEATURES, ADVANTAGES & BENEFITS */}
         {/* ===================================================================== */}
         <section id="features" className="border-t border-border/40 bg-muted/10 py-24 sm:py-32">
@@ -1021,6 +1045,87 @@ export function LandingPage() {
             })}
           </div>
         </section>
+
+        {/* Hero Modal for Selected Company from Marquee */}
+        {heroSelectedCompany && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200"
+            onClick={() => setHeroSelectedCompany(null)}
+          >
+            <div
+              className="relative w-full max-w-lg rounded-3xl border border-border/70 bg-card/95 p-6 sm:p-8 shadow-2xl backdrop-blur-2xl text-foreground"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                type="button"
+                onClick={() => setHeroSelectedCompany(null)}
+                className="absolute top-5 right-5 h-8 w-8 rounded-full border border-border/60 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors text-sm"
+              >
+                ✕
+              </button>
+
+              <div className="flex items-center gap-4">
+                <CompanyLogoSvg id={heroSelectedCompany.id} className="h-14 w-14 shadow-md" />
+                <div>
+                  <h3 className="text-xl font-bold tracking-tight text-foreground">{heroSelectedCompany.name}</h3>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className={cn('text-xs font-mono font-bold px-2 py-0.5 rounded-full border', heroSelectedCompany.bgLight, heroSelectedCompany.textColor, heroSelectedCompany.borderColor)}>
+                      {heroSelectedCompany.tag}
+                    </span>
+                    <span className="text-xs text-muted-foreground font-medium">{heroSelectedCompany.industry}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6 space-y-4 text-sm">
+                <div className="p-4 rounded-2xl bg-muted/40 border border-border/50 space-y-1">
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Over deze organisatie</span>
+                  <p className="text-sm text-foreground/90 leading-relaxed">{heroSelectedCompany.description}</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div className="p-3.5 rounded-xl border border-border/50 bg-background/50">
+                    <span className="text-muted-foreground block text-[11px]">Domein</span>
+                    <span className="font-semibold text-foreground font-mono">{heroSelectedCompany.domain}</span>
+                  </div>
+                  <div className="p-3.5 rounded-xl border border-border/50 bg-background/50">
+                    <span className="text-muted-foreground block text-[11px]">Ecosysteem Rol</span>
+                    <span className="font-semibold text-foreground">{heroSelectedCompany.category}</span>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 space-y-2">
+                  <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-semibold text-xs">
+                    <CheckCircle2 className="h-4 w-4" />
+                    <span>Actief in CRMos &amp; VVC API Netwerk</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Bedrijfstags zoals <span className="font-mono font-bold text-foreground">{heroSelectedCompany.tag}</span> zijn gekoppeld aan medewerkers en contacten in het CRM voor directe vindbaarheid en netwerk-dealmaking.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-6 pt-4 border-t border-border/40 flex items-center justify-end gap-3">
+                <a
+                  href={heroSelectedCompany.website}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full border border-border/60 hover:bg-muted text-xs font-medium text-foreground transition-all"
+                >
+                  <span>Website bezoeken</span>
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setHeroSelectedCompany(null)}
+                  className="px-5 py-2 rounded-full bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-all"
+                >
+                  Sluiten
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
 
       {/* Apple Structured Footer */}

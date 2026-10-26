@@ -17,6 +17,7 @@ import {
   ensureAllCandidatesHaveVvcTags,
   getVvcTag,
 } from '@/services/vvcTagService';
+import { NO_CURE_NO_PAY_JOBS } from '@/data/careersJobsData';
 
 /**
  * Zorgt ervoor dat elke kandidaat-aanmelding direct ook als Contact in het CRM staat,
@@ -109,6 +110,7 @@ interface RecruitmentState {
   deleteJob: (id: string) => void;
   publishJob: (id: string) => void;
   closeJob: (id: string) => void;
+  ensureNoCureNoPayJobs: () => void;
 
   addApplication: (application: Omit<JobApplication, 'id'>) => JobApplication;
   updateApplicationStage: (id: string, stage: JobApplication['stage']) => void;
@@ -353,6 +355,48 @@ export const useRecruitmentStore = create<RecruitmentState>()(
           }
         }
         return changedCount;
+      },
+
+      ensureNoCureNoPayJobs: () => {
+        const currentJobs = get().jobs;
+        const missingJobs: Job[] = [];
+        const now = new Date().toISOString();
+
+        for (const ncJob of NO_CURE_NO_PAY_JOBS) {
+          const exists = currentJobs.some(
+            (j) => j.id === ncJob.id || j.title.toLowerCase() === ncJob.title.toLowerCase()
+          );
+          if (!exists) {
+            missingJobs.push({
+              id: ncJob.id,
+              org_id: 'default_org',
+              company_name: 'vvc',
+              allowed_companies: ['vvc', 'verdienende vrienden club', 'crmos', 'investbotiq', 'boostplug'],
+              is_crmos_core: true,
+              title: ncJob.title,
+              department: ncJob.categoryLabel,
+              location: ncJob.location,
+              type: 'contract',
+              status: 'published',
+              description: `${ncJob.aboutRole}\n\nBeloning & No Cure No Pay:\n${ncJob.compensationSummary}\n\nRekenvoorbeeld:\n${ncJob.compensationExample}\n\nTaken:\n- ${ncJob.tasks.join('\n- ')}`,
+              requirements: ncJob.requirements,
+              currency: 'EUR',
+              hiring_manager: 'Jamal Drenthe',
+              assigned_recruiters: ['Jamal Drenthe'],
+              candidates_count: 0,
+              created_at: now,
+              updated_at: now,
+            });
+          }
+        }
+
+        if (missingJobs.length > 0) {
+          const updated = [...currentJobs, ...missingJobs];
+          set({ jobs: updated });
+          missingJobs.forEach((job) => {
+            saveJobToFirestore(job, 'default_org');
+          });
+        }
       },
 
       searchCandidates: (query) => {

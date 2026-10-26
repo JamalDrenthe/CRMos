@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,6 +24,8 @@ import {
   Trash2,
   ChevronLeft,
   ChevronRight,
+  ExternalLink,
+  Sparkles,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -43,8 +45,12 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 
 export function JobsPage() {
-  const { jobs, addJob, updateJob, deleteJob, publishJob, closeJob } = useRecruitmentStore();
+  const { jobs, addJob, updateJob, deleteJob, publishJob, closeJob, ensureNoCureNoPayJobs } = useRecruitmentStore();
   const { user, adminCompanyFilter } = useAuthStore();
+
+  useEffect(() => {
+    ensureNoCureNoPayJobs();
+  }, [ensureNoCureNoPayJobs]);
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
@@ -328,13 +334,23 @@ export function JobsPage() {
             Beheer openstaande functies en recruitmentpijplijnen voor jouw organisatie.
           </p>
         </div>
-        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Vacature Plaatsen
-            </Button>
-          </DialogTrigger>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <Button
+            variant="outline"
+            onClick={() => window.open('/careers', '_blank')}
+            className="border-primary/40 text-primary hover:bg-primary/5 gap-1.5"
+          >
+            <Sparkles className="h-4 w-4 text-primary" />
+            <span>Publieke Carrièrepagina (13 No Cure Jobs)</span>
+            <ExternalLink className="h-3.5 w-3.5 opacity-70" />
+          </Button>
+          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                Vacature Plaatsen
+              </Button>
+            </DialogTrigger>
           <DialogContent className="max-w-lg">
             <DialogHeader>
               <DialogTitle>Nieuwe Vacature Aanmaken</DialogTitle>
@@ -401,6 +417,7 @@ export function JobsPage() {
             </div>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
