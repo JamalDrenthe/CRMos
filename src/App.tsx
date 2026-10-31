@@ -59,6 +59,8 @@ import { useCRMStore } from '@/stores/crmStore';
 import { useRecruitmentStore } from '@/stores/recruitmentStore';
 import { useContactCenterStore } from '@/stores/contactCenterStore';
 import { useD2DStore } from '@/stores/d2dStore';
+import { useQuotesStore } from '@/stores/quotesStore';
+import { useEnhancedStore } from '@/stores/enhancedStore';
 import { useThemeStore } from '@/stores/themeStore';
 import { formatCompanyTag } from '@/lib/companyAccess';
 import { cn } from '@/lib/utils';
@@ -225,6 +227,12 @@ function App() {
   const { syncWithFirestore: syncRecruitment } = useRecruitmentStore();
   const { syncWithFirestore: syncContactCenter } = useContactCenterStore();
   const { syncWithFirestore: syncD2D } = useD2DStore();
+  const { syncWithFirestore: syncQuotes } = useQuotesStore();
+  const { 
+    syncWorkflowsWithFirestore: syncWorkflows, 
+    syncTerritoriesWithFirestore: syncTerritories, 
+    syncAuditLogsWithFirestore: syncAuditLogs 
+  } = useEnhancedStore();
   const { theme } = useThemeStore();
 
   // Zorg dat alle 13 ecosysteem-bedrijven én alle referral-teams + 7 kernteamleiders altijd in het CRM staan
@@ -333,7 +341,7 @@ function App() {
   // Admin has master view to see all data, other organizations are strictly isolated
   const effectiveOrgId = isSuperAdmin ? 'all' : (organization?.id || user?.org_id || 'default_org');
 
-  // Sync CRM, Recruitment, Contact Center, and D2D data with Firestore for active organization
+  // Sync CRM, Recruitment, Contact Center, D2D, Quotes, Workflows, Territories & Audit Logs with Firestore
   useEffect(() => {
     if (!isAuthenticated) return;
 
@@ -341,13 +349,33 @@ function App() {
     const unsubRec = syncRecruitment(effectiveOrgId);
     const unsubCC = syncContactCenter(effectiveOrgId);
     const unsubD2D = syncD2D(effectiveOrgId);
+    const unsubQuotes = syncQuotes(effectiveOrgId);
+    const unsubWorkflows = syncWorkflows(effectiveOrgId);
+    const unsubTerritories = syncTerritories(effectiveOrgId);
+    const unsubAuditLogs = syncAuditLogs(effectiveOrgId);
+
     return () => {
       if (typeof unsubCRM === 'function') unsubCRM();
       if (typeof unsubRec === 'function') unsubRec();
       if (typeof unsubCC === 'function') unsubCC();
       if (typeof unsubD2D === 'function') unsubD2D();
+      if (typeof unsubQuotes === 'function') unsubQuotes();
+      if (typeof unsubWorkflows === 'function') unsubWorkflows();
+      if (typeof unsubTerritories === 'function') unsubTerritories();
+      if (typeof unsubAuditLogs === 'function') unsubAuditLogs();
     };
-  }, [effectiveOrgId, isAuthenticated, syncWithFirestore, syncRecruitment, syncContactCenter, syncD2D]);
+  }, [
+    effectiveOrgId, 
+    isAuthenticated, 
+    syncWithFirestore, 
+    syncRecruitment, 
+    syncContactCenter, 
+    syncD2D, 
+    syncQuotes, 
+    syncWorkflows, 
+    syncTerritories, 
+    syncAuditLogs
+  ]);
 
   return (
     <TooltipProvider>

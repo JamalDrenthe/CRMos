@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,8 +40,10 @@ import {
   ChevronRight,
   Tag,
   Copy,
+  WifiOff,
+  RefreshCw,
 } from 'lucide-react';
-import { isFirebaseConfigured } from '@/lib/firebase';
+import { isFirebaseConfigured, isOnline, onConnectivityChange } from '@/lib/firebase';
 import { ThemeToggle } from '@/components/common/ThemeToggle';
 import { LanguageToggle } from '@/components/common/LanguageToggle';
 import { useTranslation } from '@/stores/languageStore';
@@ -57,9 +59,17 @@ interface HeaderProps {
 export function Header({ onOpenSearch, onToggleMobileMenu }: HeaderProps = {}) {
   const navigate = useNavigate();
   const { user, organization, logout, adminCompanyFilter, setAdminCompanyFilter } = useAuthStore();
-  const { searchContacts, searchCompanies, searchDeals, companies } = useCRMStore();
+  const { searchContacts, searchCompanies, searchDeals, companies, syncStatus } = useCRMStore();
   const { activeCall } = useContactCenterStore();
   const { t } = useTranslation();
+
+  const [online, setOnline] = useState<boolean>(isOnline());
+
+  useEffect(() => {
+    return onConnectivityChange((isNowOnline) => {
+      setOnline(isNowOnline);
+    });
+  }, []);
 
   const isSuperAdmin =
     user?.email?.toLowerCase() === 'info@jamaldrenthe.com' ||
@@ -251,25 +261,58 @@ export function Header({ onOpenSearch, onToggleMobileMenu }: HeaderProps = {}) {
           </div>
         )}
 
-        {/* Firestore Status Badge (Hidden on smallest mobile screens to save space) */}
-        {isFirebaseConfigured() ? (
-          <div 
-            title="Cloud Firestore is verbonden en actief"
-            className="hidden lg:flex items-center gap-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-400"
-          >
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            <Cloud className="h-3 w-3" />
-            <span className="text-[11px]">Firestore Live</span>
-          </div>
-        ) : (
-          <div 
-            title="Lokale demomodus actief."
-            className="hidden lg:flex items-center gap-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 text-xs font-medium text-amber-600 dark:text-amber-400"
-          >
-            <CloudOff className="h-3 w-3" />
-            <span className="text-[11px]">Demo Opslag</span>
-          </div>
-        )}
+        {/* Apple-Style Realtime & Offline Connection Status Pill */}
+        {(() => {
+          if (!isFirebaseConfigured()) {
+            return (
+              <div 
+                title="Lokale demomodus actief (Geen Firebase credentials)"
+                className="hidden md:flex items-center gap-1.5 rounded-full bg-amber-500/10 border border-amber-500/25 px-2.5 py-1 text-xs font-medium text-amber-600 dark:text-amber-400 backdrop-blur-md shadow-xs"
+              >
+                <CloudOff className="h-3 w-3" />
+                <span className="text-[11px] font-medium">Demo Opslag</span>
+              </div>
+            );
+          }
+
+          if (!online) {
+            return (
+              <div 
+                title="Geen internetverbinding. Multi-tab IndexedDB cache actief. Wijzigingen worden offline bewaard en gesynchroniseerd zodra de verbinding herstelt."
+                className="hidden sm:flex items-center gap-1.5 rounded-full bg-zinc-500/15 border border-zinc-500/30 px-2.5 py-1 text-xs font-medium text-zinc-600 dark:text-zinc-300 backdrop-blur-md shadow-xs"
+              >
+                <WifiOff className="h-3 w-3 text-zinc-400" />
+                <span className="text-[11px] font-medium">Offline (Cache)</span>
+              </div>
+            );
+          }
+
+          if (syncStatus === 'syncing') {
+            return (
+              <div 
+                title="Realtime gegevens aan het synchroniseren met Cloud Firestore..."
+                className="hidden sm:flex items-center gap-1.5 rounded-full bg-sky-500/10 border border-sky-500/25 px-2.5 py-1 text-xs font-medium text-sky-600 dark:text-sky-400 backdrop-blur-md shadow-xs"
+              >
+                <RefreshCw className="h-3 w-3 animate-spin text-sky-500" />
+                <span className="text-[11px] font-medium">Syncing...</span>
+              </div>
+            );
+          }
+
+          return (
+            <div 
+              title="Volledige realtime Firestore persistentie & sync actief met multi-tab IndexedDB cache."
+              className="hidden sm:flex items-center gap-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-400 backdrop-blur-md shadow-xs"
+            >
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              <Cloud className="h-3 w-3 text-emerald-500" />
+              <span className="text-[11px] font-semibold">Realtime Synced</span>
+            </div>
+          );
+        })()}
 
         {/* Active Call Indicator */}
         {activeCall && (

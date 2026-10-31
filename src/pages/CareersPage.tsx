@@ -22,6 +22,7 @@ import {
 } from '@/data/careersJobsData';
 import { useRecruitmentStore } from '@/stores/recruitmentStore';
 import { useCRMStore } from '@/stores/crmStore';
+import { crmosApi } from '@/services/crmosApiClient';
 import { toast } from 'sonner';
 import {
   Search,
@@ -154,6 +155,21 @@ export function CareersPage() {
         experience_years: formExperienceYears,
       },
       notes: `Aangemeld voor functie: [${targetJob.code}] ${targetJob.title}.\nContractvoorkeur: ${formContractType} (${formHours}).\nErvaring: ${formExperienceYears}.\nToelichting: ${formMotivation || 'Geen extra toelichting'}\nKandidaat ID: ${candidate.id}`,
+    });
+
+    // 3. Stuur ook direct door naar de CRMos REST API & Cloud Registry
+    crmosApi.submitCandidate({
+      id: candidate.id,
+      first_name: formFirstName.trim(),
+      last_name: formLastName.trim(),
+      email: formEmail.trim(),
+      phone: formPhone.trim(),
+      status: 'new',
+      skills: [targetJob.title, targetJob.domain, formContractType],
+      experience_years: parseInt(formExperienceYears) || 3,
+      location: '100% Remote (Nederland / Europa)',
+      source: `No Cure No Pay Funnel - [${targetJob.code}] ${targetJob.title}`,
+      vvc_tag: generatedVvcTag,
     });
 
     setApplicationSuccess(generatedVvcTag);

@@ -703,6 +703,26 @@ export interface Notification {
 // ===== UI Types =====
 export type ViewMode = 'list' | 'grid' | 'kanban' | 'calendar';
 
+// ===== CRMos API & Developer Tokens =====
+export interface ApiKeyRecord {
+  id: string;
+  name: string;
+  token_preview: string;
+  token_hash?: string;
+  full_token?: string;
+  environment: 'live' | 'test';
+  scopes: string[];
+  org_id: string;
+  company_name?: string;
+  created_by_user?: string;
+  last_used_at?: string;
+  expires_at?: string;
+  status: 'active' | 'revoked';
+  created_at: string;
+  updated_at: string;
+}
+
+
 // ===== Search =====
 export interface SearchResult {
   id: string;

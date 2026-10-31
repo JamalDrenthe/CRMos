@@ -13,6 +13,9 @@ import {
 } from 'firebase/auth';
 import { 
   getFirestore, 
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
   doc, 
   getDoc, 
   setDoc, 
@@ -55,7 +58,50 @@ export const app = !getApps().length
   : getApp();
 
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+
+// Initialize Cloud Firestore with multi-tab IndexedDB offline persistence
+function createFirestoreInstance() {
+  if (typeof window === 'undefined') {
+    return getFirestore(app);
+  }
+  try {
+    return initializeFirestore(app, {
+      localCache: persistentLocalCache({
+        tabManager: persistentMultipleTabManager(),
+      }),
+    });
+  } catch {
+    // Fallback if already initialized (HMR or dev server reload)
+    return getFirestore(app);
+  }
+}
+
+export const db = createFirestoreInstance();
+
+/**
+ * Checks whether the browser is currently online
+ */
+export const isOnline = (): boolean => {
+  if (typeof navigator !== 'undefined') {
+    return navigator.onLine;
+  }
+  return true;
+};
+
+/**
+ * Subscribes to online/offline connectivity changes
+ */
+export const onConnectivityChange = (callback: (online: boolean) => void): (() => void) => {
+  if (typeof window === 'undefined') return () => {};
+  const handleOnline = () => callback(true);
+  const handleOffline = () => callback(false);
+  window.addEventListener('online', handleOnline);
+  window.addEventListener('offline', handleOffline);
+  return () => {
+    window.removeEventListener('online', handleOnline);
+    window.removeEventListener('offline', handleOffline);
+  };
+};
 
 // Google Auth Provider
 export const googleProvider = new GoogleAuthProvider();

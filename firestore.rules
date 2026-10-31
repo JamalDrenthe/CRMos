@@ -94,6 +94,39 @@ service cloud.firestore {
       allow read, write: if isAuthenticated();
     }
 
+    // Teams & Referral Netwerk
+    match /crm_teams/{teamId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
+    // Workflows & Automatisering
+    match /crm_workflows/{workflowId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Audit Logs & Activity Trail
+    match /crm_audit_logs/{logId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Gamification Profielen
+    match /crm_gamification/{profileId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // CRMos REST API Keys
+    match /crm_api_keys/{keyId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // No Cure No Pay Sollicitaties (Publiek aanmelden, intern beheren)
+    match /recruitment_candidates/{candidateId} {
+      allow read: if isAuthenticated();
+      allow create: if true;
+      allow update, delete: if isAuthenticated();
+    }
+
     // Integraties (HubSpot / Standalone)
     match /crm_integrations/{integrationId} {
       allow read, write: if isAuthenticated();

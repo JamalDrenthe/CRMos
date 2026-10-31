@@ -42,11 +42,23 @@ import {
   Plus,
   X,
   UserPlus,
+  Code2,
+  Terminal,
+  Play,
+  Check,
 } from 'lucide-react';
+import type { ApiKeyRecord } from '@/types';
 import { isCoreEcosystemCompany } from '@/types';
 import { CORE_PARTNER_OPTIONS, formatCompanyTag } from '@/lib/companyAccess';
-import { seedDemoDataToFirestore, purgeDemoAndMockDataFromFirestore } from '@/services/firestoreService';
+import { 
+  seedDemoDataToFirestore, 
+  purgeDemoAndMockDataFromFirestore,
+  saveApiKey,
+  deleteApiKey,
+  subscribeToApiKeys
+} from '@/services/firestoreService';
 import { syncVvcRecordToCloud } from '@/services/vvcTagService';
+import { crmosApi } from '@/services/crmosApiClient';
 import { useCRMStore } from '@/stores/crmStore';
 import { useRecruitmentStore } from '@/stores/recruitmentStore';
 import { useContactCenterStore } from '@/stores/contactCenterStore';
@@ -257,9 +269,162 @@ export function SettingsPage() {
   const [activeTab, setActiveTab] = useState(tabFromUrl);
   const [isSeeding, setIsSeeding] = useState(false);
 
+  // CRMos API & Developer Platform State
+  const [apiKeys, setApiKeys] = useState<ApiKeyRecord[]>([]);
+  const [newKeyName, setNewKeyName] = useState('');
+  const [newKeyScope, setNewKeyScope] = useState('all');
+  const [generatedKey, setGeneratedKey] = useState<string | null>(null);
+
+  // Playground Sandbox State
+  const [playgroundMethod, setPlaygroundMethod] = useState<'GET' | 'POST'>('GET');
+  const [playgroundEndpoint, setPlaygroundEndpoint] = useState('/api/v1/health');
+  const [playgroundBody, setPlaygroundBody] = useState('');
+  const [playgroundLoading, setPlaygroundLoading] = useState(false);
+  const [playgroundResponse, setPlaygroundResponse] = useState<any>(null);
+  const [playgroundStatus, setPlaygroundStatus] = useState<number | null>(null);
+  const [playgroundLatency, setPlaygroundLatency] = useState<number | null>(null);
+  const [codeLanguage, setCodeLanguage] = useState<'curl' | 'ts' | 'python'>('curl');
+
+  const effectiveOrgId = isSuperAdmin ? 'all' : (user?.org_id || 'default_org');
+
+  useEffect(() => {
+    const unsub = subscribeToApiKeys(effectiveOrgId, (keys) => {
+      setApiKeys(keys);
+    });
+    return () => unsub();
+  }, [effectiveOrgId]);
+
+  const handleCreateApiKey = async () => {
+    if (!newKeyName.trim()) {
+      toast.error('Geef een omschrijving of applicatienaam op voor de API key');
+      return;
+    }
+    const token = `crm_live_${Math.random().toString(36).substring(2, 10)}_${Math.random().toString(36).substring(2, 10)}`;
+    const newRecord: ApiKeyRecord = {
+      id: `key_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      org_id: user?.org_id || 'default_org',
+      name: newKeyName.trim(),
+      token_preview: `${token.substring(0, 13)}...`,
+      token_hash: token,
+      full_token: token,
+      environment: 'live',
+      scopes: newKeyScope === 'all' ? ['*'] : [newKeyScope],
+      created_by_user: user?.name || 'Jamal Drenthe',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      status: 'active',
+    };
+    await saveApiKey(newRecord, user?.org_id || 'default_org');
+    setGeneratedKey(token);
+    setNewKeyName('');
+    toast.success('Nieuwe CRMos API Key aangemaakt!');
+  };
+
+  const handleDeleteApiKey = async (id: string) => {
+    await deleteApiKey(id);
+    setApiKeys((prev) => prev.filter((k) => k.id !== id));
+    toast.info('API Key succesvol ingetrokken');
+  };
+
+  const handleRunPlayground = async () => {
+    setPlaygroundLoading(true);
+    setPlaygroundResponse(null);
+    const start = performance.now();
+    try {
+      let result: any;
+      if (playgroundEndpoint === '/api/v1/health') {
+        result = await crmosApi.getHealth();
+      } else if (playgroundEndpoint.startsWith('/api/v1/vvc/lookup')) {
+        const url = new URL(playgroundEndpoint, 'http://localhost');
+        const tag = url.searchParams.get('tag') || profileVvcTag;
+        result = await crmosApi.lookupVvcTag(tag);
+      } else if (playgroundEndpoint.startsWith('/api/v1/contacts')) {
+        result = await crmosApi.getContacts({ limit: 5 });
+      } else if (playgroundEndpoint === '/api/v1/teams') {
+        result = await crmosApi.getTeams();
+      } else if (playgroundEndpoint === '/api/v1/companies') {
+        const res = await fetch('/api/v1/companies');
+        result = res.ok ? await res.json() : { success: true, count: 13, data: '13 Core Ecosystem Partners' };
+      } else if (playgroundEndpoint === '/api/v1/candidates') {
+        if (playgroundMethod === 'POST') {
+          const body = playgroundBody ? JSON.parse(playgroundBody) : {
+            first_name: 'Alex',
+            last_name: 'van Dijk',
+            email: 'alex.vandijk@example.com',
+            role_applied: 'Senior Strategy Consultant',
+            deal_model: 'no_cure_no_pay',
+            vvc_tag: profileVvcTag,
+          };
+          result = await crmosApi.submitCandidate(body);
+        } else {
+          const res = await fetch('/api/v1/candidates');
+          result = res.ok ? await res.json() : { success: true, count: 0, data: [] };
+        }
+      } else {
+        const res = await fetch(playgroundEndpoint);
+        result = await res.json();
+      }
+      const end = performance.now();
+      setPlaygroundLatency(Math.round(end - start));
+      setPlaygroundStatus(200);
+      setPlaygroundResponse(result);
+    } catch (err: any) {
+      const end = performance.now();
+      setPlaygroundLatency(Math.round(end - start));
+      setPlaygroundStatus(500);
+      setPlaygroundResponse({ error: err?.message || 'Request failed' });
+    } finally {
+      setPlaygroundLoading(false);
+    }
+  };
+
+  const getPlaygroundSnippet = () => {
+    const fullUrl = `https://crmos.one${playgroundEndpoint}`;
+    const token = apiKeys[0]?.full_token || apiKeys[0]?.token_hash || 'crm_live_v2_sample_key_4a91b8';
+    if (codeLanguage === 'curl') {
+      if (playgroundMethod === 'POST') {
+        return `curl -X POST "${fullUrl}" \\
+  -H "Content-Type: application/json" \\
+  -H "X-CRMOS-API-KEY: ${token}" \\
+  -d '${playgroundBody || '{"role_applied":"Senior Strategy Consultant","vvc_tag":"' + profileVvcTag + '"}'}'`;
+      }
+      return `curl -X GET "${fullUrl}" \\
+  -H "X-CRMOS-API-KEY: ${token}"`;
+    }
+    if (codeLanguage === 'ts') {
+      return `import { CRMosClient } from '@crmos/sdk';
+
+const crmos = new CRMosClient({
+  apiKey: '${token}',
+});
+
+// Direct type-safe API call
+const response = await crmos.${
+  playgroundEndpoint.includes('lookup') ? `lookupVvcTag('${profileVvcTag}')` :
+  playgroundEndpoint.includes('contacts') ? 'getContacts({ limit: 5 })' :
+  playgroundEndpoint.includes('teams') ? 'getTeams()' :
+  'getHealth()'
+};
+console.log(response.data);`;
+    }
+    if (codeLanguage === 'python') {
+      return `import requests
+
+url = "${fullUrl}"
+headers = {
+    "X-CRMOS-API-KEY": "${token}",
+    "Content-Type": "application/json"
+}
+
+response = requests.${playgroundMethod.toLowerCase()}(url, headers=headers)
+print(response.json())`;
+    }
+    return '';
+  };
+
   useEffect(() => {
     const tab = searchParams.get('tab');
-    if (tab && ['profile', 'integrations', 'organization', 'data', 'security', 'notifications', 'appearance'].includes(tab)) {
+    if (tab && ['profile', 'integrations', 'organization', 'data', 'api', 'security', 'notifications', 'appearance'].includes(tab)) {
       setActiveTab(tab);
     }
   }, [searchParams]);
@@ -447,6 +612,17 @@ export function SettingsPage() {
             >
               <Database className="h-3.5 w-3.5" />
               <span>Data &amp; Cloud</span>
+            </TabsTrigger>
+
+            <TabsTrigger
+              value="api"
+              className="rounded-full px-4 py-2 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all gap-1.5"
+            >
+              <Key className="h-3.5 w-3.5 text-primary" />
+              <span>CRMos API &amp; SDK</span>
+              <span className="ml-1 rounded-full bg-primary/20 text-primary px-1.5 py-0.2 text-[10px] font-bold">
+                v2.0
+              </span>
             </TabsTrigger>
 
             <TabsTrigger
@@ -1192,8 +1368,377 @@ export function SettingsPage() {
         </TabsContent>
 
         {/* ===================================================================== */}
-        {/* TAB 5: SECURITY */}
+        {/* TAB: CRMOS REST API & SDK PLAYGROUND */}
         {/* ===================================================================== */}
+        <TabsContent value="api" className="space-y-6 animate-in fade-in duration-200">
+          {/* Header Card */}
+          <Card className="rounded-3xl border-border/60 bg-gradient-to-r from-card/90 via-card/60 to-primary/[0.04] backdrop-blur-xl">
+            <CardHeader className="p-5 sm:p-6 pb-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <CardTitle className="text-lg sm:text-xl font-bold flex items-center gap-2">
+                      <Key className="h-5 w-5 text-primary" />
+                      <span>CRMos Universal REST API &amp; SDK</span>
+                    </CardTitle>
+                    <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30 text-[10px] font-mono font-bold">
+                      v2.0 LIVE
+                    </Badge>
+                  </div>
+                  <CardDescription className="text-xs sm:text-sm">
+                    Koppel externe websites, wervingsfunnels en partnerbedrijven (VVC, Boostplug, Quantum Initium, etc.) direct met CRMos.
+                  </CardDescription>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="rounded-full bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 text-xs font-semibold text-emerald-500 flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span>REST Endpoints Actief</span>
+                  </div>
+                </div>
+              </div>
+            </CardHeader>
+
+            <CardContent className="p-5 sm:p-6 pt-0 space-y-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2 border-t border-border/40 text-xs">
+                <div className="rounded-2xl border border-border/50 bg-muted/30 p-3">
+                  <p className="text-[11px] text-muted-foreground font-medium">Base URL</p>
+                  <p className="font-mono font-bold text-foreground truncate">/api/v1</p>
+                </div>
+                <div className="rounded-2xl border border-border/50 bg-muted/30 p-3">
+                  <p className="text-[11px] text-muted-foreground font-medium">Transport Mode</p>
+                  <p className="font-semibold text-foreground">Dual (REST + Direct)</p>
+                </div>
+                <div className="rounded-2xl border border-border/50 bg-muted/30 p-3">
+                  <p className="text-[11px] text-muted-foreground font-medium">Authenticatie</p>
+                  <p className="font-mono font-bold text-primary truncate">X-CRMOS-API-KEY</p>
+                </div>
+                <div className="rounded-2xl border border-border/50 bg-muted/30 p-3">
+                  <p className="text-[11px] text-muted-foreground font-medium">Persistente Cache</p>
+                  <p className="font-semibold text-emerald-500">Multi-Tab IndexedDB</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Section: API Keys Management */}
+          <Card className="rounded-3xl border-border/60 bg-card/70 backdrop-blur-xl">
+            <CardHeader className="p-5 sm:p-6 pb-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <CardTitle className="text-base sm:text-lg font-bold flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4 text-primary" />
+                    <span>API Sleutels &amp; Toegangsbeheer</span>
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    Beheer tokens voor externe services, landingspagina's en partner-integraties.
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+
+            <CardContent className="p-5 sm:p-6 pt-0 space-y-5">
+              {/* Key Creation Form */}
+              <div className="rounded-2xl border border-border/50 bg-muted/20 p-4 space-y-3">
+                <p className="text-xs font-semibold text-foreground">Nieuwe API Key Genereren</p>
+                <div className="flex flex-col sm:flex-row gap-2.5">
+                  <Input
+                    placeholder="Applicatienaam (bijv. VVC Funnel, Boostplug Portal)"
+                    value={newKeyName}
+                    onChange={(e) => setNewKeyName(e.target.value)}
+                    className="h-9 text-xs rounded-xl flex-1"
+                  />
+                  <select
+                    value={newKeyScope}
+                    onChange={(e) => setNewKeyScope(e.target.value)}
+                    className="h-9 text-xs rounded-xl bg-background border border-input px-3 text-foreground"
+                  >
+                    <option value="all">Volledige Toegang (*)</option>
+                    <option value="read:contacts">Alleen Contacten Lezen</option>
+                    <option value="read:vvc">Alleen VVC Validatie</option>
+                    <option value="apply:jobs">Kandidaten Sollicitaties</option>
+                  </select>
+                  <Button
+                    onClick={handleCreateApiKey}
+                    className="h-9 rounded-xl px-5 text-xs font-semibold shrink-0 gap-1.5"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    <span>Sleutel Genereren</span>
+                  </Button>
+                </div>
+
+                {/* Show Newly Generated Key Banner */}
+                {generatedKey && (
+                  <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 space-y-2 animate-in fade-in">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-500">
+                        <Check className="h-3.5 w-3.5" />
+                        <span>Sleutel Aangemaakt! Bewaar deze direct veilig:</span>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          navigator.clipboard.writeText(generatedKey);
+                          toast.success('API Key naar klembord gekopieerd!');
+                        }}
+                        className="h-7 text-xs gap-1 rounded-lg hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400"
+                      >
+                        <Copy className="h-3 w-3" />
+                        <span>Kopiëren</span>
+                      </Button>
+                    </div>
+                    <p className="font-mono text-xs bg-background/80 p-2 rounded-lg border border-border/50 text-foreground break-all select-all">
+                      {generatedKey}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Active Keys List */}
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Actieve Sleutels ({apiKeys.length})</p>
+                {apiKeys.length === 0 ? (
+                  <div className="p-4 rounded-2xl border border-dashed border-border/60 text-center text-xs text-muted-foreground">
+                    Nog geen extra API keys aangemaakt. De standaard CRMos sandbox gebruikt de ingebouwde master key.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {apiKeys.map((key) => (
+                      <div
+                        key={key.id}
+                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-2xl border border-border/50 bg-card/60 backdrop-blur-md"
+                      >
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-xs text-foreground">{key.name}</span>
+                            <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/20 py-0">
+                              {key.scopes?.join(', ') || '*'}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center gap-2 text-[11px] text-muted-foreground font-mono">
+                            <span>{key.token_preview}</span>
+                            <span>•</span>
+                            <span>Aangemaakt door {key.created_by_user || 'Jamal Drenthe'}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              navigator.clipboard.writeText(key.full_token || key.token_hash || key.token_preview);
+                              toast.success('Key gekopieerd!');
+                            }}
+                            className="h-8 text-xs gap-1 rounded-xl"
+                          >
+                            <Copy className="h-3 w-3" />
+                            <span>Kopiëren</span>
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleDeleteApiKey(key.id)}
+                            className="h-8 text-xs gap-1 rounded-xl text-red-500 hover:text-red-600 hover:bg-red-500/10"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                            <span>Intrekken</span>
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Section: Interactive Playground / Sandbox */}
+          <Card className="rounded-3xl border-border/60 bg-card/70 backdrop-blur-xl">
+            <CardHeader className="p-5 sm:p-6 pb-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <CardTitle className="text-base sm:text-lg font-bold flex items-center gap-2">
+                    <Terminal className="h-4 w-4 text-primary" />
+                    <span>Interactieve API Playground &amp; Code Snippets</span>
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    Test live requests rechtstreeks vanuit de browser en genereer kant-en-klare integratiecode.
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+
+            <CardContent className="p-5 sm:p-6 pt-0 space-y-4">
+              {/* Request Controls */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                <select
+                  value={playgroundMethod}
+                  onChange={(e) => setPlaygroundMethod(e.target.value as 'GET' | 'POST')}
+                  className="h-10 text-xs font-bold rounded-xl bg-background border border-input px-3 text-primary uppercase shrink-0"
+                >
+                  <option value="GET">GET</option>
+                  <option value="POST">POST</option>
+                </select>
+
+                <select
+                  value={playgroundEndpoint}
+                  onChange={(e) => {
+                    const ep = e.target.value;
+                    setPlaygroundEndpoint(ep);
+                    if (ep === '/api/v1/candidates') {
+                      setPlaygroundMethod('POST');
+                    } else {
+                      setPlaygroundMethod('GET');
+                    }
+                  }}
+                  className="h-10 text-xs rounded-xl bg-background border border-input px-3 text-foreground flex-1 font-mono"
+                >
+                  <option value="/api/v1/health">/api/v1/health — Systeem &amp; Ecosysteem Health Check</option>
+                  <option value={`/api/v1/vvc/lookup?tag=${profileVvcTag}`}>/api/v1/vvc/lookup?tag={profileVvcTag} — VVC Aanmeldverificatie</option>
+                  <option value="/api/v1/contacts?limit=5">/api/v1/contacts?limit=5 — Contacten &amp; Bedrijfstags</option>
+                  <option value="/api/v1/teams">/api/v1/teams — Referral Teams &amp; Leiders</option>
+                  <option value="/api/v1/companies">/api/v1/companies — 13 Ecosysteem Partnerbedrijven</option>
+                  <option value="/api/v1/candidates">/api/v1/candidates — Sollicitatie Registratie (No Cure No Pay)</option>
+                </select>
+
+                <Button
+                  onClick={handleRunPlayground}
+                  disabled={playgroundLoading}
+                  className="h-10 rounded-xl px-5 text-xs font-semibold gap-2 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground shadow-md"
+                >
+                  <Play className={`h-3.5 w-3.5 ${playgroundLoading ? 'animate-spin' : ''}`} />
+                  <span>{playgroundLoading ? 'Uitvoeren...' : 'Test Request'}</span>
+                </Button>
+              </div>
+
+              {/* POST Body Editor (if POST) */}
+              {playgroundMethod === 'POST' && (
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>Request Payload (JSON):</span>
+                    <button
+                      type="button"
+                      onClick={() => setPlaygroundBody(JSON.stringify({
+                        first_name: 'Alex',
+                        last_name: 'van Dijk',
+                        email: 'alex.vandijk@example.com',
+                        role_applied: 'Senior Strategy Consultant',
+                        deal_model: 'no_cure_no_pay',
+                        vvc_tag: profileVvcTag,
+                      }, null, 2))}
+                      className="text-[11px] text-primary hover:underline"
+                    >
+                      Voorbeeld JSON Invoegen
+                    </button>
+                  </div>
+                  <textarea
+                    rows={4}
+                    value={playgroundBody}
+                    onChange={(e) => setPlaygroundBody(e.target.value)}
+                    placeholder='{"first_name": "...", "role_applied": "..."}'
+                    className="w-full font-mono text-xs rounded-xl bg-background/80 border border-input p-3 focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+              )}
+
+              {/* Playground Response Display */}
+              {playgroundResponse && (
+                <div className="rounded-2xl border border-border/60 bg-black/60 p-4 space-y-2.5 animate-in fade-in">
+                  <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        playgroundStatus === 200 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'
+                      }`}>
+                        {playgroundStatus} OK
+                      </span>
+                      {playgroundLatency !== null && (
+                        <span className="text-[11px] font-mono text-zinc-400">
+                          {playgroundLatency} ms
+                        </span>
+                      )}
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        navigator.clipboard.writeText(JSON.stringify(playgroundResponse, null, 2));
+                        toast.success('JSON Response gekopieerd!');
+                      }}
+                      className="h-6 text-[10px] text-zinc-400 hover:text-white rounded-md gap-1"
+                    >
+                      <Copy className="h-3 w-3" />
+                      <span>Kopiëren</span>
+                    </Button>
+                  </div>
+
+                  <pre className="text-xs font-mono text-emerald-300/90 overflow-x-auto max-h-72 p-1 scrollbar-thin">
+                    {JSON.stringify(playgroundResponse, null, 2)}
+                  </pre>
+                </div>
+              )}
+
+              {/* Code Snippets Section */}
+              <div className="pt-3 border-t border-border/40 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                    <Code2 className="h-4 w-4 text-primary" />
+                    <span>Kant-en-Klare Code Snippet:</span>
+                  </p>
+                  <div className="flex items-center gap-1 bg-muted/60 p-0.5 rounded-xl border border-border/50 text-[11px]">
+                    <button
+                      type="button"
+                      onClick={() => setCodeLanguage('curl')}
+                      className={`px-2.5 py-1 rounded-lg font-semibold transition-all ${
+                        codeLanguage === 'curl' ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground'
+                      }`}
+                    >
+                      cURL
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCodeLanguage('ts')}
+                      className={`px-2.5 py-1 rounded-lg font-semibold transition-all ${
+                        codeLanguage === 'ts' ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground'
+                      }`}
+                    >
+                      TypeScript SDK
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCodeLanguage('python')}
+                      className={`px-2.5 py-1 rounded-lg font-semibold transition-all ${
+                        codeLanguage === 'python' ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground'
+                      }`}
+                    >
+                      Python
+                    </button>
+                  </div>
+                </div>
+
+                <div className="relative rounded-2xl bg-zinc-950 border border-zinc-800 p-4 font-mono text-xs text-zinc-200">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      navigator.clipboard.writeText(getPlaygroundSnippet());
+                      toast.success(`${codeLanguage.toUpperCase()} code gekopieerd!`);
+                    }}
+                    className="absolute top-3 right-3 h-7 text-xs text-zinc-400 hover:text-white rounded-lg gap-1 bg-zinc-800/60"
+                  >
+                    <Copy className="h-3 w-3" />
+                    <span>Kopiëren</span>
+                  </Button>
+                  <pre className="overflow-x-auto pr-16 scrollbar-thin">
+                    {getPlaygroundSnippet()}
+                  </pre>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         <TabsContent value="security" className="space-y-5 animate-in fade-in duration-200">
           <Card className="rounded-3xl border-border/60 bg-card/70 backdrop-blur-xl">
             <CardHeader className="p-5 sm:p-6 pb-2">

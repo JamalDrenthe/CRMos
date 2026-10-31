@@ -4,7 +4,12 @@ import { useAuthStore } from '@/stores/authStore';
 import { 
   saveTerritoryToFirestore, 
   deleteTerritoryFromFirestore,
-  subscribeToTerritories 
+  subscribeToTerritories,
+  saveWorkflow,
+  deleteWorkflow,
+  subscribeToWorkflows,
+  saveAuditLog,
+  subscribeToAuditLogs
 } from '@/services/firestoreService';
 import type { 
   GamificationProfile, 
@@ -310,6 +315,7 @@ interface EnhancedState {
   deleteWorkflow: (id: string) => void;
   toggleWorkflow: (id: string) => void;
   selectWorkflow: (workflow: Workflow | null) => void;
+  syncWorkflowsWithFirestore: (orgId: string) => () => void;
   
   // Actions - Dashboards
   addDashboard: (dashboard: Omit<Dashboard, 'id' | 'created_at' | 'updated_at'>) => Dashboard;
@@ -339,6 +345,7 @@ interface EnhancedState {
   addAuditLog: (log: Omit<AuditLog, 'id' | 'created_at'>) => void;
   getAuditLogsByEntity: (entityType: string, entityId: string) => AuditLog[];
   getAuditLogsByUser: (userId: string) => AuditLog[];
+  syncAuditLogsWithFirestore: (orgId: string) => () => void;
 }
 
 export const useEnhancedStore = create<EnhancedState>()(
@@ -401,6 +408,7 @@ export const useEnhancedStore = create<EnhancedState>()(
 
       // Workflow Actions
       addWorkflow: (workflowData) => {
+        const orgId = useAuthStore.getState().user?.org_id || useAuthStore.getState().organization?.id || 'default_org';
         const newWorkflow: Workflow = {
           ...workflowData,
           id: generateId(),
@@ -409,32 +417,54 @@ export const useEnhancedStore = create<EnhancedState>()(
           updated_at: new Date().toISOString(),
         };
         set((state) => ({ workflows: [...state.workflows, newWorkflow] }));
+        saveWorkflow(newWorkflow, orgId);
         return newWorkflow;
       },
 
       updateWorkflow: (id, updates) => {
-        set((state) => ({
-          workflows: state.workflows.map((w) =>
+        const orgId = useAuthStore.getState().user?.org_id || useAuthStore.getState().organization?.id || 'default_org';
+        set((state) => {
+          const updatedWorkflows = state.workflows.map((w) =>
             w.id === id ? { ...w, ...updates, updated_at: new Date().toISOString() } : w
-          ),
-        }));
+          );
+          const target = updatedWorkflows.find((w) => w.id === id);
+          if (target) {
+            saveWorkflow(target, orgId);
+          }
+          return { workflows: updatedWorkflows };
+        });
       },
 
       deleteWorkflow: (id) => {
         set((state) => ({
           workflows: state.workflows.filter((w) => w.id !== id),
         }));
+        deleteWorkflow(id);
       },
 
       toggleWorkflow: (id) => {
-        set((state) => ({
-          workflows: state.workflows.map((w) =>
+        const orgId = useAuthStore.getState().user?.org_id || useAuthStore.getState().organization?.id || 'default_org';
+        set((state) => {
+          const updatedWorkflows = state.workflows.map((w) =>
             w.id === id ? { ...w, is_active: !w.is_active, updated_at: new Date().toISOString() } : w
-          ),
-        }));
+          );
+          const target = updatedWorkflows.find((w) => w.id === id);
+          if (target) {
+            saveWorkflow(target, orgId);
+          }
+          return { workflows: updatedWorkflows };
+        });
       },
 
       selectWorkflow: (workflow) => set({ selectedWorkflow: workflow }),
+
+      syncWorkflowsWithFirestore: (orgId: string) => {
+        return subscribeToWorkflows(orgId, (firestoreWorkflows) => {
+          if (firestoreWorkflows && firestoreWorkflows.length > 0) {
+            set({ workflows: firestoreWorkflows });
+          }
+        });
+      },
 
       // Dashboard Actions
       addDashboard: (dashboardData) => {
@@ -606,12 +636,14 @@ export const useEnhancedStore = create<EnhancedState>()(
 
       // Audit Log Actions
       addAuditLog: (logData) => {
+        const orgId = useAuthStore.getState().user?.org_id || useAuthStore.getState().organization?.id || 'default_org';
         const newLog: AuditLog = {
           ...logData,
           id: generateId(),
           created_at: new Date().toISOString(),
         };
         set((state) => ({ auditLogs: [newLog, ...state.auditLogs] }));
+        saveAuditLog(newLog, orgId);
       },
 
       getAuditLogsByEntity: (entityType, entityId) => {
@@ -622,6 +654,14 @@ export const useEnhancedStore = create<EnhancedState>()(
 
       getAuditLogsByUser: (userId) => {
         return get().auditLogs.filter((log) => log.user_id === userId);
+      },
+
+      syncAuditLogsWithFirestore: (orgId: string) => {
+        return subscribeToAuditLogs(orgId, (firestoreLogs) => {
+          if (firestoreLogs && firestoreLogs.length > 0) {
+            set({ auditLogs: firestoreLogs });
+          }
+        });
       },
     }),
     {

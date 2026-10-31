@@ -24,6 +24,9 @@ import type {
   Product,
   Territory,
   D2DAddressPin,
+  Workflow,
+  AuditLog,
+  ApiKeyRecord,
 } from '@/types';
 
 // Collection Names
@@ -40,6 +43,10 @@ export const COLLECTIONS = {
   PRODUCTS: 'crm_products',
   TERRITORIES: 'crm_territories',
   D2D_PINS: 'crm_d2d_pins',
+  WORKFLOWS: 'crm_workflows',
+  AUDIT_LOGS: 'crm_audit_logs',
+  GAMIFICATION: 'crm_gamification',
+  API_KEYS: 'crm_api_keys',
   VVC_REGISTRY: 'crm_vvc_registry',
   VVC_SYNC_CODES: 'vvc_sync_codes',
 };
@@ -932,4 +939,135 @@ export function subscribeToD2DPins(
     callback(items);
   }, (err) => console.warn('Real-time D2D pins subscription fout:', err));
 }
+
+// ====================================================
+// WORKFLOWS & AUTOMATIONS
+// ====================================================
+
+export async function saveWorkflowToFirestore(workflow: Workflow, orgId: string): Promise<void> {
+  if (!isFirebaseConfigured()) return;
+  try {
+    const docRef = doc(db, COLLECTIONS.WORKFLOWS, workflow.id);
+    await setDoc(docRef, {
+      ...workflow,
+      org_id: orgId,
+      updated_at: new Date().toISOString(),
+      _firestore_timestamp: serverTimestamp(),
+    }, { merge: true });
+  } catch (err) {
+    console.error('Fout bij opslaan van workflow:', err);
+  }
+}
+
+export async function deleteWorkflowFromFirestore(workflowId: string): Promise<void> {
+  if (!isFirebaseConfigured()) return;
+  try {
+    await deleteDoc(doc(db, COLLECTIONS.WORKFLOWS, workflowId));
+  } catch (err) {
+    console.error('Fout bij verwijderen van workflow:', err);
+  }
+}
+
+export function subscribeToWorkflows(
+  orgId: string,
+  callback: (workflows: Workflow[]) => void
+): Unsubscribe {
+  if (!isFirebaseConfigured()) return () => {};
+  const isMasterView = orgId === 'all' || orgId === '*';
+  const q = isMasterView
+    ? query(collection(db, COLLECTIONS.WORKFLOWS))
+    : query(collection(db, COLLECTIONS.WORKFLOWS), where('org_id', '==', orgId));
+
+  return onSnapshot(q, (snap) => {
+    const items = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Workflow));
+    callback(items);
+  }, (err) => console.warn('Real-time workflows subscription fout:', err));
+}
+
+// ====================================================
+// AUDIT LOGS
+// ====================================================
+
+export async function saveAuditLogToFirestore(auditLog: AuditLog, orgId: string): Promise<void> {
+  if (!isFirebaseConfigured()) return;
+  try {
+    const docRef = doc(db, COLLECTIONS.AUDIT_LOGS, auditLog.id);
+    await setDoc(docRef, {
+      ...auditLog,
+      org_id: orgId,
+      _firestore_timestamp: serverTimestamp(),
+    }, { merge: true });
+  } catch (err) {
+    console.error('Fout bij opslaan van audit log:', err);
+  }
+}
+
+export function subscribeToAuditLogs(
+  orgId: string,
+  callback: (logs: AuditLog[]) => void
+): Unsubscribe {
+  if (!isFirebaseConfigured()) return () => {};
+  const isMasterView = orgId === 'all' || orgId === '*';
+  const q = isMasterView
+    ? query(collection(db, COLLECTIONS.AUDIT_LOGS))
+    : query(collection(db, COLLECTIONS.AUDIT_LOGS), where('org_id', '==', orgId));
+
+  return onSnapshot(q, (snap) => {
+    const items = snap.docs.map((d) => ({ id: d.id, ...d.data() } as AuditLog));
+    callback(items);
+  }, (err) => console.warn('Real-time audit logs subscription fout:', err));
+}
+
+// ====================================================
+// CRMOS API KEYS
+// ====================================================
+
+export async function saveApiKeyToFirestore(apiKey: ApiKeyRecord, orgId: string): Promise<void> {
+  if (!isFirebaseConfigured()) return;
+  try {
+    const docRef = doc(db, COLLECTIONS.API_KEYS, apiKey.id);
+    await setDoc(docRef, {
+      ...apiKey,
+      org_id: orgId,
+      updated_at: new Date().toISOString(),
+      _firestore_timestamp: serverTimestamp(),
+    }, { merge: true });
+  } catch (err) {
+    console.error('Fout bij opslaan van CRMos API key:', err);
+  }
+}
+
+export async function deleteApiKeyFromFirestore(apiKeyId: string): Promise<void> {
+  if (!isFirebaseConfigured()) return;
+  try {
+    await deleteDoc(doc(db, COLLECTIONS.API_KEYS, apiKeyId));
+  } catch (err) {
+    console.error('Fout bij verwijderen van API key:', err);
+  }
+}
+
+export function subscribeToApiKeys(
+  orgId: string,
+  callback: (keys: ApiKeyRecord[]) => void
+): Unsubscribe {
+  if (!isFirebaseConfigured()) return () => {};
+  const isMasterView = orgId === 'all' || orgId === '*';
+  const q = isMasterView
+    ? query(collection(db, COLLECTIONS.API_KEYS))
+    : query(collection(db, COLLECTIONS.API_KEYS), where('org_id', '==', orgId));
+
+  return onSnapshot(q, (snap) => {
+    const items = snap.docs.map((d) => ({ id: d.id, ...d.data() } as ApiKeyRecord));
+    callback(items);
+  }, (err) => console.warn('Real-time API keys subscription fout:', err));
+}
+
+export {
+  saveWorkflowToFirestore as saveWorkflow,
+  deleteWorkflowFromFirestore as deleteWorkflow,
+  saveAuditLogToFirestore as saveAuditLog,
+  saveApiKeyToFirestore as saveApiKey,
+  deleteApiKeyFromFirestore as deleteApiKey,
+};
+
 
