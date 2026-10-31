@@ -59,6 +59,7 @@ import {
 } from '@/services/firestoreService';
 import { syncVvcRecordToCloud } from '@/services/vvcTagService';
 import { crmosApi } from '@/services/crmosApiClient';
+import { COMPANY_API_KEYS, MASTER_ECOSYSTEM_API_KEY } from '@/data/apiKeysData';
 import { useCRMStore } from '@/stores/crmStore';
 import { useRecruitmentStore } from '@/stores/recruitmentStore';
 import { useContactCenterStore } from '@/stores/contactCenterStore';
@@ -1421,17 +1422,150 @@ print(response.json())`;
             </CardContent>
           </Card>
 
-          {/* Section: API Keys Management */}
+          {/* Section: Predefined Enterprise & Company API Keys for AI Agents */}
+          <Card className="rounded-3xl border-primary/30 bg-gradient-to-br from-card/95 via-card/80 to-primary/[0.06] backdrop-blur-2xl shadow-xl">
+            <CardHeader className="p-5 sm:p-6 pb-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <CardTitle className="text-base sm:text-lg font-bold flex items-center gap-2">
+                      <Key className="h-5 w-5 text-primary" />
+                      <span>Directe Bedrijfs-API Keys voor AI Agents</span>
+                    </CardTitle>
+                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/30 text-[10px] font-bold">
+                      13 Bedrijven + Master Key
+                    </Badge>
+                  </div>
+                  <CardDescription className="text-xs">
+                    Kopieer direct een API key en geef deze aan je AI agent om alle CRM-data (contacten, bedrijven, deals, teams) op te halen en doorzoeken.
+                  </CardDescription>
+                </div>
+
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    const prompt = `CRMos API Configuratie voor AI Agent:
+Base URL: https://crmos.one/api/v1
+Master API Key: ${MASTER_ECOSYSTEM_API_KEY.key}
+Header: X-CRMOS-API-KEY: ${MASTER_ECOSYSTEM_API_KEY.key}
+
+Beschikbare Endpoints:
+- GET /api/v1/search?q={zoekterm} (Universeel zoeken over alle contacten, deals, kandidaten en teams)
+- GET /api/v1/contacts?tag={tag}&company_tag={bedrijfstag}&limit=100
+- GET /api/v1/teams (Alle referral teams en kernleiders)
+- GET /api/v1/companies (Alle 13 partnerbedrijven)
+- GET /api/v1/vvc/lookup?tag={vvc_tag} (Verifieer unieke VVC tags)
+- GET /api/v1/candidates (Recruitment & No Cure No Pay sollicitaties)
+- GET /api/v1/deals (Deals & verkoopkansen)`;
+                    navigator.clipboard.writeText(prompt);
+                    toast.success('Complete AI Agent prompt gekopieerd!');
+                  }}
+                  className="rounded-full text-xs gap-1.5 h-8 bg-primary hover:bg-primary/90 text-primary-foreground shadow-md shrink-0 font-semibold"
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                  <span>Kopieer AI Agent Prompt</span>
+                </Button>
+              </div>
+            </CardHeader>
+
+            <CardContent className="p-5 sm:p-6 pt-0 space-y-4">
+              {/* MASTER KEY BANNER */}
+              <div className="rounded-2xl border-2 border-primary/40 bg-primary/10 p-4 space-y-2.5 backdrop-blur-md">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="font-bold text-xs sm:text-sm text-foreground">
+                      {MASTER_ECOSYSTEM_API_KEY.name}
+                    </span>
+                    <Badge variant="outline" className="bg-primary/20 text-primary border-primary/40 text-[9px] font-bold uppercase">
+                      Super Admin
+                    </Badge>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="default"
+                    onClick={() => {
+                      navigator.clipboard.writeText(MASTER_ECOSYSTEM_API_KEY.key);
+                      toast.success('Master Ecosystem API Key gekopieerd!');
+                    }}
+                    className="h-8 text-xs gap-1.5 rounded-xl font-semibold shadow-xs"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                    <span>Kopieer Master Key</span>
+                  </Button>
+                </div>
+
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  {MASTER_ECOSYSTEM_API_KEY.description}
+                </p>
+
+                <div className="flex items-center justify-between rounded-xl bg-background/90 border border-border/60 p-2 text-xs font-mono select-all">
+                  <span className="text-primary font-semibold truncate mr-2">{MASTER_ECOSYSTEM_API_KEY.key}</span>
+                  <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-500 border-emerald-500/30 shrink-0">
+                    Alle Bedrijven
+                  </Badge>
+                </div>
+              </div>
+
+              {/* 13 BEDRIJVEN GRID */}
+              <div className="space-y-2 pt-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Individuele Bedrijfs-API Keys ({COMPANY_API_KEYS.length})
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                  {COMPANY_API_KEYS.map((compKey) => (
+                    <div
+                      key={compKey.id}
+                      className="p-3.5 rounded-2xl border border-border/50 bg-card/60 hover:bg-card/90 transition-all space-y-2"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-semibold text-xs text-foreground truncate max-w-[180px]">
+                            {compKey.company}
+                          </span>
+                          <Badge variant="outline" className="text-[9px] font-mono bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/30 py-0">
+                            #{compKey.tag.toLowerCase()}
+                          </Badge>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            navigator.clipboard.writeText(compKey.key);
+                            toast.success(`API Key voor ${compKey.company} gekopieerd!`);
+                          }}
+                          className="h-7 text-xs gap-1 rounded-lg hover:bg-primary/10 text-primary font-medium"
+                        >
+                          <Copy className="h-3 w-3" />
+                          <span>Kopiëren</span>
+                        </Button>
+                      </div>
+
+                      <p className="text-[11px] text-muted-foreground leading-snug line-clamp-2">
+                        {compKey.description}
+                      </p>
+
+                      <div className="p-1.5 rounded-lg bg-background/80 border border-border/40 font-mono text-[10px] text-muted-foreground truncate select-all">
+                        {compKey.key}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Section: Custom API Keys Management */}
           <Card className="rounded-3xl border-border/60 bg-card/70 backdrop-blur-xl">
             <CardHeader className="p-5 sm:p-6 pb-3">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <CardTitle className="text-base sm:text-lg font-bold flex items-center gap-2">
                     <ShieldCheck className="h-4 w-4 text-primary" />
-                    <span>API Sleutels &amp; Toegangsbeheer</span>
+                    <span>Aangepaste API Sleutels Aanmaken</span>
                   </CardTitle>
                   <CardDescription className="text-xs">
-                    Beheer tokens voor externe services, landingspagina's en partner-integraties.
+                    Maak aanvullende tokens met specifieke scopes aan voor externe webhooks of medewerkers.
                   </CardDescription>
                 </div>
               </div>

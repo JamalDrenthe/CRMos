@@ -2,6 +2,141 @@ import type { Plugin } from 'vite';
 import type { IncomingMessage, ServerResponse } from 'http';
 
 /**
+ * Officiële Master & Bedrijfs-API Keys voor CRMos
+ * Direct te kopiëren en te plakken aan AI agents / integraties.
+ */
+export const PREDEFINED_COMPANY_API_KEYS: Record<
+  string,
+  { company: string; tag: string; name: string; role: string; description: string }
+> = {
+  // Master API Key — Volledige toegang tot alle data en alle 13 bedrijven
+  'crm_live_master_jamaldrenthe_2026_all_ecosystem': {
+    company: 'ALL',
+    tag: 'ALL',
+    name: 'Master Ecosystem Key (Jamal Drenthe)',
+    role: 'super_admin',
+    description: 'Volledige lees- en schrijftoegang tot alle 13 bedrijven, alle contacten, deals, kandidaten en teams.',
+  },
+
+  // 1. VVC
+  'crm_live_vvc_verdienende_vrienden_club_2026': {
+    company: 'vvc (verdienende vrienden club)',
+    tag: 'VVC',
+    name: 'VVC API Key',
+    role: 'partner',
+    description: 'Toegang tot VVC aanmeldingen, referral-teams en community contacten.',
+  },
+
+  // 2. QUANTUM INITIUM
+  'crm_live_quantum_initium_enterprise_2026': {
+    company: 'quantum initium',
+    tag: 'QUANTUM_INITIUM',
+    name: 'Quantum Initium API Key',
+    role: 'partner',
+    description: 'Toegang tot enterprise finance, AI compute pipelines en corporate contacten.',
+  },
+
+  // 3. IMMIGRATIEPUNT
+  'crm_live_immigratiepunt_portal_2026': {
+    company: 'immigratiepunt',
+    tag: 'IMMIGRATIEPUNT',
+    name: 'Immigratiepunt API Key',
+    role: 'partner',
+    description: 'Toegang tot expat dossiers, visa/relocatie contacten en aanvragen.',
+  },
+
+  // 4. SPONTIVA
+  'crm_live_spontiva_recruitment_2026': {
+    company: 'spontiva',
+    tag: 'SPONTIVA',
+    name: 'Spontiva API Key',
+    role: 'partner',
+    description: 'Toegang tot recruitment, No Cure No Pay kandidaten en matching dossiers.',
+  },
+
+  // 5. INVESTBOTIQ
+  'crm_live_investbotiq_capital_2026': {
+    company: 'Investbotiq',
+    tag: 'INVESTBOTIQ',
+    name: 'Investbotiq API Key',
+    role: 'partner',
+    description: 'Toegang tot investeerdersrelaties, trading pools en kapitaalcontacten.',
+  },
+
+  // 6. BOOSTPLUG
+  'crm_live_boostplug_energy_iot_2026': {
+    company: 'boostplug',
+    tag: 'BOOSTPLUG',
+    name: 'Boostplug API Key',
+    role: 'partner',
+    description: 'Toegang tot EV/IoT laadpalen, energie-contracten en zakelijke deals.',
+  },
+
+  // 7. CRMOS
+  'crm_live_crmos_core_platform_2026': {
+    company: 'crmos',
+    tag: 'CRMOS',
+    name: 'CRMos Core Platform Key',
+    role: 'admin',
+    description: 'Toegang tot kernplatform CRM-operaties, licenties en workflows.',
+  },
+
+  // 8. ZHEAVENZY
+  'crm_live_zheavenzy_atelier_2026': {
+    company: 'zheavenzy',
+    tag: 'ZHEAVENZY',
+    name: 'Zheavenzy API Key',
+    role: 'partner',
+    description: 'Toegang tot luxe atelier, high-ticket klanten en lifestyle relaties.',
+  },
+
+  // 9. LOGS.RENT
+  'crm_live_logs_rent_logistics_2026': {
+    company: 'logs.rent',
+    tag: 'LOGS_RENT',
+    name: 'Logs.rent API Key',
+    role: 'partner',
+    description: 'Toegang tot compute & hardware verhuur, logistiek en datacenters.',
+  },
+
+  // 10. DJOBBA.WORKS
+  'crm_live_djobba_works_freelance_2026': {
+    company: 'djobba.works',
+    tag: 'DJOBBA_WORKS',
+    name: 'Djobba.works API Key',
+    role: 'partner',
+    description: 'Toegang tot Europese freelance marktplaats, opdrachten en zzp talenten.',
+  },
+
+  // 11. TRUSTING WORK
+  'crm_live_trusting_work_staffing_2026': {
+    company: 'trusting work',
+    tag: 'TRUSTING_WORK',
+    name: 'Trusting Work API Key',
+    role: 'partner',
+    description: 'Toegang tot IT-detachering, uitzendprofielen en opdrachtgevers.',
+  },
+
+  // 12. WONINGVRY
+  'crm_live_woningvry_realestate_2026': {
+    company: 'woningvry',
+    tag: 'WONINGVRY',
+    name: 'Woningvry API Key',
+    role: 'partner',
+    description: 'Toegang tot vastgoedbeleggingen, huurders en transformatieprojecten.',
+  },
+
+  // 13. XABI WORLD
+  'crm_live_xabi_world_international_2026': {
+    company: 'xabi world',
+    tag: 'XABI_WORLD',
+    name: 'Xabi World API Key',
+    role: 'partner',
+    description: 'Toegang tot internationale media, branding partnerships en merchandising.',
+  },
+};
+
+/**
  * Helper om Firestore REST API document fields om te zetten naar platte JSON
  */
 function parseFirestoreFields(fields: Record<string, any> = {}): Record<string, unknown> {
@@ -46,16 +181,6 @@ function sendJson(res: ServerResponse, statusCode: number, data: any) {
 
 /**
  * CRMos Universal REST API Engine
- * 
- * Behandelt:
- * - GET  /api/v1/health
- * - GET  /api/v1/vvc/lookup?tag=... & GET /api/vvc/lookup
- * - GET  /api/v1/contacts?tag=...&company_tag=...
- * - POST /api/v1/contacts
- * - GET  /api/v1/candidates
- * - POST /api/v1/candidates
- * - GET  /api/v1/teams
- * - GET  /api/v1/companies
  */
 export function vvcApiPlugin(): Plugin {
   return {
@@ -86,6 +211,15 @@ export function vvcApiPlugin(): Plugin {
           const pathname = parsedUrl.pathname;
           const projectId = process.env.VITE_FIREBASE_PROJECT_ID || 'crmosone-dev';
 
+          // Extract API Key
+          const rawKeyHeader =
+            (req.headers['x-crmos-api-key'] as string) ||
+            (req.headers['authorization'] as string) ||
+            parsedUrl.searchParams.get('api_key') ||
+            '';
+          const apiKey = rawKeyHeader.replace(/^Bearer\s+/i, '').trim();
+          const keyMeta = PREDEFINED_COMPANY_API_KEYS[apiKey] || null;
+
           // 1. HEALTH CHECK
           if (pathname === '/api/v1/health') {
             return sendJson(res, 200, {
@@ -94,13 +228,107 @@ export function vvcApiPlugin(): Plugin {
                 status: 'operational',
                 version: '2.0.0',
                 platform: 'CRMos Multi-Tenant Cloud',
-                ecosystem: 'VVC & Partners',
+                ecosystem: 'VVC & 13 Partnerbedrijven',
+                authenticated_as: keyMeta ? keyMeta.name : 'Public / Guest',
+                company_scope: keyMeta ? keyMeta.company : 'ALL',
                 timestamp: new Date().toISOString(),
               },
             });
           }
 
-          // 2. VVC LOOKUP
+          // 2. KEYS DIRECTORY FOR AGENTS
+          if (pathname === '/api/v1/keys') {
+            return sendJson(res, 200, {
+              success: true,
+              count: Object.keys(PREDEFINED_COMPANY_API_KEYS).length,
+              keys: Object.entries(PREDEFINED_COMPANY_API_KEYS).map(([token, info]) => ({
+                api_key: token,
+                name: info.name,
+                company: info.company,
+                tag: info.tag,
+                role: info.role,
+                description: info.description,
+              })),
+            });
+          }
+
+          // 3. UNIVERSELE SPOTLIGHT SEARCH OVER ALLE CRM DATA
+          if (pathname === '/api/v1/search') {
+            const query = (parsedUrl.searchParams.get('q') || parsedUrl.searchParams.get('query') || '').toLowerCase().trim();
+            if (!query) {
+              return sendJson(res, 400, {
+                success: false,
+                message: 'Geef een zoekterm op via ?q=...',
+              });
+            }
+
+            // Ophalen van documenten uit Firestore
+            const contactsUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/crm_contacts?pageSize=100`;
+            const dealsUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/crm_deals?pageSize=100`;
+            const candidatesUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/recruitment_candidates?pageSize=100`;
+
+            const [contactsRes, dealsRes, candRes] = await Promise.all([
+              fetch(contactsUrl).catch(() => null),
+              fetch(dealsUrl).catch(() => null),
+              fetch(candidatesUrl).catch(() => null),
+            ]);
+
+            const contactsData = (contactsRes && contactsRes.ok ? await contactsRes.json() : { documents: [] }) as { documents?: any[] };
+            const dealsData = (dealsRes && dealsRes.ok ? await dealsRes.json() : { documents: [] }) as { documents?: any[] };
+            const candData = (candRes && candRes.ok ? await candRes.json() : { documents: [] }) as { documents?: any[] };
+
+            const allContacts = (contactsData.documents || []).map((d: any) => ({
+              id: d.name.split('/').pop(),
+              ...parseFirestoreFields(d.fields || {}),
+            }));
+
+            const allDeals = (dealsData.documents || []).map((d: any) => ({
+              id: d.name.split('/').pop(),
+              ...parseFirestoreFields(d.fields || {}),
+            }));
+
+            const allCandidates = (candData.documents || []).map((d: any) => ({
+              id: d.name.split('/').pop(),
+              ...parseFirestoreFields(d.fields || {}),
+            }));
+
+            // Filteren op zoekterm
+            const matchingContacts = allContacts.filter((c: any) => {
+              const fullName = `${c.first_name || ''} ${c.last_name || ''}`.toLowerCase();
+              const email = (c.email || '').toLowerCase();
+              const company = (c.company || '').toLowerCase();
+              const vvcTag = (c.vvc_tag || '').toLowerCase();
+              const tags = (Array.isArray(c.tags) ? c.tags.join(' ') : '').toLowerCase();
+              return fullName.includes(query) || email.includes(query) || company.includes(query) || vvcTag.includes(query) || tags.includes(query);
+            });
+
+            const matchingDeals = allDeals.filter((d: any) => {
+              const name = (d.name || '').toLowerCase();
+              const comp = (d.company_name || '').toLowerCase();
+              return name.includes(query) || comp.includes(query);
+            });
+
+            const matchingCandidates = allCandidates.filter((c: any) => {
+              const fullName = `${c.first_name || ''} ${c.last_name || ''}`.toLowerCase();
+              const email = (c.email || '').toLowerCase();
+              const skills = (Array.isArray(c.skills) ? c.skills.join(' ') : '').toLowerCase();
+              const vvcTag = (c.vvc_tag || '').toLowerCase();
+              return fullName.includes(query) || email.includes(query) || skills.includes(query) || vvcTag.includes(query);
+            });
+
+            return sendJson(res, 200, {
+              success: true,
+              query,
+              total_matches: matchingContacts.length + matchingDeals.length + matchingCandidates.length,
+              results: {
+                contacts: matchingContacts,
+                deals: matchingDeals,
+                candidates: matchingCandidates,
+              },
+            });
+          }
+
+          // 4. VVC LOOKUP
           if (pathname === '/api/v1/vvc/lookup' || pathname === '/api/vvc/lookup' || pathname.startsWith('/api/vvc/')) {
             let tag =
               parsedUrl.searchParams.get('tag') ||
@@ -147,12 +375,13 @@ export function vvcApiPlugin(): Plugin {
             });
           }
 
-          // 3. CONTACTS
+          // 5. CONTACTS (met geavanceerd zoeken, tag-filtering & creatie)
           if (pathname === '/api/v1/contacts') {
             if (req.method === 'GET') {
               const tag = parsedUrl.searchParams.get('tag');
               const companyTag = parsedUrl.searchParams.get('company_tag');
-              const pageSize = Number(parsedUrl.searchParams.get('limit')) || 50;
+              const search = (parsedUrl.searchParams.get('q') || parsedUrl.searchParams.get('search') || '').toLowerCase().trim();
+              const pageSize = Number(parsedUrl.searchParams.get('limit')) || 100;
 
               const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/crm_contacts?pageSize=${pageSize}`;
               const fbRes = await fetch(firestoreUrl);
@@ -173,6 +402,19 @@ export function vvcApiPlugin(): Plugin {
               });
 
               let filtered = contacts;
+
+              // Filter op zoekterm indien opgegeven
+              if (search) {
+                filtered = filtered.filter((c: any) => {
+                  const name = `${c.first_name || ''} ${c.last_name || ''}`.toLowerCase();
+                  const email = (c.email || '').toLowerCase();
+                  const comp = (c.company || '').toLowerCase();
+                  const vTag = (c.vvc_tag || '').toLowerCase();
+                  const tags = (Array.isArray(c.tags) ? c.tags.join(' ') : '').toLowerCase();
+                  return name.includes(search) || email.includes(search) || comp.includes(search) || vTag.includes(search) || tags.includes(search);
+                });
+              }
+
               if (tag) {
                 filtered = filtered.filter((c: any) => 
                   c.vvc_tag?.toLowerCase() === tag.toLowerCase() ||
@@ -207,7 +449,24 @@ export function vvcApiPlugin(): Plugin {
             }
           }
 
-          // 4. CANDIDATES (Career & No Cure No Pay Application)
+          // 6. DEALS
+          if (pathname === '/api/v1/deals') {
+            const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/crm_deals?pageSize=50`;
+            const fbRes = await fetch(firestoreUrl);
+            const data = (fbRes.ok ? await fbRes.json() : { documents: [] }) as { documents?: any[] };
+            const deals = (data.documents || []).map((d: any) => {
+              const flat = parseFirestoreFields(d.fields || {});
+              return { id: d.name.split('/').pop(), ...flat };
+            });
+
+            return sendJson(res, 200, {
+              success: true,
+              count: deals.length,
+              data: deals,
+            });
+          }
+
+          // 7. CANDIDATES (Recruitment & No Cure No Pay)
           if (pathname === '/api/v1/candidates') {
             if (req.method === 'GET') {
               const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/recruitment_candidates?pageSize=50`;
@@ -240,7 +499,7 @@ export function vvcApiPlugin(): Plugin {
             }
           }
 
-          // 5. TEAMS
+          // 8. TEAMS
           if (pathname === '/api/v1/teams') {
             const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/crm_teams`;
             const fbRes = await fetch(firestoreUrl);
@@ -257,25 +516,25 @@ export function vvcApiPlugin(): Plugin {
             });
           }
 
-          // 6. 13 ECOSYSTEM COMPANIES
+          // 9. 13 ECOSYSTEM COMPANIES
           if (pathname === '/api/v1/companies') {
             return sendJson(res, 200, {
               success: true,
               count: 13,
               data: [
-                { id: 'vvc', name: 'vvc (verdienende vrienden club)', tag: 'VVC' },
-                { id: 'quantum-initium', name: 'quantum initium', tag: 'QUANTUM_INITIUM' },
-                { id: 'immigratiepunt', name: 'immigratiepunt', tag: 'IMMIGRATIEPUNT' },
-                { id: 'spontiva', name: 'spontiva', tag: 'SPONTIVA' },
-                { id: 'investbotiq', name: 'Investbotiq', tag: 'INVESTBOTIQ' },
-                { id: 'boostplug', name: 'boostplug', tag: 'BOOSTPLUG' },
-                { id: 'crmos', name: 'crmos', tag: 'CRMOS' },
-                { id: 'zheavenzy', name: 'zheavenzy', tag: 'ZHEAVENZY' },
-                { id: 'logs-rent', name: 'logs.rent', tag: 'LOGS_RENT' },
-                { id: 'djobba-works', name: 'djobba.works', tag: 'DJOBBA_WORKS' },
-                { id: 'trusting-work', name: 'trusting work', tag: 'TRUSTING_WORK' },
-                { id: 'woningvry', name: 'woningvry', tag: 'WONINGVRY' },
-                { id: 'xabi-world', name: 'xabi world', tag: 'XABI_WORLD' },
+                { id: 'vvc', name: 'vvc (verdienende vrienden club)', tag: 'VVC', api_key: 'crm_live_vvc_verdienende_vrienden_club_2026' },
+                { id: 'quantum-initium', name: 'quantum initium', tag: 'QUANTUM_INITIUM', api_key: 'crm_live_quantum_initium_enterprise_2026' },
+                { id: 'immigratiepunt', name: 'immigratiepunt', tag: 'IMMIGRATIEPUNT', api_key: 'crm_live_immigratiepunt_portal_2026' },
+                { id: 'spontiva', name: 'spontiva', tag: 'SPONTIVA', api_key: 'crm_live_spontiva_recruitment_2026' },
+                { id: 'investbotiq', name: 'Investbotiq', tag: 'INVESTBOTIQ', api_key: 'crm_live_investbotiq_capital_2026' },
+                { id: 'boostplug', name: 'boostplug', tag: 'BOOSTPLUG', api_key: 'crm_live_boostplug_energy_iot_2026' },
+                { id: 'crmos', name: 'crmos', tag: 'CRMOS', api_key: 'crm_live_crmos_core_platform_2026' },
+                { id: 'zheavenzy', name: 'zheavenzy', tag: 'ZHEAVENZY', api_key: 'crm_live_zheavenzy_atelier_2026' },
+                { id: 'logs-rent', name: 'logs.rent', tag: 'LOGS_RENT', api_key: 'crm_live_logs_rent_logistics_2026' },
+                { id: 'djobba-works', name: 'djobba.works', tag: 'DJOBBA_WORKS', api_key: 'crm_live_djobba_works_freelance_2026' },
+                { id: 'trusting-work', name: 'trusting work', tag: 'TRUSTING_WORK', api_key: 'crm_live_trusting_work_staffing_2026' },
+                { id: 'woningvry', name: 'woningvry', tag: 'WONINGVRY', api_key: 'crm_live_woningvry_realestate_2026' },
+                { id: 'xabi-world', name: 'xabi world', tag: 'XABI_WORLD', api_key: 'crm_live_xabi_world_international_2026' },
               ],
             });
           }

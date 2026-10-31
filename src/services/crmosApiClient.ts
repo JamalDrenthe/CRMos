@@ -364,6 +364,76 @@ export class CRMosClient {
 
     return { success: false, message: 'Kon teams niet ophalen' };
   }
+
+  /**
+   * Universeel Spotlight Zoeken over alle CRM data (Contacten, Deals, Kandidaten, Bedrijven)
+   */
+  async search(query: string): Promise<ApiResponse<any>> {
+    const q = query.trim();
+    if (!q) return { success: false, message: 'Geen zoekterm opgegeven' };
+
+    try {
+      const res = await fetch(`${this.baseUrl}/api/v1/search?q=${encodeURIComponent(q)}`, {
+        headers: this.getHeaders(),
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {
+      // Fallback
+    }
+
+    // Direct Firestore REST search fallback
+    try {
+      const contactsRes = await this.getContacts({ tag: q });
+      return {
+        success: true,
+        source: 'firestore_rest',
+        data: {
+          contacts: contactsRes.data || [],
+          deals: [],
+          candidates: [],
+        },
+      };
+    } catch (err: any) {
+      return { success: false, message: err?.message || 'Zoeken mislukt' };
+    }
+  }
+
+  /**
+   * 13 Ecosysteem Partnerbedrijven ophalen
+   */
+  async getCompanies(): Promise<ApiResponse<any[]>> {
+    try {
+      const res = await fetch(`${this.baseUrl}/api/v1/companies`, {
+        headers: this.getHeaders(),
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {
+      // Fallback
+    }
+    return {
+      success: true,
+      source: 'cache',
+      data: [
+        { id: 'vvc', name: 'vvc (verdienende vrienden club)', tag: 'VVC' },
+        { id: 'quantum-initium', name: 'quantum initium', tag: 'QUANTUM_INITIUM' },
+        { id: 'immigratiepunt', name: 'immigratiepunt', tag: 'IMMIGRATIEPUNT' },
+        { id: 'spontiva', name: 'spontiva', tag: 'SPONTIVA' },
+        { id: 'investbotiq', name: 'Investbotiq', tag: 'INVESTBOTIQ' },
+        { id: 'boostplug', name: 'boostplug', tag: 'BOOSTPLUG' },
+        { id: 'crmos', name: 'crmos', tag: 'CRMOS' },
+        { id: 'zheavenzy', name: 'zheavenzy', tag: 'ZHEAVENZY' },
+        { id: 'logs-rent', name: 'logs.rent', tag: 'LOGS_RENT' },
+        { id: 'djobba-works', name: 'djobba.works', tag: 'DJOBBA_WORKS' },
+        { id: 'trusting-work', name: 'trusting work', tag: 'TRUSTING_WORK' },
+        { id: 'woningvry', name: 'woningvry', tag: 'WONINGVRY' },
+        { id: 'xabi-world', name: 'xabi world', tag: 'XABI_WORLD' },
+      ],
+    };
+  }
 }
 
 // Singleton instantie voor eenvoudige import in CRMos
