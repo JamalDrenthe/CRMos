@@ -34,24 +34,30 @@ service cloud.firestore {
       }
     }
 
-    // Contacten
+    // Contacten (Bi-directioneel: Web App, AI Agents & Ecosysteem)
     match /crm_contacts/{contactId} {
-      allow read, write: if isAuthenticated();
+      allow read: if true;
+      allow write: if isAuthenticated() || 
+                      (request.resource.data.keys().hasAll(['email']) && 
+                       (request.resource.data.vvc_tag != null || request.resource.data.company_tags != null || request.resource.data.source != null));
     }
 
     // Bedrijven
     match /crm_companies/{companyId} {
-      allow read, write: if isAuthenticated();
+      allow read: if true;
+      allow write: if isAuthenticated() || request.resource.data.keys().hasAll(['name']);
     }
 
     // Deals / Verkoopkansen
     match /crm_deals/{dealId} {
-      allow read, write: if isAuthenticated();
+      allow read: if true;
+      allow write: if isAuthenticated() || request.resource.data.keys().hasAll(['name', 'value']);
     }
 
-    // Activiteiten & taken
+    // Activiteiten & taken (Interacties, notities & belstatussen van AI agents)
     match /crm_activities/{activityId} {
-      allow read, write: if isAuthenticated();
+      allow read: if true;
+      allow write: if isAuthenticated() || request.resource.data.keys().hasAll(['title', 'contact_id']);
     }
 
     // Recruitment: Kandidaten

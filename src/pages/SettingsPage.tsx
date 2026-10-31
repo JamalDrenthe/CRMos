@@ -335,17 +335,59 @@ export function SettingsPage() {
       let result: any;
       if (playgroundEndpoint === '/api/v1/health') {
         result = await crmosApi.getHealth();
+      } else if (playgroundEndpoint.startsWith('/api/v1/search')) {
+        const url = new URL(playgroundEndpoint, 'http://localhost');
+        const q = url.searchParams.get('q') || 'Reyhan';
+        result = await crmosApi.search(q);
       } else if (playgroundEndpoint.startsWith('/api/v1/vvc/lookup')) {
         const url = new URL(playgroundEndpoint, 'http://localhost');
         const tag = url.searchParams.get('tag') || profileVvcTag;
         result = await crmosApi.lookupVvcTag(tag);
+      } else if (playgroundEndpoint === '/api/v1/contacts/upsert') {
+        const body = playgroundBody ? JSON.parse(playgroundBody) : {
+          first_name: 'Daan',
+          last_name: 'van Vliet',
+          email: 'daan.vanvliet@example.com',
+          phone: '+31 6 88776655',
+          company: 'Quantum Initium Partner',
+          company_tags: ['#quantum_initium'],
+          tags: ['AI Agent Lead', '#quantum_initium'],
+          notes: 'Gecontacteerd via AI Agent, interesse in compute cluster licentie',
+        };
+        result = await crmosApi.upsertContact(body);
+      } else if (playgroundEndpoint === '/api/v1/deals' && playgroundMethod === 'POST') {
+        const body = playgroundBody ? JSON.parse(playgroundBody) : {
+          name: 'AI Agent Ingeschreven Deal - Q4 Pilot',
+          value: 45000,
+          stage: 'qualified',
+          company_name: 'Amsterdam Holding B.V.',
+        };
+        result = await crmosApi.createDeal(body);
+      } else if (playgroundEndpoint === '/api/v1/activities' && playgroundMethod === 'POST') {
+        const body = playgroundBody ? JSON.parse(playgroundBody) : {
+          contact_id: linkedCrmContact?.id || 'contact_usr_jamal',
+          type: 'call',
+          title: 'Telefonische Kwalificatie door AI Agent',
+          description: 'Gesprek gevoerd, lead gekwalificeerd voor productiedemo',
+          performed_by: 'CRMos Voice AI Agent',
+        };
+        result = await crmosApi.logActivity(body);
       } else if (playgroundEndpoint.startsWith('/api/v1/contacts')) {
-        result = await crmosApi.getContacts({ limit: 5 });
+        if (playgroundMethod === 'POST') {
+          const body = playgroundBody ? JSON.parse(playgroundBody) : {
+            first_name: 'Nieuwe',
+            last_name: 'Relatie',
+            email: 'relatie@example.com',
+            company: 'VVC Partner',
+          };
+          result = await crmosApi.createContact(body);
+        } else {
+          result = await crmosApi.getContacts({ limit: 5 });
+        }
       } else if (playgroundEndpoint === '/api/v1/teams') {
         result = await crmosApi.getTeams();
       } else if (playgroundEndpoint === '/api/v1/companies') {
-        const res = await fetch('/api/v1/companies');
-        result = res.ok ? await res.json() : { success: true, count: 13, data: '13 Core Ecosystem Partners' };
+        result = await crmosApi.getCompanies();
       } else if (playgroundEndpoint === '/api/v1/candidates') {
         if (playgroundMethod === 'POST') {
           const body = playgroundBody ? JSON.parse(playgroundBody) : {
@@ -362,7 +404,14 @@ export function SettingsPage() {
           result = res.ok ? await res.json() : { success: true, count: 0, data: [] };
         }
       } else {
-        const res = await fetch(playgroundEndpoint);
+        const res = await fetch(playgroundEndpoint, {
+          method: playgroundMethod,
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CRMOS-API-KEY': MASTER_ECOSYSTEM_API_KEY.key,
+          },
+          body: playgroundMethod === 'POST' ? playgroundBody || '{}' : undefined,
+        });
         result = await res.json();
       }
       const end = performance.now();
@@ -1444,19 +1493,32 @@ print(response.json())`;
                 <Button
                   size="sm"
                   onClick={() => {
-                    const prompt = `CRMos API Configuratie voor AI Agent:
+                    const prompt = `CRMos API Configuratie voor AI Agent (Bi-directioneel: Lezen & Schrijven):
 Base URL: https://crmos.one/api/v1
 Master API Key: ${MASTER_ECOSYSTEM_API_KEY.key}
 Header: X-CRMOS-API-KEY: ${MASTER_ECOSYSTEM_API_KEY.key}
+Content-Type: application/json
 
-Beschikbare Endpoints:
-- GET /api/v1/search?q={zoekterm} (Universeel zoeken over alle contacten, deals, kandidaten en teams)
+1. LEZEN & REALTIME ZOEKEN:
+- GET /api/v1/search?q={zoekterm} (Spotlight zoeken over contacten, deals, kandidaten, teams)
 - GET /api/v1/contacts?tag={tag}&company_tag={bedrijfstag}&limit=100
-- GET /api/v1/teams (Alle referral teams en kernleiders)
+- GET /api/v1/contacts/{id} (Volledig profiel per contact)
+- GET /api/v1/teams (Alle referral teams & leiders)
 - GET /api/v1/companies (Alle 13 partnerbedrijven)
-- GET /api/v1/vvc/lookup?tag={vvc_tag} (Verifieer unieke VVC tags)
-- GET /api/v1/candidates (Recruitment & No Cure No Pay sollicitaties)
-- GET /api/v1/deals (Deals & verkoopkansen)`;
+- GET /api/v1/deals (Deals & pipelines)
+- GET /api/v1/vvc/lookup?tag={vvc_tag} (Verifieer unieke VVC tag)
+
+2. SCHRIJVEN & SYNCHRONISEREN (DIRECT IN CLOUD CRM):
+- POST /api/v1/contacts/upsert
+  Body: {"first_name":"...","last_name":"...","email":"...","phone":"...","company":"...","tags":["#bedrijfstag"],"notes":"..."}
+  (Zoekt op email/vvc_tag: verrijkt bestaand contact of maakt nieuw contact aan!)
+- POST /api/v1/contacts (Nieuw contact aanmaken)
+- PATCH /api/v1/contacts/{id} (Bestaand contact bijwerken)
+- POST /api/v1/deals (Nieuwe deal inschrijven)
+  Body: {"name":"...","value":50000,"stage":"qualified","company_name":"..."}
+- POST /api/v1/activities (Gespreksnotitie / belstatus loggen)
+  Body: {"contact_id":"...","type":"call","title":"AI Call Kwalificatie","description":"..."}
+- POST /api/v1/candidates (Nieuwe sollicitant registreren)`;
                     navigator.clipboard.writeText(prompt);
                     toast.success('Complete AI Agent prompt gekopieerd!');
                   }}
@@ -1721,7 +1783,12 @@ Beschikbare Endpoints:
                   onChange={(e) => {
                     const ep = e.target.value;
                     setPlaygroundEndpoint(ep);
-                    if (ep === '/api/v1/candidates') {
+                    if (
+                      ep === '/api/v1/contacts/upsert' ||
+                      ep === '/api/v1/deals' ||
+                      ep === '/api/v1/activities' ||
+                      ep === '/api/v1/candidates'
+                    ) {
                       setPlaygroundMethod('POST');
                     } else {
                       setPlaygroundMethod('GET');
@@ -1730,8 +1797,12 @@ Beschikbare Endpoints:
                   className="h-10 text-xs rounded-xl bg-background border border-input px-3 text-foreground flex-1 font-mono"
                 >
                   <option value="/api/v1/health">/api/v1/health — Systeem &amp; Ecosysteem Health Check</option>
+                  <option value="/api/v1/search?q=Reyhan">/api/v1/search?q=Reyhan — Universeel Spotlight Zoeken</option>
                   <option value={`/api/v1/vvc/lookup?tag=${profileVvcTag}`}>/api/v1/vvc/lookup?tag={profileVvcTag} — VVC Aanmeldverificatie</option>
-                  <option value="/api/v1/contacts?limit=5">/api/v1/contacts?limit=5 — Contacten &amp; Bedrijfstags</option>
+                  <option value="/api/v1/contacts?limit=5">/api/v1/contacts?limit=5 — Contacten &amp; Bedrijfstags (Lezen)</option>
+                  <option value="/api/v1/contacts/upsert">/api/v1/contacts/upsert — Contact Inschrijven of Verrijken (Schrijven)</option>
+                  <option value="/api/v1/deals">/api/v1/deals — Deal Inschrijven in Pipeline (Schrijven)</option>
+                  <option value="/api/v1/activities">/api/v1/activities — Gespreksnotitie &amp; Belstatus Loggen (Schrijven)</option>
                   <option value="/api/v1/teams">/api/v1/teams — Referral Teams &amp; Leiders</option>
                   <option value="/api/v1/companies">/api/v1/companies — 13 Ecosysteem Partnerbedrijven</option>
                   <option value="/api/v1/candidates">/api/v1/candidates — Sollicitatie Registratie (No Cure No Pay)</option>

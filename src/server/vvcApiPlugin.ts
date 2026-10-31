@@ -1,140 +1,8 @@
 import type { Plugin } from 'vite';
 import type { IncomingMessage, ServerResponse } from 'http';
+import { PREDEFINED_COMPANY_API_KEYS } from '../data/apiKeysData';
 
-/**
- * Officiële Master & Bedrijfs-API Keys voor CRMos
- * Direct te kopiëren en te plakken aan AI agents / integraties.
- */
-export const PREDEFINED_COMPANY_API_KEYS: Record<
-  string,
-  { company: string; tag: string; name: string; role: string; description: string }
-> = {
-  // Master API Key — Volledige toegang tot alle data en alle 13 bedrijven
-  'crm_live_master_jamaldrenthe_2026_all_ecosystem': {
-    company: 'ALL',
-    tag: 'ALL',
-    name: 'Master Ecosystem Key (Jamal Drenthe)',
-    role: 'super_admin',
-    description: 'Volledige lees- en schrijftoegang tot alle 13 bedrijven, alle contacten, deals, kandidaten en teams.',
-  },
-
-  // 1. VVC
-  'crm_live_vvc_verdienende_vrienden_club_2026': {
-    company: 'vvc (verdienende vrienden club)',
-    tag: 'VVC',
-    name: 'VVC API Key',
-    role: 'partner',
-    description: 'Toegang tot VVC aanmeldingen, referral-teams en community contacten.',
-  },
-
-  // 2. QUANTUM INITIUM
-  'crm_live_quantum_initium_enterprise_2026': {
-    company: 'quantum initium',
-    tag: 'QUANTUM_INITIUM',
-    name: 'Quantum Initium API Key',
-    role: 'partner',
-    description: 'Toegang tot enterprise finance, AI compute pipelines en corporate contacten.',
-  },
-
-  // 3. IMMIGRATIEPUNT
-  'crm_live_immigratiepunt_portal_2026': {
-    company: 'immigratiepunt',
-    tag: 'IMMIGRATIEPUNT',
-    name: 'Immigratiepunt API Key',
-    role: 'partner',
-    description: 'Toegang tot expat dossiers, visa/relocatie contacten en aanvragen.',
-  },
-
-  // 4. SPONTIVA
-  'crm_live_spontiva_recruitment_2026': {
-    company: 'spontiva',
-    tag: 'SPONTIVA',
-    name: 'Spontiva API Key',
-    role: 'partner',
-    description: 'Toegang tot recruitment, No Cure No Pay kandidaten en matching dossiers.',
-  },
-
-  // 5. INVESTBOTIQ
-  'crm_live_investbotiq_capital_2026': {
-    company: 'Investbotiq',
-    tag: 'INVESTBOTIQ',
-    name: 'Investbotiq API Key',
-    role: 'partner',
-    description: 'Toegang tot investeerdersrelaties, trading pools en kapitaalcontacten.',
-  },
-
-  // 6. BOOSTPLUG
-  'crm_live_boostplug_energy_iot_2026': {
-    company: 'boostplug',
-    tag: 'BOOSTPLUG',
-    name: 'Boostplug API Key',
-    role: 'partner',
-    description: 'Toegang tot EV/IoT laadpalen, energie-contracten en zakelijke deals.',
-  },
-
-  // 7. CRMOS
-  'crm_live_crmos_core_platform_2026': {
-    company: 'crmos',
-    tag: 'CRMOS',
-    name: 'CRMos Core Platform Key',
-    role: 'admin',
-    description: 'Toegang tot kernplatform CRM-operaties, licenties en workflows.',
-  },
-
-  // 8. ZHEAVENZY
-  'crm_live_zheavenzy_atelier_2026': {
-    company: 'zheavenzy',
-    tag: 'ZHEAVENZY',
-    name: 'Zheavenzy API Key',
-    role: 'partner',
-    description: 'Toegang tot luxe atelier, high-ticket klanten en lifestyle relaties.',
-  },
-
-  // 9. LOGS.RENT
-  'crm_live_logs_rent_logistics_2026': {
-    company: 'logs.rent',
-    tag: 'LOGS_RENT',
-    name: 'Logs.rent API Key',
-    role: 'partner',
-    description: 'Toegang tot compute & hardware verhuur, logistiek en datacenters.',
-  },
-
-  // 10. DJOBBA.WORKS
-  'crm_live_djobba_works_freelance_2026': {
-    company: 'djobba.works',
-    tag: 'DJOBBA_WORKS',
-    name: 'Djobba.works API Key',
-    role: 'partner',
-    description: 'Toegang tot Europese freelance marktplaats, opdrachten en zzp talenten.',
-  },
-
-  // 11. TRUSTING WORK
-  'crm_live_trusting_work_staffing_2026': {
-    company: 'trusting work',
-    tag: 'TRUSTING_WORK',
-    name: 'Trusting Work API Key',
-    role: 'partner',
-    description: 'Toegang tot IT-detachering, uitzendprofielen en opdrachtgevers.',
-  },
-
-  // 12. WONINGVRY
-  'crm_live_woningvry_realestate_2026': {
-    company: 'woningvry',
-    tag: 'WONINGVRY',
-    name: 'Woningvry API Key',
-    role: 'partner',
-    description: 'Toegang tot vastgoedbeleggingen, huurders en transformatieprojecten.',
-  },
-
-  // 13. XABI WORLD
-  'crm_live_xabi_world_international_2026': {
-    company: 'xabi world',
-    tag: 'XABI_WORLD',
-    name: 'Xabi World API Key',
-    role: 'partner',
-    description: 'Toegang tot internationale media, branding partnerships en merchandising.',
-  },
-};
+export { PREDEFINED_COMPANY_API_KEYS };
 
 /**
  * Helper om Firestore REST API document fields om te zetten naar platte JSON
@@ -158,6 +26,71 @@ function parseFirestoreFields(fields: Record<string, any> = {}): Record<string, 
   return result;
 }
 
+/**
+ * Helper om platte JSON om te zetten naar Firestore REST fields structuur
+ */
+function toFirestoreFields(data: Record<string, any>): Record<string, any> {
+  const fields: Record<string, any> = {};
+  for (const [key, val] of Object.entries(data)) {
+    if (val === undefined || val === null) continue;
+    if (typeof val === 'string') {
+      fields[key] = { stringValue: val };
+    } else if (typeof val === 'number') {
+      if (Number.isInteger(val)) {
+        fields[key] = { integerValue: val.toString() };
+      } else {
+        fields[key] = { doubleValue: val };
+      }
+    } else if (typeof val === 'boolean') {
+      fields[key] = { booleanValue: val };
+    } else if (Array.isArray(val)) {
+      fields[key] = {
+        arrayValue: {
+          values: val.map((v) => {
+            if (typeof v === 'string') return { stringValue: v };
+            if (typeof v === 'number') return Number.isInteger(v) ? { integerValue: v.toString() } : { doubleValue: v };
+            if (typeof v === 'boolean') return { booleanValue: v };
+            return { stringValue: String(v) };
+          }),
+        },
+      };
+    } else if (typeof val === 'object') {
+      fields[key] = { mapValue: { fields: toFirestoreFields(val) } };
+    }
+  }
+  return fields;
+}
+
+/**
+ * Schrijf direct een document naar Cloud Firestore REST API
+ */
+async function saveToFirestoreRest(
+  projectId: string,
+  collection: string,
+  docId: string,
+  data: Record<string, any>
+): Promise<{ success: boolean; data?: any; error?: string }> {
+  try {
+    const fields = toFirestoreFields(data);
+    const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${collection}/${encodeURIComponent(
+      docId
+    )}`;
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields }),
+    });
+
+    if (res.ok) {
+      return { success: true, data };
+    }
+    const errText = await res.text();
+    return { success: false, error: errText };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Firestore REST write failed' };
+  }
+}
+
 function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
     let body = '';
@@ -173,14 +106,14 @@ function sendJson(res: ServerResponse, statusCode: number, data: any) {
   res.writeHead(statusCode, {
     'Content-Type': 'application/json',
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-CRMOS-API-KEY, X-VVC-Token',
   });
   res.end(JSON.stringify(data, null, 2));
 }
 
 /**
- * CRMos Universal REST API Engine
+ * CRMos Universal REST API Engine — Bi-directioneel (Lezen & Schrijven)
  */
 export function vvcApiPlugin(): Plugin {
   return {
@@ -199,7 +132,7 @@ export function vvcApiPlugin(): Plugin {
         if (req.method === 'OPTIONS') {
           res.writeHead(204, {
             'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+            'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
             'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-CRMOS-API-KEY, X-VVC-Token',
           });
           res.end();
@@ -211,14 +144,14 @@ export function vvcApiPlugin(): Plugin {
           const pathname = parsedUrl.pathname;
           const projectId = process.env.VITE_FIREBASE_PROJECT_ID || 'crmosone-dev';
 
-          // Extract API Key
+          // Authenticatie controleren
           const rawKeyHeader =
             (req.headers['x-crmos-api-key'] as string) ||
             (req.headers['authorization'] as string) ||
             parsedUrl.searchParams.get('api_key') ||
             '';
           const apiKey = rawKeyHeader.replace(/^Bearer\s+/i, '').trim();
-          const keyMeta = PREDEFINED_COMPANY_API_KEYS[apiKey] || null;
+          const keyMeta = (PREDEFINED_COMPANY_API_KEYS as any)[apiKey] || null;
 
           // 1. HEALTH CHECK
           if (pathname === '/api/v1/health') {
@@ -227,6 +160,7 @@ export function vvcApiPlugin(): Plugin {
               data: {
                 status: 'operational',
                 version: '2.0.0',
+                capabilities: ['read', 'write', 'update', 'upsert', 'search'],
                 platform: 'CRMos Multi-Tenant Cloud',
                 ecosystem: 'VVC & 13 Partnerbedrijven',
                 authenticated_as: keyMeta ? keyMeta.name : 'Public / Guest',
@@ -236,12 +170,12 @@ export function vvcApiPlugin(): Plugin {
             });
           }
 
-          // 2. KEYS DIRECTORY FOR AGENTS
+          // 2. KEYS DIRECTORY
           if (pathname === '/api/v1/keys') {
             return sendJson(res, 200, {
               success: true,
               count: Object.keys(PREDEFINED_COMPANY_API_KEYS).length,
-              keys: Object.entries(PREDEFINED_COMPANY_API_KEYS).map(([token, info]) => ({
+              keys: Object.entries(PREDEFINED_COMPANY_API_KEYS).map(([token, info]: any) => ({
                 api_key: token,
                 name: info.name,
                 company: info.company,
@@ -262,15 +196,14 @@ export function vvcApiPlugin(): Plugin {
               });
             }
 
-            // Ophalen van documenten uit Firestore
             const contactsUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/crm_contacts?pageSize=100`;
             const dealsUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/crm_deals?pageSize=100`;
-            const candidatesUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/recruitment_candidates?pageSize=100`;
+            const candUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/recruitment_candidates?pageSize=100`;
 
             const [contactsRes, dealsRes, candRes] = await Promise.all([
               fetch(contactsUrl).catch(() => null),
               fetch(dealsUrl).catch(() => null),
-              fetch(candidatesUrl).catch(() => null),
+              fetch(candUrl).catch(() => null),
             ]);
 
             const contactsData = (contactsRes && contactsRes.ok ? await contactsRes.json() : { documents: [] }) as { documents?: any[] };
@@ -292,7 +225,6 @@ export function vvcApiPlugin(): Plugin {
               ...parseFirestoreFields(d.fields || {}),
             }));
 
-            // Filteren op zoekterm
             const matchingContacts = allContacts.filter((c: any) => {
               const fullName = `${c.first_name || ''} ${c.last_name || ''}`.toLowerCase();
               const email = (c.email || '').toLowerCase();
@@ -328,7 +260,7 @@ export function vvcApiPlugin(): Plugin {
             });
           }
 
-          // 4. VVC LOOKUP
+          // 4. VVC LOOKUP & SYNC
           if (pathname === '/api/v1/vvc/lookup' || pathname === '/api/vvc/lookup' || pathname.startsWith('/api/vvc/')) {
             let tag =
               parsedUrl.searchParams.get('tag') ||
@@ -364,7 +296,7 @@ export function vvcApiPlugin(): Plugin {
                   });
                 }
               } catch {
-                // Next collection
+                // Next
               }
             }
 
@@ -375,9 +307,116 @@ export function vvcApiPlugin(): Plugin {
             });
           }
 
-          // 5. CONTACTS (met geavanceerd zoeken, tag-filtering & creatie)
-          if (pathname === '/api/v1/contacts') {
+          // 5. CONTACTS UPSERT (POST /api/v1/contacts/upsert)
+          // AI agents kunnen een contact opsturen; als het bestaat wordt het geüpdatet, anders aangemaakt!
+          if (pathname === '/api/v1/contacts/upsert' && req.method === 'POST') {
+            const rawBody = await readBody(req);
+            const payload = JSON.parse(rawBody || '{}');
+            const email = (payload.email || '').trim().toLowerCase();
+            const vvcTag = (payload.vvc_tag || '').trim();
+
+            if (!email && !vvcTag) {
+              return sendJson(res, 400, {
+                success: false,
+                message: 'Geef minimaal een email of vvc_tag mee voor upsert.',
+              });
+            }
+
+            // Zoeken naar bestaand contact
+            const contactsUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/crm_contacts?pageSize=100`;
+            const fbRes = await fetch(contactsUrl);
+            const contactsData = (fbRes.ok ? await fbRes.json() : { documents: [] }) as { documents?: any[] };
+            const existingDocs: any[] = (contactsData.documents || []).map((d: any) => ({
+              id: d.name.split('/').pop(),
+              ...parseFirestoreFields(d.fields || {}),
+            }));
+
+            const match: any = existingDocs.find((c: any) =>
+              (email && (c.email || '').toLowerCase() === email) ||
+              (vvcTag && (c.vvc_tag || '').toLowerCase() === vvcTag.toLowerCase())
+            );
+
+            // Bepaal tags en bedrijfscontext
+            const autoCompanyTag = keyMeta && keyMeta.tag !== 'ALL' ? `#${keyMeta.tag.toLowerCase()}` : null;
+            const existingCompanyTags = Array.isArray(match?.company_tags) ? match.company_tags : [];
+            const newCompanyTags = Array.isArray(payload.company_tags) ? payload.company_tags : [];
+            const mergedCompanyTags = Array.from(new Set([...existingCompanyTags, ...newCompanyTags, autoCompanyTag])).filter(Boolean);
+
+            const existingTags = Array.isArray(match?.tags) ? match.tags : [];
+            const newTags = Array.isArray(payload.tags) ? payload.tags : [];
+            const mergedTags = Array.from(new Set([...existingTags, ...newTags, ...mergedCompanyTags])).filter(Boolean);
+
+            if (match) {
+              // UPDATE bestaand contact
+              const updatedContact = {
+                ...match,
+                ...payload,
+                company_tags: mergedCompanyTags,
+                tags: mergedTags,
+                updated_at: new Date().toISOString(),
+              };
+
+              await saveToFirestoreRest(projectId, 'crm_contacts', match.id, updatedContact);
+
+              return sendJson(res, 200, {
+                success: true,
+                action: 'updated',
+                message: `Bestaand contact ${match.id} succesvol bijgewerkt`,
+                data: updatedContact,
+              });
+            } else {
+              // CREATE nieuw contact
+              const newId = payload.id || `contact_agt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+              const effectiveVvcTag = vvcTag || `vvc-agt-${Math.random().toString(36).substring(2, 8)}`;
+              const newContact = {
+                id: newId,
+                first_name: payload.first_name || 'Nieuw',
+                last_name: payload.last_name || 'Contact',
+                email: email || '',
+                phone: payload.phone || '',
+                company: payload.company || (keyMeta?.company !== 'ALL' ? keyMeta?.company : 'Onbekend'),
+                title: payload.title || 'Contact',
+                status: payload.status || 'lead',
+                source: payload.source || (keyMeta ? `AI Agent (${keyMeta.name})` : 'AI Agent API'),
+                vvc_tag: effectiveVvcTag,
+                company_tags: mergedCompanyTags,
+                tags: Array.from(new Set([effectiveVvcTag, ...mergedTags])),
+                custom_fields: payload.custom_fields || {},
+                notes: payload.notes || '',
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              };
+
+              await saveToFirestoreRest(projectId, 'crm_contacts', newId, newContact);
+
+              return sendJson(res, 201, {
+                success: true,
+                action: 'created',
+                message: `Nieuw contact ${newId} succesvol aangemaakt in CRMos`,
+                data: newContact,
+              });
+            }
+          }
+
+          // 6. CONTACTS: GET (lezen/zoeken), POST (aanmaken), PUT/PATCH (bijwerken)
+          if (pathname === '/api/v1/contacts' || pathname.startsWith('/api/v1/contacts/')) {
+            const contactIdFromPath = pathname.replace('/api/v1/contacts', '').replace(/^\//, '').trim();
+
+            // GET CONTACTS
             if (req.method === 'GET') {
+              // Single Contact ophalen op ID
+              if (contactIdFromPath) {
+                const singleUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/crm_contacts/${encodeURIComponent(contactIdFromPath)}`;
+                const fbRes = await fetch(singleUrl);
+                if (fbRes.ok) {
+                  const docJson = (await fbRes.json()) as any;
+                  const flat = parseFirestoreFields(docJson.fields || {});
+                  return sendJson(res, 200, { success: true, data: { id: contactIdFromPath, ...flat } });
+                }
+                return sendJson(res, 404, { success: false, message: `Contact ${contactIdFromPath} niet gevonden` });
+              }
+
+              // Lijst ophalen met filters
               const tag = parsedUrl.searchParams.get('tag');
               const companyTag = parsedUrl.searchParams.get('company_tag');
               const search = (parsedUrl.searchParams.get('q') || parsedUrl.searchParams.get('search') || '').toLowerCase().trim();
@@ -385,16 +424,7 @@ export function vvcApiPlugin(): Plugin {
 
               const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/crm_contacts?pageSize=${pageSize}`;
               const fbRes = await fetch(firestoreUrl);
-              if (!fbRes.ok) {
-                return sendJson(res, 200, {
-                  success: true,
-                  source: 'local_proxy',
-                  count: 0,
-                  data: [],
-                });
-              }
-
-              const data = (await fbRes.json()) as { documents?: any[] };
+              const data = (fbRes.ok ? await fbRes.json() : { documents: [] }) as { documents?: any[] };
               const contacts = (data.documents || []).map((d: any) => {
                 const flat = parseFirestoreFields(d.fields || {});
                 const id = d.name.split('/').pop();
@@ -403,7 +433,6 @@ export function vvcApiPlugin(): Plugin {
 
               let filtered = contacts;
 
-              // Filter op zoekterm indien opgegeven
               if (search) {
                 filtered = filtered.filter((c: any) => {
                   const name = `${c.first_name || ''} ${c.last_name || ''}`.toLowerCase();
@@ -416,7 +445,7 @@ export function vvcApiPlugin(): Plugin {
               }
 
               if (tag) {
-                filtered = filtered.filter((c: any) => 
+                filtered = filtered.filter((c: any) =>
                   c.vvc_tag?.toLowerCase() === tag.toLowerCase() ||
                   c.tags?.some((t: string) => t.toLowerCase() === tag.toLowerCase())
                 );
@@ -434,89 +463,273 @@ export function vvcApiPlugin(): Plugin {
               });
             }
 
+            // POST: CONTACT AANMAKEN
             if (req.method === 'POST') {
               const rawBody = await readBody(req);
               const payload = JSON.parse(rawBody || '{}');
+              const newId = payload.id || `contact_agt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+              const effectiveVvcTag = payload.vvc_tag || `vvc-agt-${Math.random().toString(36).substring(2, 8)}`;
+
+              const autoCompanyTag = keyMeta && keyMeta.tag !== 'ALL' ? `#${keyMeta.tag.toLowerCase()}` : null;
+              const inputCompanyTags = Array.isArray(payload.company_tags) ? payload.company_tags : [];
+              const company_tags = Array.from(new Set([...inputCompanyTags, autoCompanyTag])).filter(Boolean);
+
+              const inputTags = Array.isArray(payload.tags) ? payload.tags : [];
+              const tags = Array.from(new Set([effectiveVvcTag, ...inputTags, ...company_tags])).filter(Boolean);
+
+              const newContact = {
+                id: newId,
+                first_name: payload.first_name || '',
+                last_name: payload.last_name || '',
+                email: payload.email || '',
+                phone: payload.phone || '',
+                company: payload.company || (keyMeta?.company !== 'ALL' ? keyMeta?.company : 'Onbekend'),
+                title: payload.title || 'Contact',
+                status: payload.status || 'lead',
+                source: payload.source || (keyMeta ? `AI Agent (${keyMeta.name})` : 'AI Agent API'),
+                vvc_tag: effectiveVvcTag,
+                company_tags,
+                tags,
+                custom_fields: payload.custom_fields || {},
+                notes: payload.notes || '',
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              };
+
+              await saveToFirestoreRest(projectId, 'crm_contacts', newId, newContact);
+
               return sendJson(res, 201, {
                 success: true,
-                message: 'Contact ontvangen en verwerkt',
-                data: {
-                  id: payload.id || `contact_${Date.now()}`,
-                  ...payload,
-                  created_at: new Date().toISOString(),
-                },
+                message: 'Contact succesvol opgeslagen in Cloud Firestore',
+                data: newContact,
+              });
+            }
+
+            // PUT / PATCH: CONTACT BIJWERKEN
+            if (req.method === 'PUT' || req.method === 'PATCH') {
+              const targetId = contactIdFromPath || parsedUrl.searchParams.get('id');
+              if (!targetId) {
+                return sendJson(res, 400, { success: false, message: 'Geef een contact ID op via het pad (/api/v1/contacts/:id) of ?id=...' });
+              }
+
+              const rawBody = await readBody(req);
+              const updates = JSON.parse(rawBody || '{}');
+
+              // Haal bestaand document op
+              const singleUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/crm_contacts/${encodeURIComponent(targetId)}`;
+              const fbRes = await fetch(singleUrl);
+              const existingData = fbRes.ok ? parseFirestoreFields(((await fbRes.json()) as any).fields || {}) : {};
+
+              const merged = {
+                ...existingData,
+                ...updates,
+                id: targetId,
+                updated_at: new Date().toISOString(),
+              };
+
+              await saveToFirestoreRest(projectId, 'crm_contacts', targetId, merged);
+
+              return sendJson(res, 200, {
+                success: true,
+                message: `Contact ${targetId} succesvol bijgewerkt`,
+                data: merged,
               });
             }
           }
 
-          // 6. DEALS
-          if (pathname === '/api/v1/deals') {
-            const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/crm_deals?pageSize=50`;
-            const fbRes = await fetch(firestoreUrl);
-            const data = (fbRes.ok ? await fbRes.json() : { documents: [] }) as { documents?: any[] };
-            const deals = (data.documents || []).map((d: any) => {
-              const flat = parseFirestoreFields(d.fields || {});
-              return { id: d.name.split('/').pop(), ...flat };
-            });
+          // 7. DEALS: GET, POST (aanmaken), PUT/PATCH (bijwerken)
+          if (pathname === '/api/v1/deals' || pathname.startsWith('/api/v1/deals/')) {
+            const dealIdFromPath = pathname.replace('/api/v1/deals', '').replace(/^\//, '').trim();
 
-            return sendJson(res, 200, {
-              success: true,
-              count: deals.length,
-              data: deals,
-            });
-          }
-
-          // 7. CANDIDATES (Recruitment & No Cure No Pay)
-          if (pathname === '/api/v1/candidates') {
             if (req.method === 'GET') {
-              const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/recruitment_candidates?pageSize=50`;
+              const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/crm_deals?pageSize=100`;
               const fbRes = await fetch(firestoreUrl);
               const data = (fbRes.ok ? await fbRes.json() : { documents: [] }) as { documents?: any[] };
-              const candidates = (data.documents || []).map((d: any) => {
-                const flat = parseFirestoreFields(d.fields || {});
-                return { id: d.name.split('/').pop(), ...flat };
-              });
+              const deals = (data.documents || []).map((d: any) => ({
+                id: d.name.split('/').pop(),
+                ...parseFirestoreFields(d.fields || {}),
+              }));
 
-              return sendJson(res, 200, {
+              const compFilter = parsedUrl.searchParams.get('company');
+              const filtered = compFilter
+                ? deals.filter((d: any) => (d.company_name || '').toLowerCase().includes(compFilter.toLowerCase()))
+                : deals;
+
+              return sendJson(res, 200, { success: true, count: filtered.length, data: filtered });
+            }
+
+            if (req.method === 'POST') {
+              const rawBody = await readBody(req);
+              const payload = JSON.parse(rawBody || '{}');
+              const dealId = payload.id || `deal_agt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+
+              const newDeal = {
+                id: dealId,
+                name: payload.name || 'Nieuwe Deal',
+                value: Number(payload.value) || 0,
+                stage: payload.stage || 'lead',
+                company_name: payload.company_name || (keyMeta?.company !== 'ALL' ? keyMeta?.company : 'CRMos'),
+                contact_id: payload.contact_id || '',
+                probability: payload.probability || 20,
+                expected_close_date: payload.expected_close_date || new Date(Date.now() + 30 * 86400000).toISOString(),
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              };
+
+              await saveToFirestoreRest(projectId, 'crm_deals', dealId, newDeal);
+
+              return sendJson(res, 201, {
                 success: true,
-                count: candidates.length,
-                data: candidates,
+                message: 'Deal succesvol aangemaakt in CRMos',
+                data: newDeal,
               });
+            }
+
+            if (req.method === 'PUT' || req.method === 'PATCH') {
+              const targetId = dealIdFromPath || parsedUrl.searchParams.get('id');
+              if (!targetId) return sendJson(res, 400, { success: false, message: 'Geen deal ID opgegeven' });
+
+              const rawBody = await readBody(req);
+              const updates = JSON.parse(rawBody || '{}');
+
+              const singleUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/crm_deals/${encodeURIComponent(targetId)}`;
+              const fbRes = await fetch(singleUrl);
+              const existing = fbRes.ok ? parseFirestoreFields(((await fbRes.json()) as any).fields || {}) : {};
+
+              const merged = { ...existing, ...updates, id: targetId, updated_at: new Date().toISOString() };
+              await saveToFirestoreRest(projectId, 'crm_deals', targetId, merged);
+
+              return sendJson(res, 200, { success: true, message: `Deal ${targetId} bijgewerkt`, data: merged });
+            }
+          }
+
+          // 8. ACTIVITIES / INTERACTION LOGS (Gespreksnotities, meetings, taken van AI agent)
+          if (pathname === '/api/v1/activities') {
+            if (req.method === 'GET') {
+              const contactId = parsedUrl.searchParams.get('contact_id');
+              const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/crm_activities?pageSize=100`;
+              const fbRes = await fetch(firestoreUrl);
+              const data = (fbRes.ok ? await fbRes.json() : { documents: [] }) as { documents?: any[] };
+              let activities = (data.documents || []).map((d: any) => ({
+                id: d.name.split('/').pop(),
+                ...parseFirestoreFields(d.fields || {}),
+              }));
+
+              if (contactId) {
+                activities = activities.filter((a: any) => a.contact_id === contactId);
+              }
+
+              return sendJson(res, 200, { success: true, count: activities.length, data: activities });
+            }
+
+            if (req.method === 'POST') {
+              const rawBody = await readBody(req);
+              const payload = JSON.parse(rawBody || '{}');
+              const actId = payload.id || `act_agt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+
+              const newActivity = {
+                id: actId,
+                contact_id: payload.contact_id || '',
+                deal_id: payload.deal_id || '',
+                type: payload.type || 'note',
+                title: payload.title || 'AI Agent Notitie',
+                description: payload.description || '',
+                performed_by: payload.performed_by || (keyMeta ? keyMeta.name : 'AI Agent'),
+                completed: payload.completed ?? true,
+                date: payload.date || new Date().toISOString(),
+                created_at: new Date().toISOString(),
+              };
+
+              await saveToFirestoreRest(projectId, 'crm_activities', actId, newActivity);
+
+              return sendJson(res, 201, {
+                success: true,
+                message: 'Activiteit/Gespreksnotitie succesvol gelogd in CRMos',
+                data: newActivity,
+              });
+            }
+          }
+
+          // 9. CANDIDATES (Recruitment & No Cure No Pay)
+          if (pathname === '/api/v1/candidates' || pathname.startsWith('/api/v1/candidates/')) {
+            const candidateIdFromPath = pathname.replace('/api/v1/candidates', '').replace(/^\//, '').trim();
+
+            if (req.method === 'GET') {
+              const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/recruitment_candidates?pageSize=100`;
+              const fbRes = await fetch(firestoreUrl);
+              const data = (fbRes.ok ? await fbRes.json() : { documents: [] }) as { documents?: any[] };
+              const candidates = (data.documents || []).map((d: any) => ({
+                id: d.name.split('/').pop(),
+                ...parseFirestoreFields(d.fields || {}),
+              }));
+
+              return sendJson(res, 200, { success: true, count: candidates.length, data: candidates });
             }
 
             if (req.method === 'POST') {
               const rawBody = await readBody(req);
               const candidate = JSON.parse(rawBody || '{}');
+              const candId = candidate.id || `cand_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+              const effectiveVvcTag = candidate.vvc_tag || `vvc-cand-${Math.random().toString(36).substring(2, 7)}`;
+
+              const newCand = {
+                id: candId,
+                first_name: candidate.first_name || '',
+                last_name: candidate.last_name || '',
+                email: candidate.email || '',
+                phone: candidate.phone || '',
+                status: candidate.status || 'new',
+                skills: Array.isArray(candidate.skills) ? candidate.skills : [],
+                experience_years: Number(candidate.experience_years) || 3,
+                location: candidate.location || '100% Remote',
+                source: candidate.source || (keyMeta ? `AI Agent (${keyMeta.name})` : 'AI Agent Funnel'),
+                vvc_tag: effectiveVvcTag,
+                notes: candidate.notes || '',
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              };
+
+              await saveToFirestoreRest(projectId, 'recruitment_candidates', candId, newCand);
+
               return sendJson(res, 201, {
                 success: true,
-                message: 'Sollicitatie succesvol geregistreerd in CRMos Recruitment',
-                data: {
-                  id: candidate.id || `cand_${Date.now()}`,
-                  ...candidate,
-                  created_at: new Date().toISOString(),
-                },
+                message: 'Sollicitatie/Kandidaat succesvol geregistreerd in Cloud Firestore',
+                data: newCand,
               });
+            }
+
+            if (req.method === 'PUT' || req.method === 'PATCH') {
+              const targetId = candidateIdFromPath || parsedUrl.searchParams.get('id');
+              if (!targetId) return sendJson(res, 400, { success: false, message: 'Geen kandidaat ID opgegeven' });
+
+              const rawBody = await readBody(req);
+              const updates = JSON.parse(rawBody || '{}');
+
+              const singleUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/recruitment_candidates/${encodeURIComponent(targetId)}`;
+              const fbRes = await fetch(singleUrl);
+              const existing = fbRes.ok ? parseFirestoreFields(((await fbRes.json()) as any).fields || {}) : {};
+
+              const merged = { ...existing, ...updates, id: targetId, updated_at: new Date().toISOString() };
+              await saveToFirestoreRest(projectId, 'recruitment_candidates', targetId, merged);
+
+              return sendJson(res, 200, { success: true, message: `Kandidaat ${targetId} bijgewerkt`, data: merged });
             }
           }
 
-          // 8. TEAMS
+          // 10. TEAMS (Referral Netwerk & Kernleiders)
           if (pathname === '/api/v1/teams') {
             const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/crm_teams`;
             const fbRes = await fetch(firestoreUrl);
             const data = (fbRes.ok ? await fbRes.json() : { documents: [] }) as { documents?: any[] };
-            const teams = (data.documents || []).map((d: any) => {
-              const flat = parseFirestoreFields(d.fields || {});
-              return { id: d.name.split('/').pop(), ...flat };
-            });
+            const teams = (data.documents || []).map((d: any) => ({
+              id: d.name.split('/').pop(),
+              ...parseFirestoreFields(d.fields || {}),
+            }));
 
-            return sendJson(res, 200, {
-              success: true,
-              count: teams.length,
-              data: teams,
-            });
+            return sendJson(res, 200, { success: true, count: teams.length, data: teams });
           }
 
-          // 9. 13 ECOSYSTEM COMPANIES
+          // 11. 13 ECOSYSTEM COMPANIES
           if (pathname === '/api/v1/companies') {
             return sendJson(res, 200, {
               success: true,

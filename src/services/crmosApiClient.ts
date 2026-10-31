@@ -10,7 +10,7 @@
  * 2. Directe fallback naar Firestore REST API voor static Firebase Hosting deployments
  */
 
-import type { Contact, Candidate, CRMTeam } from '@/types';
+import type { Contact, Candidate, CRMTeam, Deal, Activity } from '@/types';
 
 export interface CRMosClientConfig {
   apiKey?: string;
@@ -282,6 +282,140 @@ export class CRMosClient {
     }
 
     return { success: false, message: 'Fout bij aanmaken contact' };
+  }
+
+  /**
+   * Contact upserten (zoek op email/vvc_tag; update indien gevonden, anders nieuw aanmaken)
+   */
+  async upsertContact(contact: Partial<Contact>): Promise<ApiResponse<Contact>> {
+    try {
+      const res = await fetch(`${this.baseUrl}/api/v1/contacts/upsert`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify(contact),
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {
+      // Fallback
+    }
+    return this.createContact(contact);
+  }
+
+  /**
+   * Contact bijwerken
+   */
+  async updateContact(id: string, updates: Partial<Contact>): Promise<ApiResponse<Contact>> {
+    try {
+      const res = await fetch(`${this.baseUrl}/api/v1/contacts/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: this.getHeaders(),
+        body: JSON.stringify(updates),
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {
+      // Fallback
+    }
+
+    try {
+      const fields = toFirestoreFields({ ...updates, updated_at: new Date().toISOString() });
+      const url = `https://firestore.googleapis.com/v1/projects/${this.projectId}/databases/(default)/documents/crm_contacts/${encodeURIComponent(id)}`;
+      const fbRes = await fetch(url, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields }),
+      });
+      if (fbRes.ok) {
+        return { success: true, source: 'firestore_rest', message: 'Contact bijgewerkt' };
+      }
+    } catch {
+      // Ignore
+    }
+    return { success: false, message: 'Fout bij bijwerken contact' };
+  }
+
+  /**
+   * Deal aanmaken
+   */
+  async createDeal(deal: Partial<Deal>): Promise<ApiResponse<Deal>> {
+    try {
+      const res = await fetch(`${this.baseUrl}/api/v1/deals`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify(deal),
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {
+      // Fallback
+    }
+
+    try {
+      const dealId = deal.id || `deal_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const payload = {
+        ...deal,
+        id: dealId,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      const fields = toFirestoreFields(payload);
+      const url = `https://firestore.googleapis.com/v1/projects/${this.projectId}/databases/(default)/documents/crm_deals/${encodeURIComponent(dealId)}`;
+      const fbRes = await fetch(url, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields }),
+      });
+      if (fbRes.ok) {
+        return { success: true, source: 'firestore_rest', data: payload as Deal };
+      }
+    } catch (err: any) {
+      return { success: false, message: err?.message || 'Deal opslaan mislukt' };
+    }
+    return { success: false, message: 'Fout bij opslaan deal' };
+  }
+
+  /**
+   * Activiteit / interactielog opslaan (AI agent gespreksnotitie, call log, taken)
+   */
+  async logActivity(activity: Partial<Activity>): Promise<ApiResponse<Activity>> {
+    try {
+      const res = await fetch(`${this.baseUrl}/api/v1/activities`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify(activity),
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {
+      // Fallback
+    }
+
+    try {
+      const actId = activity.id || `act_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const payload = {
+        ...activity,
+        id: actId,
+        created_at: new Date().toISOString(),
+      };
+      const fields = toFirestoreFields(payload);
+      const url = `https://firestore.googleapis.com/v1/projects/${this.projectId}/databases/(default)/documents/crm_activities/${encodeURIComponent(actId)}`;
+      const fbRes = await fetch(url, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields }),
+      });
+      if (fbRes.ok) {
+        return { success: true, source: 'firestore_rest', data: payload as Activity };
+      }
+    } catch (err: any) {
+      return { success: false, message: err?.message || 'Activiteit loggen mislukt' };
+    }
+    return { success: false, message: 'Fout bij opslaan activiteit' };
   }
 
   /**

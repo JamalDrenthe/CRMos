@@ -145,3 +145,12 @@ export const COMPANY_API_KEYS: CompanyApiKeyDefinition[] = [
 ];
 
 export const ALL_ACTIVE_API_KEYS = [MASTER_ECOSYSTEM_API_KEY, ...COMPANY_API_KEYS];
+
+export const PREDEFINED_COMPANY_API_KEYS: Record<string, CompanyApiKeyDefinition> = ALL_ACTIVE_API_KEYS.reduce(
+  (acc, item) => {
+    acc[item.key] = item;
+    return acc;
+  },
+  {} as Record<string, CompanyApiKeyDefinition>
+);
+
