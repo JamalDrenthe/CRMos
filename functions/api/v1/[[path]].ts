@@ -184,6 +184,13 @@ function documentId(document: FirestoreDocument): string {
   return document.name.split('/').pop() || '';
 }
 
+async function deterministicContactId(email: string, vvcTag: string): Promise<string> {
+  const identifier = email || `tag:${vvcTag}`;
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(identifier));
+  const hash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return `api-${hash.slice(0, 32)}`;
+}
+
 function firestoreBaseUrl(projectId: string): string {
   return `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/databases/(default)/documents`;
 }
@@ -276,6 +283,23 @@ async function queryByField(
   return rows.flatMap((row) => row.document ? [row.document] : []);
 }
 
+async function getDocument(
+  env: Env,
+  collection: string,
+  id: string,
+): Promise<FirestoreDocument | undefined> {
+  try {
+    const response = await firestoreRequest(
+      env,
+      `/${collection}/${encodeURIComponent(id)}`,
+    );
+    return await response.json() as FirestoreDocument;
+  } catch (error) {
+    if (error instanceof FirestoreError && error.status === 404) return undefined;
+    throw error;
+  }
+}
+
 async function writeDocument(
   env: Env,
   collection: string,
@@ -354,10 +378,33 @@ async function readJsonObject(request: Request): Promise<JsonObject> {
   const declaredLength = Number(request.headers.get('content-length') || 0);
   if (declaredLength > MAX_BODY_BYTES) throw new ApiError(413, 'Request body is too large');
 
-  const body = await request.text();
-  if (new TextEncoder().encode(body).byteLength > MAX_BODY_BYTES) {
-    throw new ApiError(413, 'Request body is too large');
+  const reader = request.body?.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  try {
+    if (reader) {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        totalBytes += value.byteLength;
+        if (totalBytes > MAX_BODY_BYTES) {
+          await reader.cancel().catch(() => undefined);
+          throw new ApiError(413, 'Request body is too large');
+        }
+        chunks.push(value);
+      }
+    }
+  } finally {
+    reader?.releaseLock();
   }
+
+  const bytes = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  const body = new TextDecoder().decode(bytes);
 
   let parsed: unknown;
   try {
@@ -428,16 +475,29 @@ async function upsertContact(env: Env, body: JsonObject): Promise<Response> {
   }
 
   const findExistingDocument = async (): Promise<FirestoreDocument | undefined> => {
-    let matches: FirestoreDocument[] = [];
-    if (email) matches = await queryByField(env, 'crm_contacts', 'email', email);
-    if (!matches.length && vvcTag) {
-      matches = await queryByField(env, 'crm_contacts', 'vvc_tag', vvcTag);
+    const emailMatches = email
+      ? await queryByField(env, 'crm_contacts', 'email', email)
+      : [];
+    const deterministicDocument = await getDocument(env, 'crm_contacts', deterministicId);
+    const tagMatches = vvcTag
+      ? await queryByField(env, 'crm_contacts', 'vvc_tag', vvcTag)
+      : [];
+    const emailDocument = emailMatches[0];
+    const tagDocument = tagMatches[0];
+
+    if (
+      emailDocument &&
+      tagDocument &&
+      documentId(emailDocument) !== documentId(tagDocument)
+    ) {
+      throw new ApiError(409, 'email and vvc_tag belong to different contacts');
     }
-    return matches[0];
+
+    return emailDocument || deterministicDocument || tagDocument;
   };
 
   const buildData = (document?: FirestoreDocument): JsonObject => {
-    const id = document ? documentId(document) : crypto.randomUUID();
+    const id = document ? documentId(document) : deterministicId;
     const decodedTags = document?.fields?.tags
       ? decodeFirestoreValue(document.fields.tags)
       : [];
@@ -456,20 +516,43 @@ async function upsertContact(env: Env, body: JsonObject): Promise<Response> {
       throw new ApiError(400, 'Merged tags may contain at most 50 entries');
     }
 
-    const data: JsonObject = {
-      ...(document
-        ? Object.fromEntries(
-          Object.entries(acceptedFields).filter(([field]) => field !== 'source' && field !== 'notes'),
-        )
-        : acceptedFields),
-      id,
+    const requestedFields: JsonObject = {
+      ...acceptedFields,
       ...(email || !document ? { email } : {}),
       ...(vvcTag ? { vvc_tag: vvcTag } : {}),
+    };
+    const fillableFields = document
+      ? Object.fromEntries(
+        Object.entries(requestedFields).filter(([field]) => {
+          const currentValue = document.fields?.[field]
+            ? decodeFirestoreValue(document.fields[field])
+            : undefined;
+          return currentValue === undefined || currentValue === '';
+        }),
+      )
+      : requestedFields;
+
+    const data: JsonObject = {
+      ...fillableFields,
+      id,
       company_tags: companyTags,
       tags,
-      ...(custom === undefined ? {} : { custom_fields: custom }),
       updated_at: new Date().toISOString(),
     };
+
+    if (custom !== undefined) {
+      const existingCustomFields = document?.fields?.custom_fields
+        ? decodeFirestoreValue(document.fields.custom_fields)
+        : undefined;
+      const existingCustom = existingCustomFields &&
+        typeof existingCustomFields === 'object' &&
+        !Array.isArray(existingCustomFields)
+        ? existingCustomFields as JsonObject
+        : {};
+      data.custom_fields = document
+        ? { ...(custom as JsonObject), ...existingCustom }
+        : custom;
+    }
 
     if (!document) {
       data.first_name = acceptedFields.first_name ?? 'Nieuw';
@@ -477,18 +560,20 @@ async function upsertContact(env: Env, body: JsonObject): Promise<Response> {
       data.phone = acceptedFields.phone ?? '';
       data.company = acceptedFields.company ?? 'Onbekend';
       data.vvc_tag = vvcTag || `vvc-${crypto.randomUUID()}`;
+      if (!email) data.email = '';
       const createdTags = Array.from(new Set([data.vvc_tag, ...tags]));
       if (createdTags.length > 50) throw new ApiError(400, 'Merged tags may contain at most 50 entries');
       data.tags = createdTags;
       data.source = acceptedFields.source ?? 'CRMos REST API';
       data.notes = acceptedFields.notes ?? '';
       data.created_at = data.updated_at;
-      if (custom === undefined && !('custom_fields' in data)) data.custom_fields = {};
+      if (custom === undefined) data.custom_fields = {};
     }
 
     return data;
   };
 
+  const deterministicId = await deterministicContactId(email, vvcTag);
   let existingDocument = await findExistingDocument();
   let data = buildData(existingDocument);
   try {
@@ -505,7 +590,7 @@ async function upsertContact(env: Env, body: JsonObject): Promise<Response> {
       (error.status === 409 || (error.status === 400 && error.reason === 'FAILED_PRECONDITION'));
     if (existingDocument || !isCreateConflict) throw error;
 
-    existingDocument = await findExistingDocument();
+    existingDocument = await getDocument(env, 'crm_contacts', deterministicId);
     if (!existingDocument) throw error;
     data = buildData(existingDocument);
     await writeDocument(env, 'crm_contacts', data.id as string, data, Object.keys(data));
@@ -538,22 +623,48 @@ async function createDeal(env: Env, body: JsonObject): Promise<Response> {
     throw new ApiError(400, 'value must be a number greater than or equal to 0');
   }
 
+  const stage = trimString(body.stage, 'stage') || 'lead';
+  const stageProbabilities: Record<string, number> = {
+    lead: 10,
+    qualified: 25,
+    proposal: 50,
+    negotiation: 75,
+    'closed-won': 100,
+    'closed-lost': 0,
+  };
+  if (!Object.prototype.hasOwnProperty.call(stageProbabilities, stage)) {
+    throw new ApiError(400, 'Invalid deal stage');
+  }
+  const optional = optionalFields(body, [
+    'company_id',
+    'contact_id',
+    'contact_name',
+    'expected_close_date',
+    'source',
+    'owner_email',
+    'notes',
+  ]);
+  const tags = stringList(body.tags, 'tags') || [];
   const now = new Date().toISOString();
   const data: JsonObject = {
     id: crypto.randomUUID(),
     name,
     value,
-    stage: trimString(body.stage, 'stage') || 'lead',
+    company_id: optional.company_id ?? '',
+    stage,
     currency: trimString(body.currency, 'currency') || 'EUR',
+    pipeline_id: '1',
+    probability: stageProbabilities[stage],
+    source: optional.source ?? 'CRMos REST API',
+    assigned_to: optional.owner_email ?? '',
+    tags,
+    activities: [],
     created_at: now,
     updated_at: now,
   };
-  Object.assign(data, optionalFields(body, [
-    'contact_id',
-    'source',
-    'owner_email',
-    'notes',
-  ]));
+  for (const field of ['contact_id', 'contact_name', 'expected_close_date', 'notes']) {
+    if (optional[field] !== undefined) data[field] = optional[field];
+  }
   const custom = body.custom === undefined || body.custom === null
     ? undefined
     : validateJsonValue(body.custom);
@@ -571,27 +682,30 @@ async function createActivity(env: Env, body: JsonObject): Promise<Response> {
   const contactId = trimString(body.contact_id, 'contact_id');
   if (!title || !contactId) throw new ApiError(400, 'title and contact_id are required');
 
+  const type = trimString(body.type, 'type') || 'note';
+  const activityTypes = ['call', 'email', 'meeting', 'task', 'note', 'whatsapp', 'sms'];
+  if (!activityTypes.includes(type)) throw new ApiError(400, 'Invalid activity type');
+  const dealId = trimString(body.deal_id, 'deal_id') || '';
+  const ownerEmail = trimString(body.owner_email, 'owner_email');
   const now = new Date().toISOString();
   const data: JsonObject = {
     id: crypto.randomUUID(),
     title,
     contact_id: contactId,
-    deal_id: '',
-    type: trimString(body.type, 'type') || 'note',
+    deal_id: dealId,
+    type,
     description: '',
-    performed_by: 'CRMos REST API',
-    completed: true,
-    date: now,
+    status: 'completed',
+    completed_at: now,
+    assigned_to: ownerEmail || 'CRMos REST API',
+    related_to: {
+      type: dealId ? 'deal' : 'contact',
+      id: dealId || contactId,
+    },
     created_at: now,
     updated_at: now,
   };
-  Object.assign(data, optionalFields(body, [
-    'description',
-    'deal_id',
-    'source',
-    'owner_email',
-  ]));
-  data.performed_by = data.owner_email || data.source || 'CRMos REST API';
+  Object.assign(data, optionalFields(body, ['description', 'source']));
   const custom = body.custom === undefined || body.custom === null
     ? undefined
     : validateJsonValue(body.custom);
