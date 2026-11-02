@@ -30,6 +30,15 @@ class ApiError extends Error {
   }
 }
 
+class FirestoreError extends Error {
+  constructor(
+    readonly status: number,
+    readonly reason?: string,
+  ) {
+    super('Firestore request failed');
+  }
+}
+
 let cachedIdToken: { value: string; refreshAt: number } | undefined;
 let signInInFlight: Promise<string> | undefined;
 
@@ -123,7 +132,7 @@ function extractApiKey(request: Request): string {
 
 function encodeFirestoreValue(value: unknown): FirestoreValue {
   if (value === null) return { nullValue: null };
-  if (value instanceof Date) return { timestampValue: value.toISOString() };
+  if (value instanceof Date) return { stringValue: value.toISOString() };
   if (typeof value === 'string') return { stringValue: value };
   if (typeof value === 'boolean') return { booleanValue: value };
   if (typeof value === 'number') {
@@ -228,7 +237,16 @@ async function firestoreRequest(
     ...init,
     headers,
   });
-  if (!response.ok) throw new Error('Firestore request failed');
+  if (!response.ok) {
+    let reason: string | undefined;
+    try {
+      const payload = await response.clone().json() as { error?: { status?: unknown } };
+      if (typeof payload.error?.status === 'string') reason = payload.error.status;
+    } catch {
+      reason = undefined;
+    }
+    throw new FirestoreError(response.status, reason);
+  }
   return response;
 }
 
@@ -263,10 +281,22 @@ async function writeDocument(
   collection: string,
   id: string,
   data: JsonObject,
+  fieldPaths?: string[],
+  exists?: boolean,
 ): Promise<void> {
+  const query = new URLSearchParams();
+  for (const fieldPath of fieldPaths || []) {
+    const escapedPath = /^[A-Za-z_][A-Za-z0-9_]*$/.test(fieldPath)
+      ? fieldPath
+      : `\`${fieldPath.replace(/\\/g, '\\\\').replace(/`/g, '\\`')}\``;
+    query.append('updateMask.fieldPaths', escapedPath);
+  }
+  if (exists !== undefined) query.set('currentDocument.exists', String(exists));
+  const queryString = query.toString();
+
   await firestoreRequest(
     env,
-    `/${collection}/${encodeURIComponent(id)}`,
+    `/${collection}/${encodeURIComponent(id)}${queryString ? `?${queryString}` : ''}`,
     {
       method: 'PATCH',
       body: JSON.stringify({ fields: encodeFirestoreFields(data) }),
@@ -368,25 +398,6 @@ async function upsertContact(env: Env, body: JsonObject): Promise<Response> {
     throw new ApiError(400, 'custom must be a JSON object');
   }
 
-  let matches: FirestoreDocument[] = [];
-  if (email) matches = await queryByField(env, 'crm_contacts', 'email', email);
-  if (!matches.length && vvcTag) {
-    matches = await queryByField(env, 'crm_contacts', 'vvc_tag', vvcTag);
-  }
-
-  const existingDocument = matches[0];
-  const existing = existingDocument
-    ? decodeFirestoreFields(existingDocument.fields || {})
-    : {};
-  const id = existingDocument ? documentId(existingDocument) : crypto.randomUUID();
-  const existingTags = Array.isArray(existing.tags) ? existing.tags.filter((tag): tag is string => typeof tag === 'string') : [];
-  const existingCompanyTags = Array.isArray(existing.company_tags)
-    ? existing.company_tags.filter((tag): tag is string => typeof tag === 'string')
-    : [];
-  const companyTags = Array.from(new Set([...existingCompanyTags, ...inputCompanyTags]));
-  const tags = Array.from(new Set([...existingTags, ...inputTags, ...companyTags]));
-  if (companyTags.length > 50 || tags.length > 50) throw new ApiError(400, 'Merged tags may contain at most 50 entries');
-
   const acceptedFields = optionalFields(body, [
     'first_name',
     'last_name',
@@ -416,42 +427,93 @@ async function upsertContact(env: Env, body: JsonObject): Promise<Response> {
     acceptedFields.last_name = lastName.join(' ');
   }
 
-  const now = new Date();
-  const data: JsonObject = {
-    ...existing,
-    ...Object.fromEntries(
-      Object.entries(acceptedFields).filter(([field]) =>
-        !existingDocument || (field !== 'source' && field !== 'notes'),
-      ),
-    ),
-    id,
-    ...(email || !existingDocument ? { email } : {}),
-    ...(vvcTag ? { vvc_tag: vvcTag } : {}),
-    company_tags: companyTags,
-    tags,
-    ...(custom === undefined ? {} : { custom_fields: custom }),
-    updated_at: now,
+  const findExistingDocument = async (): Promise<FirestoreDocument | undefined> => {
+    let matches: FirestoreDocument[] = [];
+    if (email) matches = await queryByField(env, 'crm_contacts', 'email', email);
+    if (!matches.length && vvcTag) {
+      matches = await queryByField(env, 'crm_contacts', 'vvc_tag', vvcTag);
+    }
+    return matches[0];
   };
 
-  if (!existingDocument) {
-    data.first_name = acceptedFields.first_name ?? 'Nieuw';
-    data.last_name = acceptedFields.last_name ?? 'Contact';
-    data.phone = acceptedFields.phone ?? '';
-    data.company = acceptedFields.company ?? 'Onbekend';
-    data.vvc_tag = vvcTag || `vvc-${crypto.randomUUID()}`;
-    const createdTags = Array.from(new Set([data.vvc_tag, ...tags]));
-    if (createdTags.length > 50) throw new ApiError(400, 'Merged tags may contain at most 50 entries');
-    data.tags = createdTags;
-    data.source = acceptedFields.source ?? 'CRMos REST API';
-    data.notes = acceptedFields.notes ?? '';
-    data.created_at = now;
-    if (custom === undefined && !('custom_fields' in data)) data.custom_fields = {};
+  const buildData = (document?: FirestoreDocument): JsonObject => {
+    const id = document ? documentId(document) : crypto.randomUUID();
+    const decodedTags = document?.fields?.tags
+      ? decodeFirestoreValue(document.fields.tags)
+      : [];
+    const decodedCompanyTags = document?.fields?.company_tags
+      ? decodeFirestoreValue(document.fields.company_tags)
+      : [];
+    const existingTags = Array.isArray(decodedTags)
+      ? decodedTags.filter((tag): tag is string => typeof tag === 'string')
+      : [];
+    const existingCompanyTags = Array.isArray(decodedCompanyTags)
+      ? decodedCompanyTags.filter((tag): tag is string => typeof tag === 'string')
+      : [];
+    const companyTags = Array.from(new Set([...existingCompanyTags, ...inputCompanyTags]));
+    const tags = Array.from(new Set([...existingTags, ...inputTags, ...companyTags]));
+    if (companyTags.length > 50 || tags.length > 50) {
+      throw new ApiError(400, 'Merged tags may contain at most 50 entries');
+    }
+
+    const data: JsonObject = {
+      ...(document
+        ? Object.fromEntries(
+          Object.entries(acceptedFields).filter(([field]) => field !== 'source' && field !== 'notes'),
+        )
+        : acceptedFields),
+      id,
+      ...(email || !document ? { email } : {}),
+      ...(vvcTag ? { vvc_tag: vvcTag } : {}),
+      company_tags: companyTags,
+      tags,
+      ...(custom === undefined ? {} : { custom_fields: custom }),
+      updated_at: new Date().toISOString(),
+    };
+
+    if (!document) {
+      data.first_name = acceptedFields.first_name ?? 'Nieuw';
+      data.last_name = acceptedFields.last_name ?? 'Contact';
+      data.phone = acceptedFields.phone ?? '';
+      data.company = acceptedFields.company ?? 'Onbekend';
+      data.vvc_tag = vvcTag || `vvc-${crypto.randomUUID()}`;
+      const createdTags = Array.from(new Set([data.vvc_tag, ...tags]));
+      if (createdTags.length > 50) throw new ApiError(400, 'Merged tags may contain at most 50 entries');
+      data.tags = createdTags;
+      data.source = acceptedFields.source ?? 'CRMos REST API';
+      data.notes = acceptedFields.notes ?? '';
+      data.created_at = data.updated_at;
+      if (custom === undefined && !('custom_fields' in data)) data.custom_fields = {};
+    }
+
+    return data;
+  };
+
+  let existingDocument = await findExistingDocument();
+  let data = buildData(existingDocument);
+  try {
+    await writeDocument(
+      env,
+      'crm_contacts',
+      data.id as string,
+      data,
+      existingDocument ? Object.keys(data) : undefined,
+      existingDocument ? undefined : false,
+    );
+  } catch (error) {
+    const isCreateConflict = error instanceof FirestoreError &&
+      (error.status === 409 || (error.status === 400 && error.reason === 'FAILED_PRECONDITION'));
+    if (existingDocument || !isCreateConflict) throw error;
+
+    existingDocument = await findExistingDocument();
+    if (!existingDocument) throw error;
+    data = buildData(existingDocument);
+    await writeDocument(env, 'crm_contacts', data.id as string, data, Object.keys(data));
   }
 
-  await writeDocument(env, 'crm_contacts', id, data);
   return jsonResponse(existingDocument ? 200 : 201, {
     success: true,
-    data: { id, created: !existingDocument },
+    data: { id: data.id, created: !existingDocument },
   });
 }
 
@@ -476,14 +538,15 @@ async function createDeal(env: Env, body: JsonObject): Promise<Response> {
     throw new ApiError(400, 'value must be a number greater than or equal to 0');
   }
 
+  const now = new Date().toISOString();
   const data: JsonObject = {
     id: crypto.randomUUID(),
     name,
     value,
     stage: trimString(body.stage, 'stage') || 'lead',
     currency: trimString(body.currency, 'currency') || 'EUR',
-    created_at: new Date(),
-    updated_at: new Date(),
+    created_at: now,
+    updated_at: now,
   };
   Object.assign(data, optionalFields(body, [
     'contact_id',
@@ -508,6 +571,7 @@ async function createActivity(env: Env, body: JsonObject): Promise<Response> {
   const contactId = trimString(body.contact_id, 'contact_id');
   if (!title || !contactId) throw new ApiError(400, 'title and contact_id are required');
 
+  const now = new Date().toISOString();
   const data: JsonObject = {
     id: crypto.randomUUID(),
     title,
@@ -517,9 +581,9 @@ async function createActivity(env: Env, body: JsonObject): Promise<Response> {
     description: '',
     performed_by: 'CRMos REST API',
     completed: true,
-    date: new Date(),
-    created_at: new Date(),
-    updated_at: new Date(),
+    date: now,
+    created_at: now,
+    updated_at: now,
   };
   Object.assign(data, optionalFields(body, [
     'description',
