@@ -347,6 +347,7 @@ export interface Activity {
     type: 'contact' | 'deal' | 'company';
     id: string;
   };
+  contact_id?: string;
   created_at: string;
   updated_at: string;
 }
