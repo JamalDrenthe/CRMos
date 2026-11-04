@@ -99,8 +99,11 @@ export function View360Page() {
     const actCounts = new Map<string, { total: number; emails: number; calls: number; meetings: number }>();
     for (let i = 0; i < activities.length; i++) {
       const a = activities[i];
-      if (a.related_to?.type === 'contact' && a.related_to.id) {
-        const cid = a.related_to.id;
+      const linkedContactIds = new Set([
+        a.related_to?.type === 'contact' ? a.related_to.id : undefined,
+        a.contact_id,
+      ].filter((id): id is string => Boolean(id)));
+      for (const cid of linkedContactIds) {
         const cur = actCounts.get(cid) || { total: 0, emails: 0, calls: 0, meetings: 0 };
         cur.total += 1;
         if (a.type === 'email') cur.emails += 1;

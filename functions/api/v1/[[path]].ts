@@ -39,6 +39,11 @@ class FirestoreError extends Error {
   }
 }
 
+function isCreatePreconditionConflict(error: unknown): boolean {
+  return error instanceof FirestoreError &&
+    (error.status === 409 || (error.status === 400 && error.reason === 'FAILED_PRECONDITION'));
+}
+
 let cachedIdToken: { value: string; refreshAt: number } | undefined;
 let signInInFlight: Promise<string> | undefined;
 
@@ -191,6 +196,12 @@ async function deterministicContactId(email: string, vvcTag: string): Promise<st
   return `api-${hash.slice(0, 32)}`;
 }
 
+async function externalDocumentId(externalId: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(externalId));
+  const hash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return `ext-${hash.slice(0, 32)}`;
+}
+
 function firestoreBaseUrl(projectId: string): string {
   return `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/databases/(default)/documents`;
 }
@@ -300,6 +311,13 @@ async function getDocument(
   }
 }
 
+function documentData(document: FirestoreDocument): JsonObject {
+  return {
+    ...decodeFirestoreFields(document.fields || {}),
+    id: documentId(document),
+  };
+}
+
 async function writeDocument(
   env: Env,
   collection: string,
@@ -334,6 +352,13 @@ function trimString(value: unknown, field: string, maxLength = MAX_STRING_LENGTH
   const trimmed = value.trim();
   if (trimmed.length > maxLength) throw new ApiError(400, `${field} is too long`);
   return trimmed;
+}
+
+function optionalExternalId(body: JsonObject): string | undefined {
+  if (!Object.prototype.hasOwnProperty.call(body, 'external_id')) return undefined;
+  const externalId = trimString(body.external_id, 'external_id', 200);
+  if (!externalId) throw new ApiError(400, 'external_id must contain 1 to 200 characters');
+  return externalId;
 }
 
 function validateEmail(email: string | undefined): void {
@@ -616,6 +641,7 @@ async function getContactByEmail(env: Env, emailInput: string | null): Promise<R
 }
 
 async function createDeal(env: Env, body: JsonObject): Promise<Response> {
+  const externalId = optionalExternalId(body);
   const name = trimString(body.name, 'name');
   if (!name) throw new ApiError(400, 'name is required');
   const value = body.value === undefined || body.value === null ? 0 : body.value;
@@ -647,7 +673,7 @@ async function createDeal(env: Env, body: JsonObject): Promise<Response> {
   const tags = stringList(body.tags, 'tags') || [];
   const now = new Date().toISOString();
   const data: JsonObject = {
-    id: crypto.randomUUID(),
+    id: externalId ? await externalDocumentId(externalId) : crypto.randomUUID(),
     name,
     value,
     company_id: optional.company_id ?? '',
@@ -662,6 +688,8 @@ async function createDeal(env: Env, body: JsonObject): Promise<Response> {
     created_at: now,
     updated_at: now,
   };
+  if (externalId) data.external_id = externalId;
+  if (externalId && optional.owner_email !== undefined) data.owner_email = optional.owner_email;
   for (const field of ['contact_id', 'contact_name', 'expected_close_date', 'notes']) {
     if (optional[field] !== undefined) data[field] = optional[field];
   }
@@ -673,11 +701,61 @@ async function createDeal(env: Env, body: JsonObject): Promise<Response> {
   }
   if (custom !== undefined) data.custom = custom;
 
-  await writeDocument(env, 'crm_deals', data.id as string, data);
-  return jsonResponse(201, { success: true, data });
+  if (!externalId) {
+    await writeDocument(env, 'crm_deals', data.id as string, data);
+    return jsonResponse(201, { success: true, data });
+  }
+
+  const updateExisting = async (document: FirestoreDocument): Promise<Response> => {
+    const existingData = documentData(document);
+    const updates: JsonObject = {
+      name,
+      value,
+      stage,
+      probability: stageProbabilities[stage],
+      updated_at: new Date().toISOString(),
+    };
+    if (optional.notes !== undefined) updates.notes = optional.notes;
+    if (custom !== undefined) {
+      const existingCustom = existingData.custom;
+      const previousCustom = existingCustom && typeof existingCustom === 'object' && !Array.isArray(existingCustom)
+        ? existingCustom as JsonObject
+        : {};
+      updates.custom = { ...previousCustom, ...custom as JsonObject };
+    }
+    if (optional.owner_email !== undefined) {
+      updates.owner_email = optional.owner_email;
+      updates.assigned_to = optional.owner_email;
+    }
+
+    await writeDocument(env, 'crm_deals', data.id as string, updates, Object.keys(updates));
+    return jsonResponse(200, { success: true, data: { ...existingData, ...updates } });
+  };
+
+  const existingDocument = await getDocument(env, 'crm_deals', data.id as string);
+  if (existingDocument) return updateExisting(existingDocument);
+
+  try {
+    await writeDocument(env, 'crm_deals', data.id as string, data, undefined, false);
+    return jsonResponse(201, { success: true, data });
+  } catch (error) {
+    if (!isCreatePreconditionConflict(error)) throw error;
+    const racedDocument = await getDocument(env, 'crm_deals', data.id as string);
+    if (!racedDocument) throw error;
+    return updateExisting(racedDocument);
+  }
 }
 
 async function createActivity(env: Env, body: JsonObject): Promise<Response> {
+  const externalId = optionalExternalId(body);
+  const id = externalId ? await externalDocumentId(externalId) : crypto.randomUUID();
+  if (externalId) {
+    const existingDocument = await getDocument(env, 'crm_activities', id);
+    if (existingDocument) {
+      return jsonResponse(200, { success: true, data: documentData(existingDocument) });
+    }
+  }
+
   const title = trimString(body.title, 'title');
   const contactId = trimString(body.contact_id, 'contact_id');
   if (!title || !contactId) throw new ApiError(400, 'title and contact_id are required');
@@ -689,7 +767,7 @@ async function createActivity(env: Env, body: JsonObject): Promise<Response> {
   const ownerEmail = trimString(body.owner_email, 'owner_email');
   const now = new Date().toISOString();
   const data: JsonObject = {
-    id: crypto.randomUUID(),
+    id,
     title,
     contact_id: contactId,
     deal_id: dealId,
@@ -705,6 +783,7 @@ async function createActivity(env: Env, body: JsonObject): Promise<Response> {
     created_at: now,
     updated_at: now,
   };
+  if (externalId) data.external_id = externalId;
   Object.assign(data, optionalFields(body, ['description', 'source']));
   const custom = body.custom === undefined || body.custom === null
     ? undefined
@@ -714,8 +793,20 @@ async function createActivity(env: Env, body: JsonObject): Promise<Response> {
   }
   if (custom !== undefined) data.custom = custom;
 
-  await writeDocument(env, 'crm_activities', data.id as string, data);
-  return jsonResponse(201, { success: true, data });
+  if (!externalId) {
+    await writeDocument(env, 'crm_activities', data.id as string, data);
+    return jsonResponse(201, { success: true, data });
+  }
+
+  try {
+    await writeDocument(env, 'crm_activities', data.id as string, data, undefined, false);
+    return jsonResponse(201, { success: true, data });
+  } catch (error) {
+    if (!isCreatePreconditionConflict(error)) throw error;
+    const racedDocument = await getDocument(env, 'crm_activities', data.id as string);
+    if (!racedDocument) throw error;
+    return jsonResponse(200, { success: true, data: documentData(racedDocument) });
+  }
 }
 
 export async function onRequest({
