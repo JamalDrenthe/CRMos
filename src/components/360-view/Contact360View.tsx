@@ -78,6 +78,7 @@ interface Contact360ViewProps {
 export function Contact360View({ contactId, isOpen, onClose }: Contact360ViewProps) {
   const {
     getContact360,
+    contacts,
     companies,
     teams,
     deals,
@@ -136,8 +137,11 @@ export function Contact360View({ contactId, isOpen, onClose }: Contact360ViewPro
 
   // Memoized contact data for high-performance rendering
   const contact = useMemo(() => {
+    void contacts;
+    void deals;
+    void activities;
     return contactId ? getContact360(contactId) : null;
-  }, [contactId, getContact360]);
+  }, [contactId, getContact360, contacts, deals, activities]);
 
   const vvcTag = useMemo(() => {
     return contact ? getVvcTag(contact) : undefined;
