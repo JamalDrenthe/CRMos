@@ -556,13 +556,13 @@ export const useCRMStore = create<CRMState>()(
 
       getActivitiesByContact: (contactId) => {
         return get().activities.filter(
-          (a) => a.related_to.type === 'contact' && a.related_to.id === contactId
+          (a) => (a.related_to.type === 'contact' && a.related_to.id === contactId) || a.contact_id === contactId
         );
       },
 
       getTimelineForContact: (contactId) => {
         const contactActivities = get().activities.filter(
-          (a) => a.related_to.type === 'contact' && a.related_to.id === contactId
+          (a) => (a.related_to.type === 'contact' && a.related_to.id === contactId) || a.contact_id === contactId
         );
         const contactDeals = get().deals.filter((d) => d.contact_id === contactId);
 

@@ -165,7 +165,7 @@ export function Contact360View({ contactId, isOpen, onClose }: Contact360ViewPro
 
   const contactActivities = useMemo(() => {
     return activities.filter(
-      (a) => a.related_to.type === 'contact' && a.related_to.id === contactId
+      (a) => (a.related_to.type === 'contact' && a.related_to.id === contactId) || a.contact_id === contactId
     );
   }, [activities, contactId]);
 
