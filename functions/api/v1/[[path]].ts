@@ -203,7 +203,7 @@ function escapeFieldPath(fieldPath: string): string {
 }
 
 async function externalDocumentId(keyId: string, externalId: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${keyId}:${externalId}`));
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify([keyId, externalId])));
   const hash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
   return `ext-${hash.slice(0, 32)}`;
 }
