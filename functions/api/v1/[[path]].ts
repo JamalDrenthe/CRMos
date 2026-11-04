@@ -196,8 +196,14 @@ async function deterministicContactId(email: string, vvcTag: string): Promise<st
   return `api-${hash.slice(0, 32)}`;
 }
 
-async function externalDocumentId(externalId: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(externalId));
+function escapeFieldPath(fieldPath: string): string {
+  return /^[A-Za-z_][A-Za-z0-9_]*$/.test(fieldPath)
+    ? fieldPath
+    : `\`${fieldPath.replace(/\\/g, '\\\\').replace(/`/g, '\\`')}\``;
+}
+
+async function externalDocumentId(keyId: string, externalId: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${keyId}:${externalId}`));
   const hash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
   return `ext-${hash.slice(0, 32)}`;
 }
@@ -328,10 +334,7 @@ async function writeDocument(
 ): Promise<void> {
   const query = new URLSearchParams();
   for (const fieldPath of fieldPaths || []) {
-    const escapedPath = /^[A-Za-z_][A-Za-z0-9_]*$/.test(fieldPath)
-      ? fieldPath
-      : `\`${fieldPath.replace(/\\/g, '\\\\').replace(/`/g, '\\`')}\``;
-    query.append('updateMask.fieldPaths', escapedPath);
+    query.append('updateMask.fieldPaths', fieldPath);
   }
   if (exists !== undefined) query.set('currentDocument.exists', String(exists));
   const queryString = query.toString();
@@ -607,7 +610,7 @@ async function upsertContact(env: Env, body: JsonObject): Promise<Response> {
       'crm_contacts',
       data.id as string,
       data,
-      existingDocument ? Object.keys(data) : undefined,
+      existingDocument ? Object.keys(data).map(escapeFieldPath) : undefined,
       existingDocument ? undefined : false,
     );
   } catch (error) {
@@ -618,7 +621,7 @@ async function upsertContact(env: Env, body: JsonObject): Promise<Response> {
     existingDocument = await getDocument(env, 'crm_contacts', deterministicId);
     if (!existingDocument) throw error;
     data = buildData(existingDocument);
-    await writeDocument(env, 'crm_contacts', data.id as string, data, Object.keys(data));
+    await writeDocument(env, 'crm_contacts', data.id as string, data, Object.keys(data).map(escapeFieldPath));
   }
 
   return jsonResponse(existingDocument ? 200 : 201, {
@@ -640,7 +643,7 @@ async function getContactByEmail(env: Env, emailInput: string | null): Promise<R
   return jsonResponse(200, { success: true, count: data.length, data });
 }
 
-async function createDeal(env: Env, body: JsonObject): Promise<Response> {
+async function createDeal(env: Env, body: JsonObject, keyId: string): Promise<Response> {
   const externalId = optionalExternalId(body);
   const name = trimString(body.name, 'name');
   if (!name) throw new ApiError(400, 'name is required');
@@ -673,7 +676,7 @@ async function createDeal(env: Env, body: JsonObject): Promise<Response> {
   const tags = stringList(body.tags, 'tags') || [];
   const now = new Date().toISOString();
   const data: JsonObject = {
-    id: externalId ? await externalDocumentId(externalId) : crypto.randomUUID(),
+    id: externalId ? await externalDocumentId(keyId, externalId) : crypto.randomUUID(),
     name,
     value,
     company_id: optional.company_id ?? '',
@@ -688,7 +691,10 @@ async function createDeal(env: Env, body: JsonObject): Promise<Response> {
     created_at: now,
     updated_at: now,
   };
-  if (externalId) data.external_id = externalId;
+  if (externalId) {
+    data.external_id = externalId;
+    data.api_key_id = keyId;
+  }
   if (externalId && optional.owner_email !== undefined) data.owner_email = optional.owner_email;
   for (const field of ['contact_id', 'contact_name', 'expected_close_date', 'notes']) {
     if (optional[field] !== undefined) data[field] = optional[field];
@@ -708,6 +714,7 @@ async function createDeal(env: Env, body: JsonObject): Promise<Response> {
 
   const updateExisting = async (document: FirestoreDocument): Promise<Response> => {
     const existingData = documentData(document);
+    if (existingData.api_key_id !== keyId) throw new ApiError(409, 'external_id is already in use');
     const updates: JsonObject = {
       name,
       value,
@@ -716,20 +723,36 @@ async function createDeal(env: Env, body: JsonObject): Promise<Response> {
       updated_at: new Date().toISOString(),
     };
     if (optional.notes !== undefined) updates.notes = optional.notes;
-    if (custom !== undefined) {
-      const existingCustom = existingData.custom;
-      const previousCustom = existingCustom && typeof existingCustom === 'object' && !Array.isArray(existingCustom)
-        ? existingCustom as JsonObject
-        : {};
-      updates.custom = { ...previousCustom, ...custom as JsonObject };
-    }
     if (optional.owner_email !== undefined) {
       updates.owner_email = optional.owner_email;
       updates.assigned_to = optional.owner_email;
     }
 
-    await writeDocument(env, 'crm_deals', data.id as string, updates, Object.keys(updates));
-    return jsonResponse(200, { success: true, data: { ...existingData, ...updates } });
+    const customUpdates = custom as JsonObject | undefined;
+    const fieldPaths = Object.keys(updates).map(escapeFieldPath);
+    if (customUpdates) {
+      for (const key of Object.keys(customUpdates)) {
+        fieldPaths.push(`custom.${escapeFieldPath(key)}`);
+      }
+    }
+    const existingCustom = existingData.custom;
+    const previousCustom = existingCustom && typeof existingCustom === 'object' && !Array.isArray(existingCustom)
+      ? existingCustom as JsonObject
+      : {};
+    const mergedCustom = customUpdates ? { ...previousCustom, ...customUpdates } : previousCustom;
+    const writeData: JsonObject = customUpdates ? { ...updates, custom: customUpdates } : updates;
+
+    try {
+      await writeDocument(env, 'crm_deals', data.id as string, writeData, fieldPaths, true);
+    } catch (error) {
+      if (error instanceof FirestoreError && (error.status === 404 || isCreatePreconditionConflict(error))) {
+        throw new ApiError(409, 'Deal was deleted');
+      }
+      throw error;
+    }
+    const responseData: JsonObject = { ...existingData, ...updates };
+    if (customUpdates) responseData.custom = mergedCustom;
+    return jsonResponse(200, { success: true, data: responseData });
   };
 
   const existingDocument = await getDocument(env, 'crm_deals', data.id as string);
@@ -746,13 +769,18 @@ async function createDeal(env: Env, body: JsonObject): Promise<Response> {
   }
 }
 
-async function createActivity(env: Env, body: JsonObject): Promise<Response> {
+function activityResponse(document: FirestoreDocument, keyId: string): Response {
+  if (documentData(document).api_key_id !== keyId) throw new ApiError(409, 'external_id is already in use');
+  return jsonResponse(200, { success: true, data: documentData(document) });
+}
+
+async function createActivity(env: Env, body: JsonObject, keyId: string): Promise<Response> {
   const externalId = optionalExternalId(body);
-  const id = externalId ? await externalDocumentId(externalId) : crypto.randomUUID();
+  const id = externalId ? await externalDocumentId(keyId, externalId) : crypto.randomUUID();
   if (externalId) {
     const existingDocument = await getDocument(env, 'crm_activities', id);
     if (existingDocument) {
-      return jsonResponse(200, { success: true, data: documentData(existingDocument) });
+      return activityResponse(existingDocument, keyId);
     }
   }
 
@@ -783,7 +811,10 @@ async function createActivity(env: Env, body: JsonObject): Promise<Response> {
     created_at: now,
     updated_at: now,
   };
-  if (externalId) data.external_id = externalId;
+  if (externalId) {
+    data.external_id = externalId;
+    data.api_key_id = keyId;
+  }
   Object.assign(data, optionalFields(body, ['description', 'source']));
   const custom = body.custom === undefined || body.custom === null
     ? undefined
@@ -805,7 +836,7 @@ async function createActivity(env: Env, body: JsonObject): Promise<Response> {
     if (!isCreatePreconditionConflict(error)) throw error;
     const racedDocument = await getDocument(env, 'crm_activities', data.id as string);
     if (!racedDocument) throw error;
-    return jsonResponse(200, { success: true, data: documentData(racedDocument) });
+    return activityResponse(racedDocument, keyId);
   }
 }
 
@@ -895,9 +926,9 @@ export async function onRequest({
       );
     }
     if (route === 'POST /api/v1/deals') {
-      return withCors(await createDeal(env, await readJsonObject(request)), corsOrigin);
+      return withCors(await createDeal(env, await readJsonObject(request), key.id), corsOrigin);
     }
-    return withCors(await createActivity(env, await readJsonObject(request)), corsOrigin);
+    return withCors(await createActivity(env, await readJsonObject(request), key.id), corsOrigin);
   } catch (error) {
     if (error instanceof ApiError) {
       return jsonResponse(error.status, { success: false, message: error.message }, corsOrigin);
