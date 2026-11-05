@@ -7,15 +7,11 @@
 [![Cloudflare Pages Functions](https://img.shields.io/badge/Cloudflare-Edge_API_v1-F38020?logo=cloudflare&logoColor=white)](https://pages.cloudflare.com/)
 [![MapLibre GL](https://img.shields.io/badge/MapLibre_GL-Geospatial_D2D-396CB2?logo=maplibre&logoColor=white)](https://maplibre.org/)
 
-> **Executive Summary (NL):** **CRMos** (`crmos.one`) is een full-stack, multi-tenant Enterprise Operating System dat relatiebeheer (CRM), recruitment (ATS), omnichannel contactcenter-operaties (Twilio & AI Voice MCP), veldsales (Door-to-Door geospatial mapping met PDOK/BAG & OpenStreetMap) en een serverloze REST API v1 verenigt in één schaalbaar platform. Ontwikkeld als de centrale data- en integratiehub voor de 12+ ondernemingen binnen het **Quantum Initium** ecosysteem.
->
-> **Executive Summary (EN):** **CRMos** (`crmos.one`) is a production-grade, multi-tenant Enterprise Operating System unifying Customer Relationship Management (CRM), Applicant Tracking (ATS), Omnichannel Contact Center operations (Twilio & AI Voice MCP), Geospatial Field Sales (PDOK/Kadaster BAG + OpenStreetMap Overpass enrichment pipeline), and an edge-deployed REST API v1 on Cloudflare Pages Functions & Google Cloud Firestore.
+**CRMos** (`crmos.one`) is een multi-tenant Enterprise Operating System dat relatiebeheer (CRM), recruitment (ATS), omnichannel contactcenter-operaties (Twilio & AI Voice MCP), veldsales (Door-to-Door geospatial mapping met PDOK/BAG & OpenStreetMap) en een serverloze REST API v1 verenigt in één platform. Het systeem vormt de centrale data- en integratiehub voor de ondernemingen binnen het **Quantum Initium** netwerk.
 
 ---
 
-## Waarom dit project technisch onderscheidend is (For Technical Recruiters & CTOs)
-
-In plaats van een losstaande CRUD-interface demonstreert **CRMos** hoe moderne enterprise-software over meerdere bedrijfsdomeinen heen wordt georkestreerd:
+## Technische Kernpunten
 
 1. **Cryptografisch Beveiligde Edge REST API (`/api/v1`)**:
    - Gebouwd op **Cloudflare Pages Functions** met **constant-time SHA-256 API-key verificatie** (`constantTimeHexEqual`) om timing-attacks te elimineren.
@@ -240,12 +236,10 @@ npm run preview   # Bekijk de productiebuild lokaal
 
 ---
 
-## Over de Architect & Samenwerking
+## Auteur & Contact
 
-Dit platform is ontworpen en gebouwd door **Jamal Drenthe** — Full-Stack Software Engineer, Systems Architect & Founder van **Quantum Initium**.
+Ontworpen en ontwikkeld door **Jamal Drenthe** ([Quantum Initium](https://quantuminitium.com)).
 
-Ben je **recruiter**, **CTO** of **ondernemer** en zoek je een technisch leider of samenwerkingspartner die complexe multi-tenant platformen, AI-workflows, geospatiale datapijplijnen en high-conversion frontends van concept tot productie realiseert?
-
+- **Website**: [crmos.one](https://crmos.one)
 - **GitHub**: [@JamalDrenthe](https://github.com/JamalDrenthe)
 - **E-mail**: [info@jamaldrenthe.com](mailto:info@jamaldrenthe.com)
-- **Live Platform**: [crmos.one](https://crmos.one)
