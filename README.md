@@ -248,4 +248,4 @@ Ben je **recruiter**, **CTO** of **ondernemer** en zoek je een technisch leider 
 
 - **GitHub**: [@JamalDrenthe](https://github.com/JamalDrenthe)
 - **E-mail**: [info@jamaldrenthe.com](mailto:info@jamaldrenthe.com)
-- **Live Demo**: [crmos-eight.vercel.app](https://crmos-eight.vercel.app) / [crmos.one](https://crmos.one)
+- **Live Platform**: [crmos.one](https://crmos.one)
