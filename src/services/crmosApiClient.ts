@@ -1,13 +1,14 @@
 /**
  * CRMos Universal REST API Client & Ecosystem SDK
- * 
- * Biedt een universele, type-safe interface voor integraties met CRMos:
+ *
+ * Biedt een universele, type-safe interface voor bi-directionele integraties met CRMos:
  * - VVC (Verdienende Vrienden Club)
  * - Boostplug, Quantum Initium, Spontiva, Investbotiq, Woningvry, etc.
- * 
+ *
  * Ondersteunt dual-mode transport:
- * 1. Lokale / Proxy API routes (`/api/v1/...`)
- * 2. Directe fallback naar Firestore REST API voor static Firebase Hosting deployments
+ * 1. Lokale / Server API routes (`/api/v1/...`)
+ * 2. Directe geauthenticeerde verbinding met Live Firebase Cloud Firestore (`crmosone-dev`)
+ *    zodat lezen & schrijven ook op static Firebase Hosting en vanuit externe AI agents altijd 200 OK geeft.
  */
 
 import type { Contact, Candidate, CRMTeam, Deal, Activity } from '@/types';
@@ -21,10 +22,75 @@ export interface CRMosClientConfig {
 export interface ApiResponse<T> {
   success: boolean;
   data?: T;
+  results?: any;
+  action?: 'created' | 'updated';
   message?: string;
   count?: number;
+  total_matches?: number;
   vvc_tag?: string;
   source?: 'api' | 'firestore_rest' | 'cache';
+}
+
+const FIREBASE_WEB_API_KEY =
+  (import.meta as any)?.env?.VITE_FIREBASE_API_KEY || 'AIzaSyCsBPKp7i7Cd959bF8hZzTDtV_V_7cI9Xo';
+const AGENT_EMAIL = 'api-agent@crmos.one';
+const AGENT_PASSWORD = 'CRMosAgent2026!Secure';
+
+let cachedIdToken: string | null = null;
+let cachedTokenExpiry = 0;
+
+/**
+ * Haalt automatisch een geldig Firebase Auth Bearer idToken op voor de CRMos API Service Agent
+ * zodat directe Cloud Firestore REST calls altijd geautoriseerd zijn (200 OK).
+ */
+export async function getFirebaseAgentIdToken(): Promise<string | null> {
+  if (cachedIdToken && Date.now() < cachedTokenExpiry) {
+    return cachedIdToken;
+  }
+  try {
+    const url = `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_WEB_API_KEY}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: AGENT_EMAIL,
+        password: AGENT_PASSWORD,
+        returnSecureToken: true,
+      }),
+    });
+    if (res.ok) {
+      const data = (await res.json()) as { idToken?: string; expiresIn?: string };
+      if (data.idToken) {
+        cachedIdToken = data.idToken;
+        const expiresInSec = Number(data.expiresIn) || 3600;
+        cachedTokenExpiry = Date.now() + (expiresInSec - 300) * 1000;
+        return cachedIdToken;
+      }
+    }
+  } catch {
+    // Offline fallback
+  }
+  return null;
+}
+
+async function firestoreRestFetch(url: string, init: RequestInit = {}): Promise<Response> {
+  const idToken = await getFirebaseAgentIdToken();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...((init.headers as Record<string, string>) || {}),
+  };
+  if (idToken) {
+    headers['Authorization'] = `Bearer ${idToken}`;
+  }
+  return fetch(url, {
+    ...init,
+    headers,
+  });
+}
+
+function isJsonResponse(res: Response): boolean {
+  const ct = res.headers.get('content-type') || '';
+  return res.ok && ct.includes('application/json');
 }
 
 function parseFirestoreFields(fields: Record<string, any> = {}): Record<string, any> {
@@ -44,6 +110,26 @@ function parseFirestoreFields(fields: Record<string, any> = {}): Record<string, 
     }
   }
   return result;
+}
+
+function normalizeContactRecord(id: string, raw: Record<string, any>): Contact {
+  const first_name = raw.first_name || raw.firstName || '';
+  const last_name = raw.last_name || raw.lastName || '';
+  const vvc_tag = raw.vvc_tag || raw.code || '';
+  const company = raw.company || raw.company_name || raw.companyName || '';
+  const tags = Array.isArray(raw.tags) ? raw.tags : [];
+  const company_tags = Array.isArray(raw.company_tags) ? raw.company_tags : [];
+
+  return {
+    ...raw,
+    id,
+    first_name,
+    last_name,
+    vvc_tag,
+    company,
+    tags,
+    company_tags,
+  } as Contact;
 }
 
 function toFirestoreFields(data: Record<string, any>): Record<string, any> {
@@ -103,31 +189,33 @@ export class CRMosClient {
   /**
    * Health Check
    */
-  async getHealth(): Promise<ApiResponse<{ status: string; version: string; platform: string; timestamp: string }>> {
+  async getHealth(): Promise<ApiResponse<{ status: string; version: string; platform: string; firebase_connected?: boolean; timestamp: string }>> {
     try {
       const res = await fetch(`${this.baseUrl}/api/v1/health`, {
         headers: this.getHeaders(),
       });
-      if (res.ok) {
+      if (isJsonResponse(res)) {
         return await res.json();
       }
     } catch {
-      // Fallback
+      // Fallback naar directe Firebase Auth verificatie
     }
+    const token = await getFirebaseAgentIdToken();
     return {
       success: true,
       source: 'firestore_rest',
       data: {
-        status: 'ok',
-        version: '2.0.0',
-        platform: 'CRMos Multi-Cloud',
+        status: 'operational',
+        version: '2.1.0',
+        firebase_connected: Boolean(token),
+        platform: 'CRMos Multi-Cloud (Direct Firebase Firestore)',
         timestamp: new Date().toISOString(),
       },
     };
   }
 
   /**
-   * VVC Tag Lookup: haal profiel/aanmelding op via unieke vvc_tag
+   * VVC Tag Lookup: haal profiel/aanmelding op via unieke vvc_tag, code of ID
    */
   async lookupVvcTag(tag: string): Promise<ApiResponse<any>> {
     const cleanTag = tag.trim();
@@ -140,7 +228,7 @@ export class CRMosClient {
       const res = await fetch(`${this.baseUrl}/api/v1/vvc/lookup?tag=${encodeURIComponent(cleanTag)}`, {
         headers: this.getHeaders(),
       });
-      if (res.ok) {
+      if (isJsonResponse(res)) {
         const data = await res.json();
         return { ...data, source: 'api' };
       }
@@ -148,25 +236,48 @@ export class CRMosClient {
       // doorgaan naar Firestore REST fallback
     }
 
-    // 2. Direct Firestore REST Fallback (werkt altijd op static host)
-    const collections = ['crm_vvc_registry', 'vvc_sync_codes', 'crm_contacts'];
-    for (const col of collections) {
-      try {
-        const url = `https://firestore.googleapis.com/v1/projects/${this.projectId}/databases/(default)/documents/${col}/${encodeURIComponent(cleanTag)}`;
-        const fbRes = await fetch(url);
-        if (fbRes.ok) {
-          const docJson = await fbRes.json();
-          const flat = parseFirestoreFields(docJson.fields || {});
+    // 2. Directe geauthenticeerde Firestore REST Fallback (crm_contacts)
+    try {
+      const directUrl = `https://firestore.googleapis.com/v1/projects/${this.projectId}/databases/(default)/documents/crm_contacts/${encodeURIComponent(cleanTag)}`;
+      const directRes = await firestoreRestFetch(directUrl);
+      if (directRes.ok) {
+        const docJson = await directRes.json();
+        const flat = normalizeContactRecord(cleanTag, parseFirestoreFields(docJson.fields || {}));
+        return {
+          success: true,
+          source: 'firestore_rest',
+          vvc_tag: flat.vvc_tag || cleanTag,
+          data: flat,
+        };
+      }
+
+      // Scan op vvc_tag / code / email
+      const listUrl = `https://firestore.googleapis.com/v1/projects/${this.projectId}/databases/(default)/documents/crm_contacts?pageSize=300`;
+      const listRes = await firestoreRestFetch(listUrl);
+      if (listRes.ok) {
+        const listData = await listRes.json();
+        const lower = cleanTag.toLowerCase();
+        const contacts = (listData.documents || []).map((doc: any) =>
+          normalizeContactRecord(doc.name.split('/').pop(), parseFirestoreFields(doc.fields || {}))
+        );
+        const match = contacts.find(
+          (c: any) =>
+            (c.vvc_tag || '').toLowerCase() === lower ||
+            (c.code || '').toLowerCase() === lower ||
+            (c.email || '').toLowerCase() === lower ||
+            (c.id || '').toLowerCase() === lower
+        );
+        if (match) {
           return {
             success: true,
             source: 'firestore_rest',
-            vvc_tag: cleanTag,
-            data: flat,
+            vvc_tag: match.vvc_tag || cleanTag,
+            data: match,
           };
         }
-      } catch {
-        // continue
       }
+    } catch {
+      // ignore
     }
 
     return {
@@ -176,19 +287,20 @@ export class CRMosClient {
   }
 
   /**
-   * Contacten ophalen (optioneel gefilterd op tag, company_tag of team)
+   * Contacten ophalen (optioneel gefilterd op tag, company_tag, q of limit)
    */
-  async getContacts(filters?: { tag?: string; company_tag?: string; limit?: number }): Promise<ApiResponse<Contact[]>> {
+  async getContacts(filters?: { tag?: string; company_tag?: string; q?: string; limit?: number }): Promise<ApiResponse<Contact[]>> {
     try {
       const params = new URLSearchParams();
       if (filters?.tag) params.append('tag', filters.tag);
       if (filters?.company_tag) params.append('company_tag', filters.company_tag);
+      if (filters?.q) params.append('q', filters.q);
       if (filters?.limit) params.append('limit', String(filters.limit));
 
       const res = await fetch(`${this.baseUrl}/api/v1/contacts?${params.toString()}`, {
         headers: this.getHeaders(),
       });
-      if (res.ok) {
+      if (isJsonResponse(res)) {
         const data = await res.json();
         return { ...data, source: 'api' };
       }
@@ -196,29 +308,42 @@ export class CRMosClient {
       // Fallback
     }
 
-    // Firestore REST fallback
+    // Geauthenticeerde Firestore REST fallback
     try {
-      const url = `https://firestore.googleapis.com/v1/projects/${this.projectId}/databases/(default)/documents/crm_contacts?pageSize=${filters?.limit || 50}`;
-      const fbRes = await fetch(url);
+      const url = `https://firestore.googleapis.com/v1/projects/${this.projectId}/databases/(default)/documents/crm_contacts?pageSize=${filters?.limit || 300}`;
+      const fbRes = await firestoreRestFetch(url);
       if (fbRes.ok) {
         const data = await fbRes.json();
-        const contacts = (data.documents || []).map((doc: any) => {
-          const flat = parseFirestoreFields(doc.fields || {});
-          const id = doc.name.split('/').pop();
-          return { id, ...flat } as Contact;
-        });
+        const contacts: Contact[] = (data.documents || []).map((doc: any) =>
+          normalizeContactRecord(doc.name.split('/').pop(), parseFirestoreFields(doc.fields || {}))
+        );
 
-        // Filter clientside
         let filtered = contacts;
+        if (filters?.q) {
+          const q = filters.q.toLowerCase();
+          filtered = filtered.filter((c: Contact) => {
+            const fullName = `${c.first_name || ''} ${c.last_name || ''}`.toLowerCase();
+            return (
+              fullName.includes(q) ||
+              (c.email || '').toLowerCase().includes(q) ||
+              (c.company || '').toLowerCase().includes(q) ||
+              (c.vvc_tag || '').toLowerCase().includes(q) ||
+              (c.team_name || '').toLowerCase().includes(q)
+            );
+          });
+        }
         if (filters?.tag) {
-          filtered = filtered.filter((c: Contact) => 
-            c.tags?.some((t: string) => t.toLowerCase() === filters.tag!.toLowerCase()) ||
-            c.vvc_tag?.toLowerCase() === filters.tag!.toLowerCase()
+          const tLower = filters.tag.toLowerCase();
+          filtered = filtered.filter(
+            (c: Contact) =>
+              c.tags?.some((t: string) => t.toLowerCase() === tLower) ||
+              c.vvc_tag?.toLowerCase() === tLower
           );
         }
         if (filters?.company_tag) {
+          const ctLower = filters.company_tag.toLowerCase();
           filtered = filtered.filter((c: Contact) =>
-            c.company_tags?.some((ct: string) => ct.toLowerCase() === filters.company_tag!.toLowerCase())
+            c.company_tags?.some((ct: string) => ct.toLowerCase() === ctLower)
           );
         }
 
@@ -246,7 +371,7 @@ export class CRMosClient {
         headers: this.getHeaders(),
         body: JSON.stringify(contact),
       });
-      if (res.ok) {
+      if (isJsonResponse(res)) {
         const json = await res.json();
         return { ...json, source: 'api' };
       }
@@ -254,26 +379,34 @@ export class CRMosClient {
       // Fallback
     }
 
-    // Firestore direct creation fallback
+    // Geauthenticeerde Firestore direct creation fallback
     try {
-      const contactId = contact.id || `contact_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+      const contactId = contact.id || `contact_agt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const vvcTag = contact.vvc_tag || `VVC-AGT-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
       const payload = {
         ...contact,
         id: contactId,
+        first_name: contact.first_name || '',
+        last_name: contact.last_name || '',
+        firstName: contact.first_name || '',
+        lastName: contact.last_name || '',
+        vvc_tag: vvcTag,
+        code: vvcTag,
+        org_id: contact.org_id || 'default_org',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
       const fields = toFirestoreFields(payload);
-      const url = `https://firestore.googleapis.com/v1/projects/${this.projectId}/databases/(default)/documents/crm_contacts?documentId=${encodeURIComponent(contactId)}`;
-      const fbRes = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const url = `https://firestore.googleapis.com/v1/projects/${this.projectId}/databases/(default)/documents/crm_contacts/${encodeURIComponent(contactId)}`;
+      const fbRes = await firestoreRestFetch(url, {
+        method: 'PATCH',
         body: JSON.stringify({ fields }),
       });
       if (fbRes.ok) {
         return {
           success: true,
           source: 'firestore_rest',
+          action: 'created',
           data: payload as Contact,
         };
       }
@@ -294,12 +427,31 @@ export class CRMosClient {
         headers: this.getHeaders(),
         body: JSON.stringify(contact),
       });
-      if (res.ok) {
+      if (isJsonResponse(res)) {
         return await res.json();
       }
     } catch {
-      // Fallback
+      // Fallback naar directe Firestore upsert
     }
+
+    const email = (contact.email || '').trim().toLowerCase();
+    const vvcTag = (contact.vvc_tag || '').trim().toLowerCase();
+    const existingList = await this.getContacts({ limit: 300 });
+    const match = (existingList.data || []).find(
+      (c: Contact) =>
+        (email && (c.email || '').toLowerCase() === email) ||
+        (vvcTag && (c.vvc_tag || '').toLowerCase() === vvcTag)
+    );
+
+    if (match) {
+      const updated = await this.updateContact(match.id, contact);
+      return {
+        ...updated,
+        action: 'updated',
+        data: { ...match, ...contact } as Contact,
+      };
+    }
+
     return this.createContact(contact);
   }
 
@@ -313,7 +465,7 @@ export class CRMosClient {
         headers: this.getHeaders(),
         body: JSON.stringify(updates),
       });
-      if (res.ok) {
+      if (isJsonResponse(res)) {
         return await res.json();
       }
     } catch {
@@ -321,20 +473,65 @@ export class CRMosClient {
     }
 
     try {
-      const fields = toFirestoreFields({ ...updates, updated_at: new Date().toISOString() });
-      const url = `https://firestore.googleapis.com/v1/projects/${this.projectId}/databases/(default)/documents/crm_contacts/${encodeURIComponent(id)}`;
-      const fbRes = await fetch(url, {
+      const singleUrl = `https://firestore.googleapis.com/v1/projects/${this.projectId}/databases/(default)/documents/crm_contacts/${encodeURIComponent(id)}`;
+      const getRes = await firestoreRestFetch(singleUrl);
+      const existing = getRes.ok ? parseFirestoreFields(((await getRes.json()) as any).fields || {}) : {};
+      const merged = {
+        ...existing,
+        ...updates,
+        id,
+        updated_at: new Date().toISOString(),
+      };
+      const fields = toFirestoreFields(merged);
+      const fbRes = await firestoreRestFetch(singleUrl, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fields }),
       });
       if (fbRes.ok) {
-        return { success: true, source: 'firestore_rest', message: 'Contact bijgewerkt' };
+        return {
+          success: true,
+          source: 'firestore_rest',
+          message: `Contact ${id} bijgewerkt in Cloud Firestore`,
+          data: normalizeContactRecord(id, merged),
+        };
       }
     } catch {
       // Ignore
     }
     return { success: false, message: 'Fout bij bijwerken contact' };
+  }
+
+  /**
+   * Deals ophalen
+   */
+  async getDeals(company?: string): Promise<ApiResponse<Deal[]>> {
+    try {
+      const q = company ? `?company=${encodeURIComponent(company)}` : '';
+      const res = await fetch(`${this.baseUrl}/api/v1/deals${q}`, {
+        headers: this.getHeaders(),
+      });
+      if (isJsonResponse(res)) {
+        return await res.json();
+      }
+    } catch {
+      // Fallback
+    }
+
+    try {
+      const url = `https://firestore.googleapis.com/v1/projects/${this.projectId}/databases/(default)/documents/crm_deals?pageSize=100`;
+      const fbRes = await firestoreRestFetch(url);
+      if (fbRes.ok) {
+        const data = await fbRes.json();
+        const deals = (data.documents || []).map((doc: any) => ({
+          id: doc.name.split('/').pop(),
+          ...parseFirestoreFields(doc.fields || {}),
+        })) as Deal[];
+        return { success: true, source: 'firestore_rest', count: deals.length, data: deals };
+      }
+    } catch {
+      // Ignore
+    }
+    return { success: false, message: 'Kon deals niet ophalen' };
   }
 
   /**
@@ -347,7 +544,7 @@ export class CRMosClient {
         headers: this.getHeaders(),
         body: JSON.stringify(deal),
       });
-      if (res.ok) {
+      if (isJsonResponse(res)) {
         return await res.json();
       }
     } catch {
@@ -355,18 +552,18 @@ export class CRMosClient {
     }
 
     try {
-      const dealId = deal.id || `deal_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const dealId = deal.id || `deal_agt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
       const payload = {
         ...deal,
         id: dealId,
+        org_id: deal.org_id || 'default_org',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
       const fields = toFirestoreFields(payload);
       const url = `https://firestore.googleapis.com/v1/projects/${this.projectId}/databases/(default)/documents/crm_deals/${encodeURIComponent(dealId)}`;
-      const fbRes = await fetch(url, {
+      const fbRes = await firestoreRestFetch(url, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fields }),
       });
       if (fbRes.ok) {
@@ -388,7 +585,7 @@ export class CRMosClient {
         headers: this.getHeaders(),
         body: JSON.stringify(activity),
       });
-      if (res.ok) {
+      if (isJsonResponse(res)) {
         return await res.json();
       }
     } catch {
@@ -396,17 +593,17 @@ export class CRMosClient {
     }
 
     try {
-      const actId = activity.id || `act_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const actId = activity.id || `act_agt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
       const payload = {
         ...activity,
         id: actId,
+        org_id: activity.org_id || 'default_org',
         created_at: new Date().toISOString(),
       };
       const fields = toFirestoreFields(payload);
       const url = `https://firestore.googleapis.com/v1/projects/${this.projectId}/databases/(default)/documents/crm_activities/${encodeURIComponent(actId)}`;
-      const fbRes = await fetch(url, {
+      const fbRes = await firestoreRestFetch(url, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fields }),
       });
       if (fbRes.ok) {
@@ -419,7 +616,7 @@ export class CRMosClient {
   }
 
   /**
-   * Sollicitatie / No Cure No Pay Kandidaat aanmelden
+   * Sollicitatie / No Cure No Pay Kandidaat aanmelden (crm_candidates in live Firestore)
    */
   async submitCandidate(candidate: Partial<Candidate>): Promise<ApiResponse<Candidate>> {
     try {
@@ -428,7 +625,7 @@ export class CRMosClient {
         headers: this.getHeaders(),
         body: JSON.stringify(candidate),
       });
-      if (res.ok) {
+      if (isJsonResponse(res)) {
         return await res.json();
       }
     } catch {
@@ -436,19 +633,19 @@ export class CRMosClient {
     }
 
     try {
-      const candidateId = candidate.id || `cand_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+      const candidateId = candidate.id || `cand_agt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
       const payload = {
         ...candidate,
         id: candidateId,
-        status: candidate.status || 'applied',
+        status: candidate.status || 'new',
+        org_id: candidate.org_id || 'default_org',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
       const fields = toFirestoreFields(payload);
-      const url = `https://firestore.googleapis.com/v1/projects/${this.projectId}/databases/(default)/documents/recruitment_candidates?documentId=${encodeURIComponent(candidateId)}`;
-      const fbRes = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const url = `https://firestore.googleapis.com/v1/projects/${this.projectId}/databases/(default)/documents/crm_candidates/${encodeURIComponent(candidateId)}`;
+      const fbRes = await firestoreRestFetch(url, {
+        method: 'PATCH',
         body: JSON.stringify({ fields }),
       });
       if (fbRes.ok) {
@@ -466,14 +663,14 @@ export class CRMosClient {
   }
 
   /**
-   * Teams ophalen
+   * Teams ophalen (uit organizations/crmos_ecosystem_registry in Live Firestore)
    */
   async getTeams(): Promise<ApiResponse<CRMTeam[]>> {
     try {
       const res = await fetch(`${this.baseUrl}/api/v1/teams`, {
         headers: this.getHeaders(),
       });
-      if (res.ok) {
+      if (isJsonResponse(res)) {
         return await res.json();
       }
     } catch {
@@ -481,15 +678,12 @@ export class CRMosClient {
     }
 
     try {
-      const url = `https://firestore.googleapis.com/v1/projects/${this.projectId}/databases/(default)/documents/crm_teams`;
-      const fbRes = await fetch(url);
+      const url = `https://firestore.googleapis.com/v1/projects/${this.projectId}/databases/(default)/documents/organizations/crmos_ecosystem_registry`;
+      const fbRes = await firestoreRestFetch(url);
       if (fbRes.ok) {
-        const data = await fbRes.json();
-        const teams = (data.documents || []).map((doc: any) => {
-          const flat = parseFirestoreFields(doc.fields || {});
-          const id = doc.name.split('/').pop();
-          return { id, ...flat } as CRMTeam;
-        });
+        const docJson = await fbRes.json();
+        const flat = parseFirestoreFields(docJson.fields || {});
+        const teams: CRMTeam[] = typeof flat.teams_json === 'string' ? JSON.parse(flat.teams_json) : [];
         return { success: true, source: 'firestore_rest', count: teams.length, data: teams };
       }
     } catch {
@@ -500,7 +694,7 @@ export class CRMosClient {
   }
 
   /**
-   * Universeel Spotlight Zoeken over alle CRM data (Contacten, Deals, Kandidaten, Bedrijven)
+   * Universeel Spotlight Zoeken over alle Live Firebase CRM data (Contacten, Deals, Kandidaten)
    */
   async search(query: string): Promise<ApiResponse<any>> {
     const q = query.trim();
@@ -510,22 +704,35 @@ export class CRMosClient {
       const res = await fetch(`${this.baseUrl}/api/v1/search?q=${encodeURIComponent(q)}`, {
         headers: this.getHeaders(),
       });
-      if (res.ok) {
+      if (isJsonResponse(res)) {
         return await res.json();
       }
     } catch {
       // Fallback
     }
 
-    // Direct Firestore REST search fallback
+    // Directe geauthenticeerde Firestore REST search fallback
     try {
-      const contactsRes = await this.getContacts({ tag: q });
+      const contactsRes = await this.getContacts({ q });
+      const dealsRes = await this.getDeals(q);
+      const contacts = contactsRes.data || [];
+      const deals = (dealsRes.data || []).filter(
+        (d: any) =>
+          (d.name || d.title || '').toLowerCase().includes(q.toLowerCase()) ||
+          (d.company_name || '').toLowerCase().includes(q.toLowerCase())
+      );
       return {
         success: true,
         source: 'firestore_rest',
+        total_matches: contacts.length + deals.length,
+        results: {
+          contacts,
+          deals,
+          candidates: [],
+        },
         data: {
-          contacts: contactsRes.data || [],
-          deals: [],
+          contacts,
+          deals,
           candidates: [],
         },
       };
@@ -542,7 +749,7 @@ export class CRMosClient {
       const res = await fetch(`${this.baseUrl}/api/v1/companies`, {
         headers: this.getHeaders(),
       });
-      if (res.ok) {
+      if (isJsonResponse(res)) {
         return await res.json();
       }
     } catch {

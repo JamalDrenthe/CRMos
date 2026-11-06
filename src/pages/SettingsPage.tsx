@@ -1493,34 +1493,44 @@ print(response.json())`;
                 <Button
                   size="sm"
                   onClick={() => {
-                    const prompt = `CRMos API Configuratie voor AI Agent (Bi-directioneel: Lezen & Schrijven):
-Base URL: https://crmos.one/api/v1
+                    const prompt = `CRMos API & Live Firebase Cloud Configuratie voor AI Agent (Bi-directioneel: Lezen & Schrijven):
 Master API Key: ${MASTER_ECOSYSTEM_API_KEY.key}
+Firebase Project ID: crmosone-dev
+Firebase Web API Key: AIzaSyCsBPKp7i7Cd959bF8hZzTDtV_V_7cI9Xo
+Firebase Service Agent: api-agent@crmos.one / CRMosAgent2026!Secure
+
+=== OPTIE A: via CRMos Universal REST API (/api/v1) ===
 Header: X-CRMOS-API-KEY: ${MASTER_ECOSYSTEM_API_KEY.key}
 Content-Type: application/json
 
 1. LEZEN & REALTIME ZOEKEN:
-- GET /api/v1/search?q={zoekterm} (Spotlight zoeken over contacten, deals, kandidaten, teams)
-- GET /api/v1/contacts?tag={tag}&company_tag={bedrijfstag}&limit=100
+- GET /api/v1/search?q={zoekterm} (Spotlight zoeken over alle 300+ contacten, deals, kandidaten, bedrijven)
+- GET /api/v1/contacts?tag={tag}&company_tag={bedrijfstag}&q={zoekterm}&limit=300
 - GET /api/v1/contacts/{id} (Volledig profiel per contact)
-- GET /api/v1/teams (Alle referral teams & leiders)
-- GET /api/v1/companies (Alle 13 partnerbedrijven)
+- GET /api/v1/teams (Alle 9 referral teams & 7 kernleiders: Reyhan, Julius, Jayden, Deniz, Boas, Fawzan, Ricardo)
+- GET /api/v1/companies (Alle 13 partnerbedrijven + Firestore bedrijven)
 - GET /api/v1/deals (Deals & pipelines)
-- GET /api/v1/vvc/lookup?tag={vvc_tag} (Verifieer unieke VVC tag)
+- GET /api/v1/vvc/lookup?tag={vvc_tag} (Verifieer unieke VVC tag of code)
 
-2. SCHRIJVEN & SYNCHRONISEREN (DIRECT IN CLOUD CRM):
+2. SCHRIJVEN & SYNCHRONISEREN (DIRECT IN FIREBASE CLOUD):
 - POST /api/v1/contacts/upsert
   Body: {"first_name":"...","last_name":"...","email":"...","phone":"...","company":"...","tags":["#bedrijfstag"],"notes":"..."}
-  (Zoekt op email/vvc_tag: verrijkt bestaand contact of maakt nieuw contact aan!)
-- POST /api/v1/contacts (Nieuw contact aanmaken)
+- POST /api/v1/contacts (Nieuw contact aanmaken in crm_contacts)
 - PATCH /api/v1/contacts/{id} (Bestaand contact bijwerken)
-- POST /api/v1/deals (Nieuwe deal inschrijven)
-  Body: {"name":"...","value":50000,"stage":"qualified","company_name":"..."}
-- POST /api/v1/activities (Gespreksnotitie / belstatus loggen)
-  Body: {"contact_id":"...","type":"call","title":"AI Call Kwalificatie","description":"..."}
-- POST /api/v1/candidates (Nieuwe sollicitant registreren)`;
+- POST /api/v1/deals (Nieuwe deal inschrijven in crm_deals)
+- POST /api/v1/activities (Gespreksnotitie / belstatus loggen in crm_activities)
+- POST /api/v1/candidates (Nieuwe sollicitant registreren in crm_candidates)
+
+=== OPTIE B: Rechtstreeks op Google Cloud Firestore REST API (24/7 Cloud) ===
+Stap 1: Haal een Bearer idToken op via Firebase Auth REST:
+POST https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=AIzaSyCsBPKp7i7Cd959bF8hZzTDtV_V_7cI9Xo
+Body: {"email":"api-agent@crmos.one","password":"CRMosAgent2026!Secure","returnSecureToken":true}
+
+Stap 2: Gebruik Header "Authorization: Bearer <idToken>" op:
+https://firestore.googleapis.com/v1/projects/crmosone-dev/databases/(default)/documents/{collectie}
+Collecties (200 OK Read & Write): crm_contacts, crm_companies, crm_deals, crm_activities, crm_candidates, crm_jobs, organizations/crmos_ecosystem_registry`;
                     navigator.clipboard.writeText(prompt);
-                    toast.success('Complete AI Agent prompt gekopieerd!');
+                    toast.success('Complete AI Agent prompt (API + Direct Firebase Cloud) gekopieerd!');
                   }}
                   className="rounded-full text-xs gap-1.5 h-8 bg-primary hover:bg-primary/90 text-primary-foreground shadow-md shrink-0 font-semibold"
                 >
