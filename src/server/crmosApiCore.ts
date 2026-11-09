@@ -19,7 +19,7 @@ export const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
   'Access-Control-Allow-Headers':
-    'Content-Type, Authorization, X-CRMOS-API-KEY, X-VVC-Token, X-Webhook-Signature, Accept, Origin',
+    'Content-Type, Authorization, X-CRMOS-API-KEY, X-API-Key, x-api-key, X-VVC-Token, X-Webhook-Signature, Accept, Origin',
   'Access-Control-Max-Age': '86400',
 };
 
@@ -480,6 +480,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
 
     const rawKeyHeader =
       normHeaders['x-crmos-api-key'] ||
+      normHeaders['x-api-key'] ||
       normHeaders['x-vvc-token'] ||
       normHeaders['authorization'] ||
       parsedUrl.searchParams.get('api_key') ||
@@ -501,8 +502,10 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
       const fbToken = await getFirebaseAgentIdToken();
       return jsonResponse(200, {
         status: 'online',
+        service: 'crmos-api',
         version: '2.2.0',
         timestamp: nowIso,
+        time: nowIso,
         success: true,
         firebase_connected: Boolean(fbToken),
         firebase_project: projectId,
