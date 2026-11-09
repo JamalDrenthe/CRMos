@@ -574,20 +574,27 @@ async function main() {
 
   const now = new Date().toISOString();
 
-  // 1. Seed Core Referral Leaders into `crm_contacts`
+  // 1. Seed Core Referral Leaders into `crm_contacts` (under both hs_cont_* and cont_core_* so they appear on page 1)
   console.log(`1. Seeding 8 Core Leaders (Jamal + 7 Referral Leaders) into crm_contacts...`);
   for (const leader of CORE_LEADERS_TO_SEED) {
-    const res = await patchFirestoreDoc(
-      'crm_contacts',
-      leader.id,
-      {
-        ...leader,
-        created_at: '2026-01-15T09:00:00.000Z',
-        updated_at: now,
-      },
-      idToken
-    );
-    console.log(`  [${res.ok ? 'OK' : 'FAIL'}] crm_contacts/${leader.id} (${leader.first_name} ${leader.last_name}) -> HTTP ${res.status}`);
+    const coreId = leader.id.startsWith('cont_core_')
+      ? leader.id
+      : `cont_core_${leader.first_name.toLowerCase()}_salesmates`;
+    for (const docId of Array.from(new Set([leader.id, coreId]))) {
+      const res = await patchFirestoreDoc(
+        'crm_contacts',
+        docId,
+        {
+          ...leader,
+          id: docId,
+          canonical_id: leader.id,
+          created_at: '2026-01-15T09:00:00.000Z',
+          updated_at: now,
+        },
+        idToken
+      );
+      console.log(`  [${res.ok ? 'OK' : 'FAIL'}] crm_contacts/${docId} (${leader.first_name} ${leader.last_name}) -> HTTP ${res.status}`);
+    }
   }
 
   // 2. Seed Ecosystem Registry + Individual API Keys & Teams into `organizations`
