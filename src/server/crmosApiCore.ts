@@ -130,6 +130,31 @@ async function firestoreFetch(url: string, init: RequestInit = {}): Promise<Resp
   });
 }
 
+/**
+ * Haalt alle documenten uit een Firestore collectie op (volgt automatisch nextPageToken over pagina's van 300)
+ */
+async function fetchAllCollectionDocs(
+  projectId: string,
+  collection: string,
+  maxPages = 3
+): Promise<any[]> {
+  const allDocs: any[] = [];
+  let pageToken = '';
+  for (let i = 0; i < maxPages; i++) {
+    const tokenParam = pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : '';
+    const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${collection}?pageSize=300${tokenParam}`;
+    const res = await firestoreFetch(url).catch(() => null);
+    if (!res || !res.ok) break;
+    const data = (await res.json()) as { documents?: any[]; nextPageToken?: string };
+    if (Array.isArray(data.documents)) {
+      allDocs.push(...data.documents);
+    }
+    if (!data.nextPageToken) break;
+    pageToken = data.nextPageToken;
+  }
+  return allDocs;
+}
+
 export function parseFirestoreFields(fields: Record<string, any> = {}): Record<string, any> {
   const result: Record<string, any> = {};
   for (const [key, val] of Object.entries(fields)) {
@@ -568,21 +593,17 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
         return errorResponse(400, 'Validatiefout: zoekterm parameter ?q=... is verplicht');
       }
 
-      const contactsUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/crm_contacts?pageSize=300`;
       const dealsUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/crm_deals?pageSize=100`;
       const candUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/crm_candidates?pageSize=100`;
       const compUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/crm_companies?pageSize=100`;
 
-      const [contactsRes, dealsRes, candRes, compRes] = await Promise.all([
-        firestoreFetch(contactsUrl).catch(() => null),
+      const [rawContactDocs, dealsRes, candRes, compRes] = await Promise.all([
+        fetchAllCollectionDocs(projectId, 'crm_contacts', 4),
         firestoreFetch(dealsUrl).catch(() => null),
         firestoreFetch(candUrl).catch(() => null),
         firestoreFetch(compUrl).catch(() => null),
       ]);
 
-      const contactsData = (contactsRes && contactsRes.ok ? await contactsRes.json() : { documents: [] }) as {
-        documents?: any[];
-      };
       const dealsData = (dealsRes && dealsRes.ok ? await dealsRes.json() : { documents: [] }) as {
         documents?: any[];
       };
@@ -593,7 +614,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
         documents?: any[];
       };
 
-      const allContacts = (contactsData.documents || []).map((d: any) =>
+      const allContacts = rawContactDocs.map((d: any) =>
         normalizeContactRecord(d.name.split('/').pop(), parseFirestoreFields(d.fields || {}))
       );
       const allDeals = (dealsData.documents || []).map((d: any) => ({
@@ -723,11 +744,9 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
       }
 
       // 2. Scan crm_contacts op vvc_tag, code, email of id
-      const listUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/crm_contacts?pageSize=300`;
-      const listRes = await firestoreFetch(listUrl);
-      if (listRes.ok) {
-        const listData = (await listRes.json()) as { documents?: any[] };
-        const allContacts = (listData.documents || []).map((d: any) =>
+      const rawContactDocs = await fetchAllCollectionDocs(projectId, 'crm_contacts', 4);
+      if (rawContactDocs.length > 0) {
+        const allContacts = rawContactDocs.map((d: any) =>
           normalizeContactRecord(d.name.split('/').pop(), parseFirestoreFields(d.fields || {}))
         );
         const found = allContacts.find(
@@ -780,10 +799,8 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
       }
 
       // Haal bestaande contacten op om op LOWER(TRIM(email)) te matchen
-      const contactsUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/crm_contacts?pageSize=300`;
-      const fbRes = await firestoreFetch(contactsUrl);
-      const contactsData = (fbRes.ok ? await fbRes.json() : { documents: [] }) as { documents?: any[] };
-      const existingDocs: any[] = (contactsData.documents || []).map((d: any) =>
+      const rawContactDocs = await fetchAllCollectionDocs(projectId, 'crm_contacts', 4);
+      const existingDocs: any[] = rawContactDocs.map((d: any) =>
         normalizeContactRecord(d.name.split('/').pop(), parseFirestoreFields(d.fields || {}))
       );
 
@@ -981,12 +998,10 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
         )
           .toLowerCase()
           .trim();
-        const pageSize = Math.min(Number(parsedUrl.searchParams.get('limit')) || 300, 500);
+        const pageSize = Math.min(Number(parsedUrl.searchParams.get('limit')) || 500, 1000);
 
-        const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/crm_contacts?pageSize=${pageSize}`;
-        const fbRes = await firestoreFetch(firestoreUrl);
-        const data = (fbRes.ok ? await fbRes.json() : { documents: [] }) as { documents?: any[] };
-        const contacts = (data.documents || []).map((d: any) =>
+        const rawContactDocs = await fetchAllCollectionDocs(projectId, 'crm_contacts', 4);
+        const contacts = rawContactDocs.map((d: any) =>
           normalizeContactRecord(d.name.split('/').pop(), parseFirestoreFields(d.fields || {}))
         );
 
@@ -1039,10 +1054,13 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
           filtered = filtered.filter((c: any) => c.team_id === teamId);
         }
 
+        const sliced = filtered.slice(0, pageSize);
+
         return jsonResponse(200, {
           success: true,
-          count: filtered.length,
-          data: filtered,
+          count: sliced.length,
+          total_available: filtered.length,
+          data: sliced,
         });
       }
 
