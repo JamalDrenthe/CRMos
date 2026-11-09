@@ -907,6 +907,30 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
           return errorResponse(500, `Fout bij bijwerken in Cloud Firestore: ${writeRes.error}`);
         }
 
+        // Automatisch activiteit loggen in crm_activities voor live Firestore feed op het dashboard!
+        const updateActId = `act_upsert_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+        await saveToFirestoreRest(projectId, 'crm_activities', updateActId, {
+          id: updateActId,
+          org_id: updatedContact.org_id || 'default_org',
+          company_name: sourceCompanyLabel,
+          type: 'note',
+          title: `API Contact Bijgewerkt: ${firstName} ${lastName}`,
+          description: incomingNoteText ? `[${sourceCompanyLabel}]: ${incomingNoteText}` : `Contactdossier verrijkt via ${sourceCompanyLabel} API`,
+          status: 'completed',
+          due_date: new Date().toISOString(),
+          completed_at: new Date().toISOString(),
+          assigned_to: `${sourceCompanyLabel} Agent`,
+          performed_by: `${sourceCompanyLabel} Agent`,
+          related_to: {
+            type: 'contact',
+            id: match.id,
+          },
+          contact_id: match.id,
+          source: noteSource,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }).catch((err) => console.warn('Activity logging warning:', err));
+
         return jsonResponse(200, {
           success: true,
           action: 'updated',
@@ -956,6 +980,30 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
         if (!writeRes.success) {
           return errorResponse(500, `Fout bij aanmaken in Cloud Firestore: ${writeRes.error}`);
         }
+
+        // Automatisch activiteit loggen in crm_activities voor live Firestore feed op het dashboard!
+        const createActId = `act_create_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+        await saveToFirestoreRest(projectId, 'crm_activities', createActId, {
+          id: createActId,
+          org_id: newContact.org_id || 'default_org',
+          company_name: sourceCompanyLabel,
+          type: 'note',
+          title: `API Nieuw Contact: ${firstName} ${lastName}`,
+          description: incomingNoteText ? `[${sourceCompanyLabel}]: ${incomingNoteText}` : `Nieuw contact geregistreerd via ${sourceCompanyLabel} API`,
+          status: 'completed',
+          due_date: new Date().toISOString(),
+          completed_at: new Date().toISOString(),
+          assigned_to: `${sourceCompanyLabel} Agent`,
+          performed_by: `${sourceCompanyLabel} Agent`,
+          related_to: {
+            type: 'contact',
+            id: newId,
+          },
+          contact_id: newId,
+          source: noteSource,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }).catch((err) => console.warn('Activity logging warning:', err));
 
         return jsonResponse(201, {
           success: true,
@@ -1258,6 +1306,30 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
           return errorResponse(500, `Fout bij aanmaken deal: ${writeRes.error}`);
         }
 
+        // Automatisch activiteit loggen in crm_activities voor live Firestore dashboard feed
+        const dealActId = `act_deal_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+        await saveToFirestoreRest(projectId, 'crm_activities', dealActId, {
+          id: dealActId,
+          org_id: newDeal.org_id || 'default_org',
+          company_name: sourceCompanyLabel,
+          type: 'task',
+          title: `API Deal Geregistreerd: ${newDeal.name} (€${newDeal.value.toLocaleString()})`,
+          description: `Nieuwe deal in stage "${stage}" via ${sourceCompanyLabel} API`,
+          status: 'completed',
+          due_date: new Date().toISOString(),
+          completed_at: new Date().toISOString(),
+          assigned_to: `${sourceCompanyLabel} Agent`,
+          performed_by: `${sourceCompanyLabel} Agent`,
+          related_to: {
+            type: 'deal',
+            id: dealId,
+          },
+          contact_id: newDeal.contact_id || '',
+          deal_id: dealId,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }).catch((err) => console.warn('Activity logging warning:', err));
+
         // Als de deal direct als 'won' of 'closed-won' binnenkomt, stuur Outbound Webhook!
         let webhookResult = null;
         if (stage === 'won' || stage === 'closed-won' || stage === 'closed_won') {
@@ -1351,18 +1423,29 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
         const payload = parsedBody.data;
 
         const actId = payload.id || `act_agt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+        const assignedName = payload.assigned_to || payload.performed_by || `${sourceCompanyLabel} Agent`;
         const newActivity = {
           id: actId,
           contact_id: payload.contact_id || '',
           deal_id: payload.deal_id || '',
           type: payload.type || 'note',
-          title: payload.title || 'AI Agent Notitie',
+          title: payload.title || `API Activiteit: ${sourceCompanyLabel}`,
           description: payload.description || payload.notes || '',
-          performed_by: payload.performed_by || sourceCompanyLabel,
+          company_name: payload.company_name || sourceCompanyLabel,
+          performed_by: payload.performed_by || `${sourceCompanyLabel} Agent`,
+          assigned_to: assignedName,
+          status: payload.status || (payload.completed === false ? 'pending' : 'completed'),
           completed: payload.completed ?? true,
+          due_date: payload.due_date || payload.date || new Date().toISOString(),
+          completed_at: payload.completed_at || new Date().toISOString(),
           date: payload.date || new Date().toISOString(),
+          related_to: {
+            type: payload.deal_id ? 'deal' : 'contact',
+            id: payload.contact_id || payload.deal_id || 'api_event',
+          },
           org_id: payload.org_id || 'default_org',
           created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         };
 
         const writeRes = await saveToFirestoreRest(projectId, 'crm_activities', actId, newActivity);

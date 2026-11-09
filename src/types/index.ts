@@ -343,6 +343,8 @@ export interface Activity {
   due_date?: string;
   completed_at?: string;
   assigned_to: string;
+  performed_by?: string;
+  source?: string;
   related_to: {
     type: 'contact' | 'deal' | 'company';
     id: string;

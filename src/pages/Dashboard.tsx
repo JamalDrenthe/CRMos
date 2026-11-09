@@ -45,6 +45,9 @@ import {
   Layers,
   MapPin,
   CheckCircle2,
+  Sparkles,
+  Bot,
+  FileText,
 } from 'lucide-react';
 
 interface StatCardProps {
@@ -139,58 +142,221 @@ function RecentActivity({
   contacts: Contact[];
   deals: Deal[];
 }) {
-  const recentActivities = activities.slice(0, 10);
+  const [filter, setFilter] = useState<'all' | 'api' | 'contact' | 'deal'>('all');
 
-  const getRelatedName = (activity: ActivityType) => {
-    if (activity.related_to.type === 'contact') {
-      const contact = contacts.find((c) => c.id === activity.related_to.id);
-      return contact ? `${contact.first_name} ${contact.last_name}` : 'Unknown';
+  // Sorteer op recentste datum (created_at, date of due_date)
+  const sortedActivities = useMemo(() => {
+    return [...activities].sort((a, b) => {
+      const timeA = new Date(a.created_at || (a as any).date || a.due_date || 0).getTime();
+      const timeB = new Date(b.created_at || (b as any).date || b.due_date || 0).getTime();
+      return timeB - timeA;
+    });
+  }, [activities]);
+
+  const filteredActivities = useMemo(() => {
+    if (filter === 'all') return sortedActivities;
+    if (filter === 'api') {
+      return sortedActivities.filter((a: any) =>
+        Boolean(
+          a.performed_by?.toLowerCase().includes('agent') ||
+          a.performed_by?.toLowerCase().includes('api') ||
+          a.title?.toLowerCase().includes('api') ||
+          a.title?.toLowerCase().includes('investbotiq') ||
+          a.title?.toLowerCase().includes('quantum') ||
+          a.title?.toLowerCase().includes('boostplug') ||
+          a.company_name
+        )
+      );
     }
-    if (activity.related_to.type === 'deal') {
-      const deal = deals.find((d) => d.id === activity.related_to.id);
-      return deal?.name || 'Unknown';
+    if (filter === 'contact') {
+      return sortedActivities.filter((a) => a.related_to?.type === 'contact' || (a as any).contact_id);
     }
-    return 'Unknown';
+    if (filter === 'deal') {
+      return sortedActivities.filter((a) => a.related_to?.type === 'deal' || (a as any).deal_id);
+    }
+    return sortedActivities;
+  }, [sortedActivities, filter]);
+
+  const getRelatedName = (activity: any) => {
+    if (activity.related_to?.type === 'contact' || activity.contact_id) {
+      const cId = activity.related_to?.id || activity.contact_id;
+      const contact = contacts.find((c) => c.id === cId);
+      if (contact) return `${contact.first_name} ${contact.last_name}`;
+    }
+    if (activity.related_to?.type === 'deal' || activity.deal_id) {
+      const dId = activity.related_to?.id || activity.deal_id;
+      const deal = deals.find((d) => d.id === dId);
+      if (deal) return deal.name;
+    }
+    return activity.company_name || activity.performed_by || 'CRMos Cloud';
   };
 
-  const getActivityIcon = (type: string) => {
-    switch (type) {
-      case 'call': return <Phone className="h-4 w-4" />;
-      case 'email': return <Activity className="h-4 w-4" />;
-      case 'meeting': return <Clock className="h-4 w-4" />;
-      case 'task': return <Target className="h-4 w-4" />;
-      default: return <Activity className="h-4 w-4" />;
+  const getActivityIcon = (activity: any) => {
+    const isAgent =
+      activity.performed_by?.toLowerCase().includes('agent') ||
+      activity.title?.toLowerCase().includes('api') ||
+      activity.title?.toLowerCase().includes('agent') ||
+      activity.performed_by?.toLowerCase().includes('investbotiq') ||
+      activity.performed_by?.toLowerCase().includes('quantum');
+
+    if (isAgent) return <Bot className="h-4 w-4 text-purple-400" />;
+    switch (activity.type) {
+      case 'call': return <Phone className="h-4 w-4 text-blue-400" />;
+      case 'email': return <Activity className="h-4 w-4 text-emerald-400" />;
+      case 'meeting': return <Clock className="h-4 w-4 text-amber-400" />;
+      case 'task': return <Target className="h-4 w-4 text-indigo-400" />;
+      case 'note': return <FileText className="h-4 w-4 text-cyan-400" />;
+      default: return <Activity className="h-4 w-4 text-primary" />;
+    }
+  };
+
+  const getTimeAgo = (activity: any) => {
+    const rawDate = activity.created_at || activity.date || activity.due_date;
+    if (!rawDate) return 'Recent';
+    try {
+      const d = new Date(rawDate);
+      if (isNaN(d.getTime())) return 'Recent';
+      return formatDistanceToNow(d, { addSuffix: true });
+    } catch {
+      return 'Recent';
     }
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Recent Activity</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <ScrollArea className="h-[300px]">
-          <div className="space-y-4">
-            {recentActivities.map((activity) => (
-              <div key={activity.id} className="flex items-start gap-3">
-                <div className="mt-0.5 rounded-full bg-primary/10 p-2">
-                  {getActivityIcon(activity.type)}
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium">{activity.title}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {getRelatedName(activity)}
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {activity.due_date && formatDistanceToNow(new Date(activity.due_date), { addSuffix: true })}
-                  </p>
-                </div>
-                <Badge variant={activity.status === 'completed' ? 'default' : 'outline'}>
-                  {activity.status}
-                </Badge>
-              </div>
-            ))}
+    <Card className="rounded-2xl border-border/60 shadow-xs flex flex-col">
+      <CardHeader className="pb-3 border-b border-border/40">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <CardTitle className="text-base font-semibold">Live Firestore Feed</CardTitle>
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
           </div>
+          <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-500 border-emerald-500/30 font-medium">
+            Realtime Synced
+          </Badge>
+        </div>
+        <CardDescription className="text-xs">
+          Directe Firestore stream van AI agent interacties, contacten en deals.
+        </CardDescription>
+
+        {/* Filter Tabs */}
+        <div className="flex items-center gap-1.5 pt-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setFilter('all')}
+            className={`px-2 py-0.5 rounded-lg text-[11px] font-medium transition-colors ${
+              filter === 'all'
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-muted/60 text-muted-foreground hover:bg-muted'
+            }`}
+          >
+            Alles ({sortedActivities.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilter('api')}
+            className={`px-2 py-0.5 rounded-lg text-[11px] font-medium transition-colors flex items-center gap-1 ${
+              filter === 'api'
+                ? 'bg-purple-600 text-white'
+                : 'bg-muted/60 text-muted-foreground hover:bg-muted'
+            }`}
+          >
+            <Sparkles className="h-3 w-3" />
+            AI Agents &amp; API
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilter('contact')}
+            className={`px-2 py-0.5 rounded-lg text-[11px] font-medium transition-colors ${
+              filter === 'contact'
+                ? 'bg-blue-600 text-white'
+                : 'bg-muted/60 text-muted-foreground hover:bg-muted'
+            }`}
+          >
+            Contacten
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilter('deal')}
+            className={`px-2 py-0.5 rounded-lg text-[11px] font-medium transition-colors ${
+              filter === 'deal'
+                ? 'bg-emerald-600 text-white'
+                : 'bg-muted/60 text-muted-foreground hover:bg-muted'
+            }`}
+          >
+            Deals
+          </button>
+        </div>
+      </CardHeader>
+
+      <CardContent className="pt-3 flex-1">
+        <ScrollArea className="h-[320px] pr-2">
+          {filteredActivities.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-48 text-center text-muted-foreground p-4">
+              <Bot className="h-8 w-8 text-muted-foreground/40 mb-2" />
+              <p className="text-xs font-medium">Nog geen activiteiten in deze selectie</p>
+              <p className="text-[11px] text-muted-foreground/80 mt-1 max-w-[200px]">
+                Zodra partner-agents de API aanroepen verschijnen interacties hier realtime live.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              {filteredActivities.slice(0, 20).map((activity) => {
+                const isAgent =
+                  activity.performed_by?.toLowerCase().includes('agent') ||
+                  activity.title?.toLowerCase().includes('api') ||
+                  activity.title?.toLowerCase().includes('agent');
+
+                return (
+                  <div
+                    key={activity.id}
+                    className="group relative flex items-start gap-2.5 p-2 rounded-xl border border-border/50 bg-card/60 hover:bg-accent/40 hover:border-border transition-all duration-150"
+                  >
+                    <div className="mt-0.5 rounded-lg bg-muted/80 p-1.5 flex-shrink-0 group-hover:scale-105 transition-transform">
+                      {getActivityIcon(activity)}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-1">
+                        <p className="text-xs font-semibold truncate leading-tight">
+                          {activity.title}
+                        </p>
+                        <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                          {getTimeAgo(activity)}
+                        </span>
+                      </div>
+
+                      {activity.description && (
+                        <p className="text-[11px] text-muted-foreground line-clamp-2 mt-0.5 leading-snug">
+                          {activity.description}
+                        </p>
+                      )}
+
+                      <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                        {activity.company_name && (
+                          <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 border-primary/20 text-primary">
+                            {activity.company_name}
+                          </Badge>
+                        )}
+                        {activity.performed_by && activity.performed_by !== activity.company_name && (
+                          <span className="text-[10px] text-muted-foreground/80 flex items-center gap-0.5">
+                            {isAgent && <Bot className="h-2.5 w-2.5 text-purple-400" />}
+                            {activity.performed_by}
+                          </span>
+                        )}
+                        <span className="text-[10px] text-muted-foreground/60">•</span>
+                        <span className="text-[10px] text-muted-foreground font-medium">
+                          {getRelatedName(activity)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </ScrollArea>
       </CardContent>
     </Card>
