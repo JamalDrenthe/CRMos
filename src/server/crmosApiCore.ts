@@ -904,7 +904,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
 
         const writeRes = await saveToFirestoreRest(projectId, 'crm_contacts', match.id, updatedContact);
         if (!writeRes.success) {
-          return errorResponse(500, `Fout bij bijwerken in Cloud Firestore: ${writeRes.error}`);
+          return errorResponse(500, `Fout bij bijwerken in CRMos Cloud: ${writeRes.error}`);
         }
 
         // Automatisch activiteit loggen in crm_activities voor live Firestore feed op het dashboard!
@@ -978,7 +978,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
 
         const writeRes = await saveToFirestoreRest(projectId, 'crm_contacts', newId, newContact);
         if (!writeRes.success) {
-          return errorResponse(500, `Fout bij aanmaken in Cloud Firestore: ${writeRes.error}`);
+          return errorResponse(500, `Fout bij aanmaken in CRMos Cloud: ${writeRes.error}`);
         }
 
         // Automatisch activiteit loggen in crm_activities voor live Firestore feed op het dashboard!
@@ -1183,7 +1183,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
         return jsonResponse(201, {
           success: true,
           action: 'created',
-          message: 'Contact succesvol opgeslagen in Cloud Firestore',
+          message: 'Contact succesvol opgeslagen in CRMos',
           data: newContact,
         });
       }
@@ -1343,7 +1343,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
 
         return jsonResponse(201, {
           success: true,
-          message: 'Deal succesvol aangemaakt in Cloud Firestore',
+          message: 'Deal succesvol geregistreerd in CRMos',
           data: newDeal,
           webhook_dispatched: webhookResult,
         });
@@ -1455,7 +1455,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
 
         return jsonResponse(201, {
           success: true,
-          message: 'Activiteit/Gespreksnotitie succesvol gelogd in Cloud Firestore',
+          message: 'Activiteit/Gespreksnotitie succesvol gelogd in CRMos',
           data: newActivity,
         });
       }
@@ -1571,7 +1571,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
         return jsonResponse(201, {
           success: true,
           message:
-            'Sollicitatie/Kandidaat succesvol geregistreerd in Cloud Firestore & gekoppeld aan CRM-contact',
+            'Sollicitatie/Kandidaat succesvol geregistreerd in CRMos & gekoppeld aan CRM-contact',
           data: newCand,
           webhook_dispatched: webhookResult,
         });

@@ -290,7 +290,7 @@ export function Header({ onOpenSearch, onToggleMobileMenu }: HeaderProps = {}) {
           if (syncStatus === 'syncing') {
             return (
               <div 
-                title="Realtime gegevens aan het synchroniseren met Cloud Firestore..."
+                title="Realtime gegevens aan het synchroniseren..."
                 className="hidden sm:flex items-center gap-1.5 rounded-full bg-sky-500/10 border border-sky-500/25 px-2.5 py-1 text-xs font-medium text-sky-600 dark:text-sky-400 backdrop-blur-md shadow-xs"
               >
                 <RefreshCw className="h-3 w-3 animate-spin text-sky-500" />
@@ -301,7 +301,7 @@ export function Header({ onOpenSearch, onToggleMobileMenu }: HeaderProps = {}) {
 
           return (
             <div 
-              title="Volledige realtime Firestore persistentie & sync actief met multi-tab IndexedDB cache."
+                title="Volledige realtime datasynchronisatie actief."
               className="hidden sm:flex items-center gap-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-400 backdrop-blur-md shadow-xs"
             >
               <span className="relative flex h-2 w-2">

@@ -137,10 +137,12 @@ function RecentActivity({
   activities,
   contacts,
   deals,
+  isSuperAdmin = false,
 }: {
   activities: ActivityType[];
   contacts: Contact[];
   deals: Deal[];
+  isSuperAdmin?: boolean;
 }) {
   const [filter, setFilter] = useState<'all' | 'api' | 'contact' | 'deal'>('all');
 
@@ -154,9 +156,18 @@ function RecentActivity({
   }, [activities]);
 
   const filteredActivities = useMemo(() => {
-    if (filter === 'all') return sortedActivities;
-    if (filter === 'api') {
-      return sortedActivities.filter((a: any) =>
+    // Voor reguliere gebruikers: verberg cross-company AI agent/API interacties
+    const baseList = isSuperAdmin
+      ? sortedActivities
+      : sortedActivities.filter(
+          (a) =>
+            !a.performed_by?.toLowerCase().includes('agent') &&
+            !a.title?.toLowerCase().includes('api')
+        );
+
+    if (filter === 'all') return baseList;
+    if (filter === 'api' && isSuperAdmin) {
+      return baseList.filter((a: any) =>
         Boolean(
           a.performed_by?.toLowerCase().includes('agent') ||
           a.performed_by?.toLowerCase().includes('api') ||
@@ -169,13 +180,13 @@ function RecentActivity({
       );
     }
     if (filter === 'contact') {
-      return sortedActivities.filter((a) => a.related_to?.type === 'contact' || (a as any).contact_id);
+      return baseList.filter((a) => a.related_to?.type === 'contact' || (a as any).contact_id);
     }
     if (filter === 'deal') {
-      return sortedActivities.filter((a) => a.related_to?.type === 'deal' || (a as any).deal_id);
+      return baseList.filter((a) => a.related_to?.type === 'deal' || (a as any).deal_id);
     }
-    return sortedActivities;
-  }, [sortedActivities, filter]);
+    return baseList;
+  }, [sortedActivities, filter, isSuperAdmin]);
 
   const getRelatedName = (activity: any) => {
     if (activity.related_to?.type === 'contact' || activity.contact_id) {
@@ -188,7 +199,7 @@ function RecentActivity({
       const deal = deals.find((d) => d.id === dId);
       if (deal) return deal.name;
     }
-    return activity.company_name || activity.performed_by || 'CRMos Cloud';
+    return activity.company_name || activity.performed_by || 'CRMos';
   };
 
   const getActivityIcon = (activity: any) => {
@@ -227,18 +238,22 @@ function RecentActivity({
       <CardHeader className="pb-3 border-b border-border/40">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <CardTitle className="text-base font-semibold">Live Firestore Feed</CardTitle>
+            <CardTitle className="text-base font-semibold">
+              {isSuperAdmin ? 'Live Ecosysteem Activiteiten' : 'Recente Activiteiten'}
+            </CardTitle>
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
             </span>
           </div>
           <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-500 border-emerald-500/30 font-medium">
-            Realtime Synced
+            Live Synced
           </Badge>
         </div>
         <CardDescription className="text-xs">
-          Directe Firestore stream van AI agent interacties, contacten en deals.
+          {isSuperAdmin
+            ? 'Realtime overzicht van partner-integraties, interacties en deals.'
+            : 'Overzicht van recente taken, gesprekken en contactmomenten.'}
         </CardDescription>
 
         {/* Filter Tabs */}
@@ -252,20 +267,22 @@ function RecentActivity({
                 : 'bg-muted/60 text-muted-foreground hover:bg-muted'
             }`}
           >
-            Alles ({sortedActivities.length})
+            Alles ({filteredActivities.length})
           </button>
-          <button
-            type="button"
-            onClick={() => setFilter('api')}
-            className={`px-2 py-0.5 rounded-lg text-[11px] font-medium transition-colors flex items-center gap-1 ${
-              filter === 'api'
-                ? 'bg-purple-600 text-white'
-                : 'bg-muted/60 text-muted-foreground hover:bg-muted'
-            }`}
-          >
-            <Sparkles className="h-3 w-3" />
-            AI Agents &amp; API
-          </button>
+          {isSuperAdmin && (
+            <button
+              type="button"
+              onClick={() => setFilter('api')}
+              className={`px-2 py-0.5 rounded-lg text-[11px] font-medium transition-colors flex items-center gap-1 ${
+                filter === 'api'
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-muted/60 text-muted-foreground hover:bg-muted'
+              }`}
+            >
+              <Sparkles className="h-3 w-3" />
+              AI Agents &amp; API
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setFilter('contact')}
@@ -297,8 +314,10 @@ function RecentActivity({
             <div className="flex flex-col items-center justify-center h-48 text-center text-muted-foreground p-4">
               <Bot className="h-8 w-8 text-muted-foreground/40 mb-2" />
               <p className="text-xs font-medium">Nog geen activiteiten in deze selectie</p>
-              <p className="text-[11px] text-muted-foreground/80 mt-1 max-w-[200px]">
-                Zodra partner-agents de API aanroepen verschijnen interacties hier realtime live.
+              <p className="text-[11px] text-muted-foreground/80 mt-1 max-w-[220px]">
+                {isSuperAdmin
+                  ? 'Zodra partner-integraties communiceren verschijnen interacties hier realtime.'
+                  : 'Nieuwe contactmomenten en taken verschijnen hier automatisch.'}
               </p>
             </div>
           ) : (
@@ -929,6 +948,7 @@ export function Dashboard() {
               activities={accessibleActivities}
               contacts={accessibleContacts}
               deals={accessibleDeals}
+              isSuperAdmin={isSuperAdmin}
             />
           </div>
           <div className="grid gap-4 lg:grid-cols-3">
