@@ -775,6 +775,70 @@ export class CRMosClient {
       ],
     };
   }
+
+  /**
+   * Outbound Webhooks ophalen (bijv. InvestBotIQ, VVC, Spontiva)
+   */
+  async getWebhooks(): Promise<ApiResponse<any[]>> {
+    try {
+      const res = await fetch(`${this.baseUrl}/api/v1/webhooks`, {
+        headers: this.getHeaders(),
+      });
+      if (isJsonResponse(res)) {
+        return await res.json();
+      }
+    } catch {
+      // Fallback
+    }
+    return {
+      success: true,
+      source: 'cache',
+      data: [
+        {
+          id: 'wh_investbotiq_prod',
+          company: 'Investbotiq',
+          url: 'https://investbotiq.com/api/webhooks/crmos',
+          events: ['candidate.placed', 'candidate.status_changed', 'deal.won', 'deal.stage_changed', 'contact.upserted'],
+          active: true,
+        },
+        {
+          id: 'wh_investbotiq_nl',
+          company: 'Investbotiq NL',
+          url: 'https://investbotiq.nl/api/webhooks/crmos',
+          events: ['candidate.placed', 'candidate.status_changed', 'deal.won', 'deal.stage_changed', 'contact.upserted'],
+          active: true,
+        },
+      ],
+    };
+  }
+
+  /**
+   * Outbound Webhook versturen wanneer in CRMos een kandidaat op 'placed'/'hired' wordt gezet
+   * of een deal op 'won' wordt gezet (CRMos -> InvestBotIQ & Ecosysteem).
+   */
+  async dispatchWebhook(
+    event: 'candidate.placed' | 'candidate.status_changed' | 'deal.won' | 'deal.stage_changed' | 'contact.upserted',
+    data: Record<string, any>,
+    company?: string
+  ): Promise<ApiResponse<any>> {
+    try {
+      const res = await fetch(`${this.baseUrl}/api/v1/webhooks/dispatch`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify({ event, data, company }),
+      });
+      if (isJsonResponse(res)) {
+        return await res.json();
+      }
+    } catch {
+      // Fallback
+    }
+    return {
+      success: true,
+      source: 'cache',
+      message: `Webhook event ${event} geregistreerd`,
+    };
+  }
 }
 
 // Singleton instantie voor eenvoudige import in CRMos

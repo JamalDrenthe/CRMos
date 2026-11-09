@@ -30,6 +30,7 @@ import {
   smartSearchContacts,
   smartSearchCompanies,
 } from '@/services/crmSearchEngine';
+import { crmosApi } from '@/services/crmosApiClient';
 
 function mergeEcosystemCompanies(existingCompanies: Company[]): {
   merged: Company[];
@@ -362,6 +363,14 @@ export const useCRMStore = create<CRMState>()(
           if (updated) {
             const orgId = useAuthStore.getState().organization?.id || 'default_org';
             saveDealToFirestore(updated, orgId);
+            if (updates.stage) {
+              const isWon = updates.stage === 'closed-won' || updates.stage === 'won';
+              crmosApi.dispatchWebhook(
+                isWon ? 'deal.won' : 'deal.stage_changed',
+                updated as unknown as Record<string, any>,
+                updated.company_name
+              );
+            }
           }
           return { deals: updatedDeals };
         });
@@ -385,6 +394,12 @@ export const useCRMStore = create<CRMState>()(
           if (updated) {
             const orgId = useAuthStore.getState().organization?.id || 'default_org';
             saveDealToFirestore(updated, orgId);
+            const isWon = newStage === 'closed-won' || newStage === 'won';
+            crmosApi.dispatchWebhook(
+              isWon ? 'deal.won' : 'deal.stage_changed',
+              updated as unknown as Record<string, any>,
+              updated.company_name
+            );
           }
           return { deals: updatedDeals };
         });

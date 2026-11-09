@@ -1797,7 +1797,8 @@ Collecties (200 OK Read & Write): crm_contacts, crm_companies, crm_deals, crm_ac
                       ep === '/api/v1/contacts/upsert' ||
                       ep === '/api/v1/deals' ||
                       ep === '/api/v1/activities' ||
-                      ep === '/api/v1/candidates'
+                      ep === '/api/v1/candidates' ||
+                      ep === '/api/v1/webhooks/dispatch'
                     ) {
                       setPlaygroundMethod('POST');
                     } else {
@@ -1816,6 +1817,8 @@ Collecties (200 OK Read & Write): crm_contacts, crm_companies, crm_deals, crm_ac
                   <option value="/api/v1/teams">/api/v1/teams — Referral Teams &amp; Leiders</option>
                   <option value="/api/v1/companies">/api/v1/companies — 13 Ecosysteem Partnerbedrijven</option>
                   <option value="/api/v1/candidates">/api/v1/candidates — Sollicitatie Registratie (No Cure No Pay)</option>
+                  <option value="/api/v1/webhooks">/api/v1/webhooks — Geregistreerde Outbound Webhooks (InvestBotIQ e.a.)</option>
+                  <option value="/api/v1/webhooks/dispatch">/api/v1/webhooks/dispatch — Trigger Outbound Webhook (CRMos ➡️ InvestBotIQ)</option>
                 </select>
 
                 <Button

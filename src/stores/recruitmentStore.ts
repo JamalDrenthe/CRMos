@@ -18,6 +18,7 @@ import {
   getVvcTag,
 } from '@/services/vvcTagService';
 import { NO_CURE_NO_PAY_JOBS } from '@/data/careersJobsData';
+import { crmosApi } from '@/services/crmosApiClient';
 
 /**
  * Zorgt ervoor dat elke kandidaat-aanmelding direct ook als Contact in het CRM staat,
@@ -206,6 +207,13 @@ export const useRecruitmentStore = create<RecruitmentState>()(
             const orgId = useAuthStore.getState().organization?.id || 'default_org';
             saveCandidateToFirestore(updated, orgId);
             syncCandidateAsCrmContact(updated);
+            if (updates.status) {
+              const isPlaced = updates.status === 'hired' || (updates.status as string) === 'placed';
+              crmosApi.dispatchWebhook(
+                isPlaced ? 'candidate.placed' : 'candidate.status_changed',
+                updated as unknown as Record<string, any>
+              );
+            }
           }
           return { candidates: updatedCandidates };
         });
@@ -228,6 +236,11 @@ export const useRecruitmentStore = create<RecruitmentState>()(
           if (updated) {
             const orgId = useAuthStore.getState().organization?.id || 'default_org';
             saveCandidateToFirestore(updated, orgId);
+            const isPlaced = newStatus === 'hired' || (newStatus as string) === 'placed';
+            crmosApi.dispatchWebhook(
+              isPlaced ? 'candidate.placed' : 'candidate.status_changed',
+              updated as unknown as Record<string, any>
+            );
           }
           return { candidates: updatedCandidates };
         });
