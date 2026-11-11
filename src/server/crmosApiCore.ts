@@ -552,6 +552,89 @@ function parseJsonBody(rawBody?: string): { ok: true; data: Record<string, any> 
   }
 }
 
+// =========================================================================
+// WRITE-BEVEILIGING (mass assignment & cross-tenant IDOR)
+// - Alleen velden op de allowlist worden uit de request body overgenomen.
+// - id, org_id, company/company_name en created_at zijn nooit via de API
+//   instelbaar; create-endpoints negeren een meegegeven id en org_id.
+// - Bij updates wordt gecontroleerd dat het record bij het bedrijf van de
+//   API key hoort (master/admin keys mogen alles).
+// =========================================================================
+
+const CONTACT_EDITABLE_FIELDS = [
+  'first_name', 'firstName', 'last_name', 'lastName', 'email', 'phone', 'title',
+  'status', 'source', 'role', 'role_applied', 'vvc_tag', 'code', 'tags',
+  'company_tags', 'notes', 'note', 'message', 'team_id', 'team_name',
+  'team_status', 'referred_by_name', 'location', 'deal_model',
+  'experience_years', 'skills', 'linkedin', 'website', 'avatar_url',
+  'last_contacted_at', 'address', 'city', 'postal_code', 'country',
+];
+
+const DEAL_EDITABLE_FIELDS = [
+  'name', 'title', 'value', 'currency', 'stage', 'status', 'probability',
+  'expected_close_date', 'close_date', 'contact_id', 'contact_email', 'email',
+  'notes', 'note', 'description', 'assigned_to', 'owner', 'products',
+  'quantity', 'source',
+];
+
+const CANDIDATE_EDITABLE_FIELDS = [
+  'first_name', 'firstName', 'last_name', 'lastName', 'email', 'phone',
+  'status', 'role', 'role_applied', 'job_title', 'deal_model', 'skills',
+  'experience_years', 'location', 'source', 'notes', 'note', 'vvc_tag',
+  'code', 'tags', 'linkedin', 'cv_url', 'availability', 'salary_expectation',
+];
+
+function pickEditableFields(
+  body: Record<string, any>,
+  allowed: string[]
+): Record<string, any> {
+  const picked: Record<string, any> = {};
+  for (const field of allowed) {
+    if (body[field] !== undefined) picked[field] = body[field];
+  }
+  return picked;
+}
+
+function recordCompanyOf(record: Record<string, any>): string {
+  return String(record?.company_name || record?.company || '').trim();
+}
+
+/**
+ * Controleert of de API key records van dit bedrijf mag wijzigen.
+ * Zonder geldige key of met een master/admin key geldt geen tenant-beperking
+ * (verplichte API-authenticatie wordt door een aparte fix afgedwongen).
+ */
+function keyCanWriteRecord(keyMeta: any, record: Record<string, any>): boolean {
+  if (!keyMeta) return true;
+  if (keyMeta.tag === 'ALL' || keyMeta.role === 'super_admin' || keyMeta.role === 'admin') {
+    return true;
+  }
+  const recordCompany = recordCompanyOf(record).toLowerCase();
+  if (!recordCompany) return true;
+  const keyCompany = String(keyMeta.company || '').toLowerCase();
+  const keyTag = String(keyMeta.tag || '').toLowerCase();
+  return (
+    recordCompany === keyCompany ||
+    recordCompany === keyTag ||
+    recordCompany.includes(keyTag) ||
+    recordCompany.includes(keyCompany) ||
+    keyCompany.includes(recordCompany)
+  );
+}
+
+function tenantForbiddenResponse(
+  keyMeta: any,
+  record: Record<string, any>
+): ApiCoreResponse | null {
+  if (!keyCanWriteRecord(keyMeta, record)) {
+    return errorResponse(
+      403,
+      `Geen toegang: deze API key mag geen records van "${recordCompanyOf(record)}" wijzigen`
+    );
+  }
+  return null;
+}
+
 /**
  * Universele Request Handler voor alle `/api/v1/*` en `/api/vvc/*` routes
  */
@@ -594,6 +677,11 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
         ? 'CRMos Master Agent'
         : keyMeta.company
       : 'Externe Website / Agent';
+
+    // Bedrijf dat de API key afdwingt op nieuwe records (partner-keys kunnen
+    // geen records voor een ander bedrijf aanmaken). Master/admin is vrij.
+    const enforcedCompany =
+      keyMeta && keyMeta.tag !== 'ALL' ? keyMeta.company : null;
 
     // =========================================================================
     // 1. DEDICATED HEALTH ENDPOINT (GET /api/v1/health)
@@ -952,6 +1040,10 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
         : existingNotesHistory;
 
       if (match) {
+        // Tenant-check: een partner-key mag alleen records van het eigen bedrijf wijzigen
+        const forbidden = tenantForbiddenResponse(keyMeta, match);
+        if (forbidden) return forbidden;
+
         // UPDATE BESTAAND CONTACT (behoud bestaande velden indien niet meegegeven, merge tags & notes!)
         const firstName = payload.first_name || payload.firstName || match.first_name || '';
         const lastName = payload.last_name || payload.lastName || match.last_name || '';
@@ -960,7 +1052,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
 
         const updatedContact = {
           ...match,
-          ...payload,
+          ...pickEditableFields(payload, CONTACT_EDITABLE_FIELDS),
           id: match.id,
           email: email || match.email,
           first_name: firstName,
@@ -968,7 +1060,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
           firstName,
           lastName,
           phone: payload.phone || match.phone || '',
-          company: payload.company || match.company || sourceCompanyLabel,
+          company: match.company || enforcedCompany || sourceCompanyLabel,
           title: payload.title || payload.role_applied || match.title || 'Contact',
           vvc_tag: effectiveTag,
           code: effectiveTag,
@@ -1016,9 +1108,8 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
           data: updatedContact,
         });
       } else {
-        // CREATE NIEUW CONTACT
-        const newId =
-          payload.id || `contact_agt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+        // CREATE NIEUW CONTACT (id wordt server-side gegenereerd, nooit uit de body)
+        const newId = `contact_agt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
         const effectiveVvcTag =
           vvcTag || `VVC-AGT-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
         const firstName = payload.first_name || payload.firstName || 'Nieuw';
@@ -1034,7 +1125,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
           email,
           phone: payload.phone || '',
           company:
-            payload.company || (keyMeta?.company && keyMeta.company !== 'ALL' ? keyMeta.company : 'Onbekend'),
+            enforcedCompany || payload.company || 'Onbekend',
           title: payload.title || payload.role_applied || 'Contact',
           status: payload.status || 'lead',
           source: payload.source || noteSource,
@@ -1048,7 +1139,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
           tags: finalTags,
           notes: mergedNotes,
           notes_history: mergedNotesHistory,
-          org_id: payload.org_id || 'default_org',
+          org_id: 'default_org',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
@@ -1207,8 +1298,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
           });
         }
 
-        const newId =
-          payload.id || `contact_agt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+        const newId = `contact_agt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
         const effectiveVvcTag =
           payload.vvc_tag ||
           payload.code ||
@@ -1234,7 +1324,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
           lastName,
           email: String(payload.email || '').trim().toLowerCase(),
           phone: payload.phone || '',
-          company: payload.company || sourceCompanyLabel,
+          company: enforcedCompany || payload.company || sourceCompanyLabel,
           title: payload.title || 'Contact',
           status: payload.status || 'lead',
           source: noteSource,
@@ -1247,7 +1337,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
           company_tags,
           tags,
           notes: formattedNotes,
-          org_id: payload.org_id || 'default_org',
+          org_id: 'default_org',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
@@ -1280,9 +1370,19 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
 
         const singleUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/crm_contacts/${encodeURIComponent(targetId)}`;
         const fbRes = await firestoreFetch(singleUrl);
-        const existingData: Record<string, any> = fbRes.ok
-          ? parseFirestoreFields(((await fbRes.json()) as any).fields || {})
-          : {};
+        if (!fbRes.ok) {
+          return errorResponse(404, `Contact "${targetId}" niet gevonden`);
+        }
+        const existingData: Record<string, any> = parseFirestoreFields(
+          ((await fbRes.json()) as any).fields || {}
+        );
+
+        // Tenant-check: een partner-key mag alleen records van het eigen bedrijf wijzigen
+        const forbidden = tenantForbiddenResponse(
+          keyMeta,
+          normalizeContactRecord(targetId, existingData)
+        );
+        if (forbidden) return forbidden;
 
         // Merge tags & notities bij PATCH i.p.v. blind overschrijven
         const existingTags = Array.isArray(existingData.tags) ? existingData.tags : [];
@@ -1301,7 +1401,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
 
         const merged = normalizeContactRecord(targetId, {
           ...existingData,
-          ...updates,
+          ...pickEditableFields(updates, CONTACT_EDITABLE_FIELDS),
           id: targetId,
           tags: mergedTags,
           company_tags: mergedCompanyTags,
@@ -1357,7 +1457,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
           return errorResponse(400, 'Validatiefout: deal name of title is verplicht');
         }
 
-        const dealId = payload.id || `deal_agt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+        const dealId = `deal_agt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
         const stage = String(payload.stage || 'lead').toLowerCase();
 
         const newDeal = {
@@ -1366,14 +1466,15 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
           title: payload.title || payload.name,
           value: Number(payload.value) || 0,
           stage,
-          company_name: payload.company_name || payload.company || sourceCompanyLabel,
+          company_name:
+            enforcedCompany || payload.company_name || payload.company || sourceCompanyLabel,
           contact_id: payload.contact_id || '',
           contact_email: (payload.contact_email || payload.email || '').trim().toLowerCase(),
           probability: Number(payload.probability) || (stage.includes('won') ? 100 : 25),
           expected_close_date:
             payload.expected_close_date || new Date(Date.now() + 30 * 86400000).toISOString(),
           notes: appendTimestampedNote('', payload.notes, sourceCompanyLabel),
-          org_id: payload.org_id || 'default_org',
+          org_id: 'default_org',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
@@ -1438,13 +1539,20 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
 
         const singleUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/crm_deals/${encodeURIComponent(targetId)}`;
         const fbRes = await firestoreFetch(singleUrl);
-        const existing: Record<string, any> = fbRes.ok
-          ? parseFirestoreFields(((await fbRes.json()) as any).fields || {})
-          : {};
+        if (!fbRes.ok) {
+          return errorResponse(404, `Deal "${targetId}" niet gevonden`);
+        }
+        const existing: Record<string, any> = parseFirestoreFields(
+          ((await fbRes.json()) as any).fields || {}
+        );
+
+        // Tenant-check: een partner-key mag alleen deals van het eigen bedrijf wijzigen
+        const forbidden = tenantForbiddenResponse(keyMeta, existing);
+        if (forbidden) return forbidden;
 
         const merged: Record<string, any> = {
           ...existing,
-          ...updates,
+          ...pickEditableFields(updates, DEAL_EDITABLE_FIELDS),
           id: targetId,
           updated_at: new Date().toISOString(),
         };
@@ -1499,7 +1607,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
         if (!parsedBody.ok) return errorResponse(400, parsedBody.error);
         const payload = parsedBody.data;
 
-        const actId = payload.id || `act_agt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+        const actId = `act_agt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
         const assignedName = payload.assigned_to || payload.performed_by || `${sourceCompanyLabel} Agent`;
         const newActivity = {
           id: actId,
@@ -1508,7 +1616,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
           type: payload.type || 'note',
           title: payload.title || `API Activiteit: ${sourceCompanyLabel}`,
           description: payload.description || payload.notes || '',
-          company_name: payload.company_name || sourceCompanyLabel,
+          company_name: enforcedCompany || payload.company_name || sourceCompanyLabel,
           performed_by: payload.performed_by || `${sourceCompanyLabel} Agent`,
           assigned_to: assignedName,
           status: payload.status || (payload.completed === false ? 'pending' : 'completed'),
@@ -1520,7 +1628,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
             type: payload.deal_id ? 'deal' : 'contact',
             id: payload.contact_id || payload.deal_id || 'api_event',
           },
-          org_id: payload.org_id || 'default_org',
+          org_id: 'default_org',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
@@ -1567,7 +1675,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
           return errorResponse(400, 'Validatiefout: email is verplicht voor kandidaat-registratie');
         }
 
-        const candId = candidate.id || `cand_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+        const candId = `cand_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
         const effectiveVvcTag =
           candidate.vvc_tag || `VVC-CAND-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
         const roleApplied =
@@ -1597,10 +1705,10 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
           experience_years: Number(candidate.experience_years) || 3,
           location: candidate.location || '100% Remote',
           source: noteSource,
-          company: candidate.company || sourceCompanyLabel,
+          company: enforcedCompany || candidate.company || sourceCompanyLabel,
           vvc_tag: effectiveVvcTag,
           notes: formattedNotes,
-          org_id: candidate.org_id || 'default_org',
+          org_id: 'default_org',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
@@ -1669,9 +1777,16 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
 
         const singleUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/crm_candidates/${encodeURIComponent(targetId)}`;
         const fbRes = await firestoreFetch(singleUrl);
-        const existing: Record<string, any> = fbRes.ok
-          ? parseFirestoreFields(((await fbRes.json()) as any).fields || {})
-          : {};
+        if (!fbRes.ok) {
+          return errorResponse(404, `Kandidaat "${targetId}" niet gevonden`);
+        }
+        const existing: Record<string, any> = parseFirestoreFields(
+          ((await fbRes.json()) as any).fields || {}
+        );
+
+        // Tenant-check: een partner-key mag alleen kandidaten van het eigen bedrijf wijzigen
+        const forbidden = tenantForbiddenResponse(keyMeta, existing);
+        if (forbidden) return forbidden;
 
         const noteSource =
           updates.source || (keyMeta && keyMeta.company !== 'ALL' ? keyMeta.company : 'CRMos Teamleider');
@@ -1681,7 +1796,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
 
         const merged: Record<string, any> = {
           ...existing,
-          ...updates,
+          ...pickEditableFields(updates, CANDIDATE_EDITABLE_FIELDS),
           id: targetId,
           notes: mergedNotes,
           updated_at: new Date().toISOString(),
