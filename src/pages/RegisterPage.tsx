@@ -28,7 +28,7 @@ export function RegisterPage() {
   const [companyName, setCompanyName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<User['role']>('admin');
+  const [role, setRole] = useState<User['role']>('agent');
   const [agreedToTerms, setAgreedToTerms] = useState(true);
 
   const [showPassword, setShowPassword] = useState(false);

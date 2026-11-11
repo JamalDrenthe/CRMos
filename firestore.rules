@@ -16,8 +16,8 @@ service cloud.firestore {
         (
           request.auth.token.get('email_verified', false) == true &&
           (
-            request.auth.token.email == 'info@jamaldrenthe.com' ||
-            request.auth.token.email == 'info@crmos.one'
+            request.auth.token.get('email', '') == 'info@jamaldrenthe.com' ||
+            request.auth.token.get('email', '') == 'info@crmos.one'
           )
         )
       );
@@ -33,7 +33,7 @@ service cloud.firestore {
         request.auth.token.get('service', false) == true ||
         (
           request.auth.token.get('email_verified', false) == true &&
-          request.auth.token.email == 'api-agent@crmos.one'
+          request.auth.token.get('email', '') == 'api-agent@crmos.one'
         )
       );
     }
@@ -78,13 +78,16 @@ service cloud.firestore {
       allow create: if isPrivileged() ||
         (isAuthenticated() && request.auth.uid == userId &&
          request.resource.data.get('is_super_admin', false) == false &&
-         !(request.resource.data.get('role', 'member') in ['admin', 'super_admin']));
+         request.resource.data.get('role', 'agent') == 'agent' &&
+         request.resource.data.get('allowed_companies', []).size() == 1 &&
+         request.resource.data.get('allowed_companies', [])[0] ==
+           request.resource.data.get('company_name', ''));
       // Bijwerken van je eigen profiel: privilege-velden (role, is_super_admin,
       // org_id, company_name) mogen niet wijzigen; admin mag alles.
       allow update: if isPrivileged() ||
         (isAuthenticated() && request.auth.uid == userId &&
          !request.resource.data.diff(resource.data).affectedKeys()
-            .hasAny(['role', 'is_super_admin', 'org_id', 'company_name']));
+            .hasAny(['role', 'is_super_admin', 'org_id', 'allowed_companies', 'company_name']));
       allow delete: if isAdmin();
     }
 
@@ -110,39 +113,28 @@ service cloud.firestore {
     match /crm_contacts/{contactId} {
       allow read: if canReadTenant();
       allow update, delete: if canUpdateTenant();
-      // Publieke intake (upsert met email + tag/source) blijft mogelijk,
-      // maar het document moet een org_id krijgen
-      allow create: if canCreateTenant() ||
-        (request.resource.data.org_id is string &&
-         request.resource.data.keys().hasAll(['email', 'org_id']) &&
-         (request.resource.data.vvc_tag != null || request.resource.data.company_tags != null || request.resource.data.source != null));
+      allow create: if canCreateTenant();
     }
 
     // Bedrijven
     match /crm_companies/{companyId} {
       allow read: if canReadTenant();
       allow update, delete: if canUpdateTenant();
-      allow create: if canCreateTenant() ||
-        (request.resource.data.org_id is string &&
-         request.resource.data.keys().hasAll(['name', 'org_id']));
+      allow create: if canCreateTenant();
     }
 
     // Deals / Verkoopkansen
     match /crm_deals/{dealId} {
       allow read: if canReadTenant();
       allow update, delete: if canUpdateTenant();
-      allow create: if canCreateTenant() ||
-        (request.resource.data.org_id is string &&
-         request.resource.data.keys().hasAll(['name', 'value', 'org_id']));
+      allow create: if canCreateTenant();
     }
 
     // Activiteiten & taken (Interacties, notities & belstatussen van AI agents)
     match /crm_activities/{activityId} {
       allow read: if canReadTenant();
       allow update, delete: if canUpdateTenant();
-      allow create: if canCreateTenant() ||
-        (request.resource.data.org_id is string &&
-         request.resource.data.keys().hasAll(['title', 'contact_id', 'org_id']));
+      allow create: if canCreateTenant();
     }
 
     // Recruitment: Kandidaten
@@ -262,10 +254,9 @@ service cloud.firestore {
 
     // VVC API Registry: Unieke vvc_tag registraties voor VVC API & onboarding
     match /crm_vvc_registry/{vvcTag} {
-      allow read: if true;
-      allow write: if isPrivileged();
-      allow create: if request.resource.data.keys().hasAll(['vvc_tag', 'email']) &&
-                       vvcTag.matches('^vvc-.*');
+      allow read: if canReadTenant();
+      allow create: if canCreateTenant();
+      allow update, delete: if canUpdateTenant();
     }
   }
 }

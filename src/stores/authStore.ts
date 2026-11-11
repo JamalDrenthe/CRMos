@@ -75,7 +75,7 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      registerWithEmailAction: async (name, email, password, companyName, role = 'admin') => {
+      registerWithEmailAction: async (name, email, password, companyName, role = 'agent') => {
         set({ isLoading: true, error: null });
         try {
           if (isFirebaseConfigured()) {
