@@ -59,7 +59,7 @@ import {
 } from '@/services/firestoreService';
 import { syncVvcRecordToCloud } from '@/services/vvcTagService';
 import { crmosApi } from '@/services/crmosApiClient';
-import { COMPANY_API_KEYS, MASTER_ECOSYSTEM_API_KEY } from '@/data/apiKeysData';
+import { auth } from '@/lib/firebase';
 import { useCRMStore } from '@/stores/crmStore';
 import { useRecruitmentStore } from '@/stores/recruitmentStore';
 import { useContactCenterStore } from '@/stores/contactCenterStore';
@@ -300,14 +300,15 @@ export function SettingsPage() {
       toast.error('Geef een omschrijving of applicatienaam op voor de API key');
       return;
     }
-    const token = `crm_live_${Math.random().toString(36).substring(2, 10)}_${Math.random().toString(36).substring(2, 10)}`;
+    const token = `crm_live_${crypto.getRandomValues(new Uint8Array(16)).reduce((acc, b) => acc + b.toString(16).padStart(2, '0'), '')}`;
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
+    const tokenHash = Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
     const newRecord: ApiKeyRecord = {
       id: `key_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       org_id: user?.org_id || 'default_org',
       name: newKeyName.trim(),
       token_preview: `${token.substring(0, 13)}...`,
-      token_hash: token,
-      full_token: token,
+      token_hash: tokenHash,
       environment: 'live',
       scopes: newKeyScope === 'all' ? ['*'] : [newKeyScope],
       created_by_user: user?.name || 'Jamal Drenthe',
@@ -408,7 +409,9 @@ export function SettingsPage() {
           method: playgroundMethod,
           headers: {
             'Content-Type': 'application/json',
-            'X-CRMOS-API-KEY': MASTER_ECOSYSTEM_API_KEY.key,
+            ...(await auth.currentUser?.getIdToken()
+              ? { Authorization: `Bearer ${await auth.currentUser!.getIdToken()}` }
+              : {}),
           },
           body: playgroundMethod === 'POST' ? playgroundBody || '{}' : undefined,
         });
@@ -430,7 +433,7 @@ export function SettingsPage() {
 
   const getPlaygroundSnippet = () => {
     const fullUrl = `https://crmos.one${playgroundEndpoint}`;
-    const token = apiKeys[0]?.full_token || apiKeys[0]?.token_hash || 'crm_live_v2_sample_key_4a91b8';
+    const token = apiKeys[0]?.full_token || '<jouw-api-key>';
     if (codeLanguage === 'curl') {
       if (playgroundMethod === 'POST') {
         return `curl -X POST "${fullUrl}" \\
@@ -1471,162 +1474,6 @@ print(response.json())`;
             </CardContent>
           </Card>
 
-          {/* Section: Predefined Enterprise & Company API Keys for AI Agents */}
-          <Card className="rounded-3xl border-primary/30 bg-gradient-to-br from-card/95 via-card/80 to-primary/[0.06] backdrop-blur-2xl shadow-xl">
-            <CardHeader className="p-5 sm:p-6 pb-3">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <CardTitle className="text-base sm:text-lg font-bold flex items-center gap-2">
-                      <Key className="h-5 w-5 text-primary" />
-                      <span>Directe Bedrijfs-API Keys voor AI Agents</span>
-                    </CardTitle>
-                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/30 text-[10px] font-bold">
-                      13 Bedrijven + Master Key
-                    </Badge>
-                  </div>
-                  <CardDescription className="text-xs">
-                    Kopieer direct een API key en geef deze aan je AI agent om alle CRM-data (contacten, bedrijven, deals, teams) op te halen en doorzoeken.
-                  </CardDescription>
-                </div>
-
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    const prompt = `CRMos API & Live Firebase Cloud Configuratie voor AI Agent (Bi-directioneel: Lezen & Schrijven):
-Master API Key: ${MASTER_ECOSYSTEM_API_KEY.key}
-Firebase Project ID: crmosone-dev
-Firebase Web API Key: AIzaSyCsBPKp7i7Cd959bF8hZzTDtV_V_7cI9Xo
-Firebase Service Agent: api-agent@crmos.one / CRMosAgent2026!Secure
-
-=== OPTIE A: via CRMos Universal REST API (/api/v1) ===
-Header: X-CRMOS-API-KEY: ${MASTER_ECOSYSTEM_API_KEY.key}
-Content-Type: application/json
-
-1. LEZEN & REALTIME ZOEKEN:
-- GET /api/v1/search?q={zoekterm} (Spotlight zoeken over alle 300+ contacten, deals, kandidaten, bedrijven)
-- GET /api/v1/contacts?tag={tag}&company_tag={bedrijfstag}&q={zoekterm}&limit=300
-- GET /api/v1/contacts/{id} (Volledig profiel per contact)
-- GET /api/v1/teams (Alle 9 referral teams & 7 kernleiders: Reyhan, Julius, Jayden, Deniz, Boas, Fawzan, Ricardo)
-- GET /api/v1/companies (Alle 13 partnerbedrijven + Firestore bedrijven)
-- GET /api/v1/deals (Deals & pipelines)
-- GET /api/v1/vvc/lookup?tag={vvc_tag} (Verifieer unieke VVC tag of code)
-
-2. SCHRIJVEN & SYNCHRONISEREN (DIRECT IN FIREBASE CLOUD):
-- POST /api/v1/contacts/upsert
-  Body: {"first_name":"...","last_name":"...","email":"...","phone":"...","company":"...","tags":["#bedrijfstag"],"notes":"..."}
-- POST /api/v1/contacts (Nieuw contact aanmaken in crm_contacts)
-- PATCH /api/v1/contacts/{id} (Bestaand contact bijwerken)
-- POST /api/v1/deals (Nieuwe deal inschrijven in crm_deals)
-- POST /api/v1/activities (Gespreksnotitie / belstatus loggen in crm_activities)
-- POST /api/v1/candidates (Nieuwe sollicitant registreren in crm_candidates)
-
-=== OPTIE B: Rechtstreeks op Google Cloud Firestore REST API (24/7 Cloud) ===
-Stap 1: Haal een Bearer idToken op via Firebase Auth REST:
-POST https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=AIzaSyCsBPKp7i7Cd959bF8hZzTDtV_V_7cI9Xo
-Body: {"email":"api-agent@crmos.one","password":"CRMosAgent2026!Secure","returnSecureToken":true}
-
-Stap 2: Gebruik Header "Authorization: Bearer <idToken>" op:
-https://firestore.googleapis.com/v1/projects/crmosone-dev/databases/(default)/documents/{collectie}
-Collecties (200 OK Read & Write): crm_contacts, crm_companies, crm_deals, crm_activities, crm_candidates, crm_jobs, organizations/crmos_ecosystem_registry`;
-                    navigator.clipboard.writeText(prompt);
-                    toast.success('Complete AI Agent prompt (API + Direct Firebase Cloud) gekopieerd!');
-                  }}
-                  className="rounded-full text-xs gap-1.5 h-8 bg-primary hover:bg-primary/90 text-primary-foreground shadow-md shrink-0 font-semibold"
-                >
-                  <Copy className="h-3.5 w-3.5" />
-                  <span>Kopieer AI Agent Prompt</span>
-                </Button>
-              </div>
-            </CardHeader>
-
-            <CardContent className="p-5 sm:p-6 pt-0 space-y-4">
-              {/* MASTER KEY BANNER */}
-              <div className="rounded-2xl border-2 border-primary/40 bg-primary/10 p-4 space-y-2.5 backdrop-blur-md">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                    <span className="font-bold text-xs sm:text-sm text-foreground">
-                      {MASTER_ECOSYSTEM_API_KEY.name}
-                    </span>
-                    <Badge variant="outline" className="bg-primary/20 text-primary border-primary/40 text-[9px] font-bold uppercase">
-                      Super Admin
-                    </Badge>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="default"
-                    onClick={() => {
-                      navigator.clipboard.writeText(MASTER_ECOSYSTEM_API_KEY.key);
-                      toast.success('Master Ecosystem API Key gekopieerd!');
-                    }}
-                    className="h-8 text-xs gap-1.5 rounded-xl font-semibold shadow-xs"
-                  >
-                    <Copy className="h-3.5 w-3.5" />
-                    <span>Kopieer Master Key</span>
-                  </Button>
-                </div>
-
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  {MASTER_ECOSYSTEM_API_KEY.description}
-                </p>
-
-                <div className="flex items-center justify-between rounded-xl bg-background/90 border border-border/60 p-2 text-xs font-mono select-all">
-                  <span className="text-primary font-semibold truncate mr-2">{MASTER_ECOSYSTEM_API_KEY.key}</span>
-                  <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-500 border-emerald-500/30 shrink-0">
-                    Alle Bedrijven
-                  </Badge>
-                </div>
-              </div>
-
-              {/* 13 BEDRIJVEN GRID */}
-              <div className="space-y-2 pt-2">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  Individuele Bedrijfs-API Keys ({COMPANY_API_KEYS.length})
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-                  {COMPANY_API_KEYS.map((compKey) => (
-                    <div
-                      key={compKey.id}
-                      className="p-3.5 rounded-2xl border border-border/50 bg-card/60 hover:bg-card/90 transition-all space-y-2"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-semibold text-xs text-foreground truncate max-w-[180px]">
-                            {compKey.company}
-                          </span>
-                          <Badge variant="outline" className="text-[9px] font-mono bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/30 py-0">
-                            #{compKey.tag.toLowerCase()}
-                          </Badge>
-                        </div>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => {
-                            navigator.clipboard.writeText(compKey.key);
-                            toast.success(`API Key voor ${compKey.company} gekopieerd!`);
-                          }}
-                          className="h-7 text-xs gap-1 rounded-lg hover:bg-primary/10 text-primary font-medium"
-                        >
-                          <Copy className="h-3 w-3" />
-                          <span>Kopiëren</span>
-                        </Button>
-                      </div>
-
-                      <p className="text-[11px] text-muted-foreground leading-snug line-clamp-2">
-                        {compKey.description}
-                      </p>
-
-                      <div className="p-1.5 rounded-lg bg-background/80 border border-border/40 font-mono text-[10px] text-muted-foreground truncate select-all">
-                        {compKey.key}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
           {/* Section: Custom API Keys Management */}
           <Card className="rounded-3xl border-border/60 bg-card/70 backdrop-blur-xl">
             <CardHeader className="p-5 sm:p-6 pb-3">
@@ -1730,18 +1577,20 @@ Collecties (200 OK Read & Write): crm_contacts, crm_companies, crm_deals, crm_ac
                         </div>
 
                         <div className="flex items-center gap-2">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => {
-                              navigator.clipboard.writeText(key.full_token || key.token_hash || key.token_preview);
-                              toast.success('Key gekopieerd!');
-                            }}
-                            className="h-8 text-xs gap-1 rounded-xl"
-                          >
-                            <Copy className="h-3 w-3" />
-                            <span>Kopiëren</span>
-                          </Button>
+                          {key.full_token && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                navigator.clipboard.writeText(key.full_token!);
+                                toast.success('Key gekopieerd!');
+                              }}
+                              className="h-8 text-xs gap-1 rounded-xl"
+                            >
+                              <Copy className="h-3 w-3" />
+                              <span>Kopiëren</span>
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             variant="ghost"

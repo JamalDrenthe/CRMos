@@ -13,7 +13,13 @@
  * - Outbound Webhooks (`CRMos -> InvestBotIQ` & alle 13 partnerbedrijven) bij `candidate.placed` / `deal.won`
  */
 
-import { PREDEFINED_COMPANY_API_KEYS } from '../data/apiKeysData';
+import {
+  hasFullScope,
+  recordInKeyScope,
+  resolveApiKeyMeta,
+  verifyFirebaseIdToken,
+} from './apiAuth';
+import type { ApiKeyMeta } from './apiAuth';
 
 export const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -26,7 +32,13 @@ export const CORS_HEADERS: Record<string, string> = {
 const DEFAULT_PROJECT_ID = 'crmosone-dev';
 const DEFAULT_FIREBASE_WEB_API_KEY = 'AIzaSyCsBPKp7i7Cd959bF8hZzTDtV_V_7cI9Xo';
 const DEFAULT_AGENT_EMAIL = 'api-agent@crmos.one';
-const DEFAULT_AGENT_PASSWORD = 'CRMosAgent2026!Secure';
+
+// Runtime environment (Cloudflare Pages env / process.env). Werd voorheen
+// hardcoded; secrets komen nu UITSLUITEND uit env:
+// - CRMOS_FIREBASE_AGENT_EMAIL / CRMOS_FIREBASE_AGENT_PASSWORD (Firestore service-login)
+// - VITE_FIREBASE_API_KEY / FIREBASE_WEB_API_KEY (publieke Firebase web key)
+// - CRMOS_API_KEYS_JSON (gehashte master/partner API keys)
+let runtimeEnv: Record<string, string | undefined> = {};
 
 // Standaard geregistreerde Ecosysteem Webhooks (kunnen via POST /api/v1/webhooks worden uitgebreid)
 export interface WebhookSubscription {
@@ -158,10 +170,17 @@ let cachedIdToken: string | null = null;
 let cachedTokenExpiry = 0;
 
 export async function getFirebaseAgentIdToken(
-  firebaseWebApiKey = DEFAULT_FIREBASE_WEB_API_KEY,
-  agentEmail = DEFAULT_AGENT_EMAIL,
-  agentPassword = DEFAULT_AGENT_PASSWORD
+  firebaseWebApiKey = runtimeEnv.VITE_FIREBASE_API_KEY ||
+    runtimeEnv.FIREBASE_WEB_API_KEY ||
+    DEFAULT_FIREBASE_WEB_API_KEY,
+  agentEmail = runtimeEnv.CRMOS_FIREBASE_AGENT_EMAIL ||
+    runtimeEnv.CRMOS_SERVICE_EMAIL ||
+    DEFAULT_AGENT_EMAIL,
+  agentPassword = runtimeEnv.CRMOS_FIREBASE_AGENT_PASSWORD ||
+    runtimeEnv.CRMOS_SERVICE_PASSWORD ||
+    ''
 ): Promise<string | null> {
+  if (!agentPassword) return null;
   if (cachedIdToken && Date.now() < cachedTokenExpiry) {
     return cachedIdToken;
   }
@@ -509,6 +528,7 @@ export interface ApiCoreRequest {
   headers: Record<string, string | undefined>;
   bodyText?: string;
   projectId?: string;
+  env?: Record<string, string | undefined>;
 }
 
 export interface ApiCoreResponse {
@@ -656,6 +676,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
     const parsedUrl = new URL(req.url, 'https://crmos.one');
     const pathname = parsedUrl.pathname.replace(/\/+$/, '') || '/';
     const projectId = req.projectId || DEFAULT_PROJECT_ID;
+    runtimeEnv = req.env || {};
 
     // Normalize headers lowercase
     const normHeaders: Record<string, string> = {};
@@ -671,9 +692,21 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
       parsedUrl.searchParams.get('api_key') ||
       '';
     const apiKey = rawKeyHeader.replace(/^Bearer\s+/i, '').trim();
-    const keyMeta = (PREDEFINED_COMPANY_API_KEYS as any)[apiKey] || null;
+
+    // Authenticatie: geldige API key (gehasht, uit env-secret of crm_api_keys)
+    // of een geldig Firebase ID-token van een ingelogde CRMos app-gebruiker.
+    let keyMeta: ApiKeyMeta | null = await resolveApiKeyMeta(
+      apiKey,
+      projectId,
+      runtimeEnv,
+      firestoreFetch,
+      parseFirestoreFields
+    );
+    if (!keyMeta && apiKey) {
+      keyMeta = await verifyFirebaseIdToken(apiKey, runtimeEnv);
+    }
     const sourceCompanyLabel = keyMeta
-      ? keyMeta.company === 'ALL'
+      ? keyMeta.tag === 'ALL'
         ? 'CRMos Master Agent'
         : keyMeta.company
       : 'Externe Website / Agent';
@@ -724,22 +757,15 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
     }
 
     // =========================================================================
-    // 2. KEYS DIRECTORY (GET /api/v1/keys)
+    // AUTHENTICATIE VEREIST voor alle overige endpoints (401 zonder geldige key/token)
     // =========================================================================
-    if (pathname === '/api/v1/keys') {
-      return jsonResponse(200, {
-        success: true,
-        count: Object.keys(PREDEFINED_COMPANY_API_KEYS).length,
-        keys: Object.entries(PREDEFINED_COMPANY_API_KEYS).map(([token, info]: any) => ({
-          api_key: token,
-          name: info.name,
-          company: info.company,
-          tag: info.tag,
-          role: info.role,
-          description: info.description,
-        })),
-      });
+    if (!keyMeta) {
+      return errorResponse(
+        401,
+        'Unauthorized: een geldige API key (X-CRMOS-API-KEY) of Firebase Bearer token is vereist'
+      );
     }
+    const isFullScope = hasFullScope(keyMeta);
 
     // =========================================================================
     // 3. UNIVERSELE SPOTLIGHT SEARCH (GET /api/v1/search?q=...)
@@ -795,7 +821,17 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
         ...parseFirestoreFields(d.fields || {}),
       }));
 
-      const matchingContacts = allContacts.filter((c: any) => {
+      const scopeFilteredContacts = isFullScope
+        ? allContacts
+        : allContacts.filter((c: any) => recordInKeyScope(c, keyMeta));
+      const scopeFilteredDeals = isFullScope
+        ? allDeals
+        : allDeals.filter((d: any) => recordInKeyScope(d, keyMeta));
+      const scopeFilteredCandidates = isFullScope
+        ? allCandidates
+        : allCandidates.filter((c: any) => recordInKeyScope(c, keyMeta));
+
+      const matchingContacts = scopeFilteredContacts.filter((c: any) => {
         const fullName = `${c.first_name || ''} ${c.last_name || ''}`.toLowerCase();
         const email = (c.email || '').toLowerCase();
         const phone = (c.phone || '').toLowerCase();
@@ -818,13 +854,13 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
         );
       });
 
-      const matchingDeals = allDeals.filter((d: any) => {
+      const matchingDeals = scopeFilteredDeals.filter((d: any) => {
         const name = (d.name || d.title || '').toLowerCase();
         const comp = (d.company_name || d.company || '').toLowerCase();
         return name.includes(query) || comp.includes(query);
       });
 
-      const matchingCandidates = allCandidates.filter((c: any) => {
+      const matchingCandidates = scopeFilteredCandidates.filter((c: any) => {
         const fullName = `${c.first_name || c.firstName || ''} ${c.last_name || c.lastName || ''}`.toLowerCase();
         const email = (c.email || '').toLowerCase();
         const role = (c.role || c.role_applied || '').toLowerCase();
@@ -897,6 +933,9 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
         if (directRes.ok) {
           const docJson = (await directRes.json()) as { fields?: Record<string, any> };
           const flatData = normalizeContactRecord(cleanTag, parseFirestoreFields(docJson.fields || {}));
+          if (!isFullScope && !recordInKeyScope(flatData, keyMeta)) {
+            return errorResponse(403, 'Forbidden: dit record valt buiten de scope van deze API key');
+          }
           return jsonResponse(200, {
             success: true,
             vvc_tag: flatData.vvc_tag || cleanTag,
@@ -911,9 +950,11 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
       // 2. Scan crm_contacts op vvc_tag, code, email of id
       const rawContactDocs = await fetchAllCollectionDocs(projectId, 'crm_contacts', 4);
       if (rawContactDocs.length > 0) {
-        const allContacts = rawContactDocs.map((d: any) =>
-          normalizeContactRecord(d.name.split('/').pop(), parseFirestoreFields(d.fields || {}))
-        );
+        const allContacts = rawContactDocs
+          .map((d: any) =>
+            normalizeContactRecord(d.name.split('/').pop(), parseFirestoreFields(d.fields || {}))
+          )
+          .filter((c: any) => isFullScope || recordInKeyScope(c, keyMeta));
         const found = allContacts.find(
           (c: any) =>
             (c.vvc_tag || '').toLowerCase() === lowerTag ||
@@ -969,7 +1010,10 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
         normalizeContactRecord(d.name.split('/').pop(), parseFirestoreFields(d.fields || {}))
       );
 
-      const match: any = existingDocs.find((c: any) => {
+      const inScopeDocs = isFullScope
+        ? existingDocs
+        : existingDocs.filter((c: any) => recordInKeyScope(c, keyMeta));
+      const match: any = inScopeDocs.find((c: any) => {
         const existingEmail = String(c.email || '').trim().toLowerCase();
         const existingTag = String(c.vvc_tag || c.code || '').trim().toLowerCase();
         if (email && existingEmail && existingEmail === email) return true;
@@ -1198,6 +1242,9 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
               contactIdFromPath,
               parseFirestoreFields(docJson.fields || {})
             );
+            if (!isFullScope && !recordInKeyScope(flat, keyMeta)) {
+              return errorResponse(403, 'Forbidden: dit record valt buiten de scope van deze API key');
+            }
             return jsonResponse(200, { success: true, data: flat });
           }
           return errorResponse(404, `Contact "${contactIdFromPath}" niet gevonden`);
@@ -1268,6 +1315,10 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
 
         if (teamId) {
           filtered = filtered.filter((c: any) => c.team_id === teamId);
+        }
+
+        if (!isFullScope) {
+          filtered = filtered.filter((c: any) => recordInKeyScope(c, keyMeta));
         }
 
         const sliced = filtered.slice(0, pageSize);
@@ -1384,6 +1435,10 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
         );
         if (forbidden) return forbidden;
 
+        if (fbRes.ok && !isFullScope && !recordInKeyScope(existingData, keyMeta)) {
+          return errorResponse(403, 'Forbidden: dit record valt buiten de scope van deze API key');
+        }
+
         // Merge tags & notities bij PATCH i.p.v. blind overschrijven
         const existingTags = Array.isArray(existingData.tags) ? existingData.tags : [];
         const incomingTags = Array.isArray(updates.tags) ? updates.tags : [];
@@ -1439,11 +1494,14 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
         }));
 
         const compFilter = parsedUrl.searchParams.get('company');
-        const filtered = compFilter
+        let filtered = compFilter
           ? deals.filter((d: any) =>
               (d.company_name || d.company || '').toLowerCase().includes(compFilter.toLowerCase())
             )
           : deals;
+        if (!isFullScope) {
+          filtered = filtered.filter((d: any) => recordInKeyScope(d, keyMeta));
+        }
 
         return jsonResponse(200, { success: true, count: filtered.length, data: filtered });
       }
@@ -1466,8 +1524,9 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
           title: payload.title || payload.name,
           value: Number(payload.value) || 0,
           stage,
-          company_name:
-            enforcedCompany || payload.company_name || payload.company || sourceCompanyLabel,
+          company_name: isFullScope
+            ? payload.company_name || payload.company || sourceCompanyLabel
+            : keyMeta.company,
           contact_id: payload.contact_id || '',
           contact_email: (payload.contact_email || payload.email || '').trim().toLowerCase(),
           probability: Number(payload.probability) || (stage.includes('won') ? 100 : 25),
@@ -1550,6 +1609,10 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
         const forbidden = tenantForbiddenResponse(keyMeta, existing);
         if (forbidden) return forbidden;
 
+        if (fbRes.ok && !isFullScope && !recordInKeyScope(existing, keyMeta)) {
+          return errorResponse(403, 'Forbidden: dit record valt buiten de scope van deze API key');
+        }
+
         const merged: Record<string, any> = {
           ...existing,
           ...pickEditableFields(updates, DEAL_EDITABLE_FIELDS),
@@ -1597,6 +1660,9 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
 
         if (contactId) {
           activities = activities.filter((a: any) => a.contact_id === contactId);
+        }
+        if (!isFullScope) {
+          activities = activities.filter((a: any) => recordInKeyScope(a, keyMeta));
         }
 
         return jsonResponse(200, { success: true, count: activities.length, data: activities });
@@ -1657,10 +1723,13 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
         const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/crm_candidates?pageSize=100`;
         const fbRes = await firestoreFetch(firestoreUrl);
         const data = (fbRes.ok ? await fbRes.json() : { documents: [] }) as { documents?: any[] };
-        const candidates = (data.documents || []).map((d: any) => ({
+        let candidates = (data.documents || []).map((d: any) => ({
           id: d.name.split('/').pop(),
           ...parseFirestoreFields(d.fields || {}),
         }));
+        if (!isFullScope) {
+          candidates = candidates.filter((c: any) => recordInKeyScope(c, keyMeta));
+        }
 
         return jsonResponse(200, { success: true, count: candidates.length, data: candidates });
       }
@@ -1705,7 +1774,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
           experience_years: Number(candidate.experience_years) || 3,
           location: candidate.location || '100% Remote',
           source: noteSource,
-          company: enforcedCompany || candidate.company || sourceCompanyLabel,
+          company: isFullScope ? candidate.company || sourceCompanyLabel : keyMeta.company,
           vvc_tag: effectiveVvcTag,
           notes: formattedNotes,
           org_id: 'default_org',
@@ -1788,6 +1857,10 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
         const forbidden = tenantForbiddenResponse(keyMeta, existing);
         if (forbidden) return forbidden;
 
+        if (fbRes.ok && !isFullScope && !recordInKeyScope(existing, keyMeta)) {
+          return errorResponse(403, 'Forbidden: dit record valt buiten de scope van deze API key');
+        }
+
         const noteSource =
           updates.source || (keyMeta && keyMeta.company !== 'ALL' ? keyMeta.company : 'CRMos Teamleider');
         const mergedNotes = updates.notes
@@ -1838,8 +1911,11 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
 
       const subPath = pathname.replace('/api/v1/webhooks', '').replace(/^\//, '').trim();
 
-      // GET /api/v1/webhooks -> toon alle geregistreerde webhooks (incl. InvestBotIQ)
+      // GET /api/v1/webhooks -> toon alle geregistreerde webhooks (alleen interne gebruikers)
       if (method === 'GET') {
+        if (keyMeta.role !== 'super_admin' && keyMeta.role !== 'admin' && keyMeta.role !== 'user') {
+          return errorResponse(403, 'Forbidden: webhooks inzien vereist een admin of interne gebruiker');
+        }
         const hooks = await getActiveWebhooks(projectId);
         return jsonResponse(200, {
           success: true,
@@ -1857,6 +1933,9 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
 
       // POST /api/v1/webhooks/dispatch of /api/v1/webhooks/test -> Trigger direct een Outbound Webhook!
       if (method === 'POST' && (subPath === 'dispatch' || subPath === 'test')) {
+        if (keyMeta.role !== 'super_admin' && keyMeta.role !== 'admin' && keyMeta.role !== 'user') {
+          return errorResponse(403, 'Forbidden: webhooks dispatchen vereist een admin of interne gebruiker');
+        }
         const parsedBody = parseJsonBody(req.bodyText);
         if (!parsedBody.ok) return errorResponse(400, parsedBody.error);
         const body = parsedBody.data;
@@ -1889,6 +1968,9 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
 
       // POST /api/v1/webhooks -> Registreer een nieuwe webhook URL (bijv. vanuit InvestBotIQ)
       if (method === 'POST') {
+        if (keyMeta.role !== 'super_admin' && keyMeta.role !== 'admin' && keyMeta.role !== 'user') {
+          return errorResponse(403, 'Forbidden: webhooks registreren vereist een admin of interne gebruiker');
+        }
         const parsedBody = parseJsonBody(req.bodyText);
         if (!parsedBody.ok) return errorResponse(400, parsedBody.error);
         const body = parsedBody.data;
@@ -1903,7 +1985,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
         // zodat ingebouwde partner-webhooks niet overschreven kunnen worden.
         const newHook: WebhookSubscription = {
           id: generateWebhookId(),
-          company: body.company || sourceCompanyLabel,
+          company: isFullScope ? body.company || sourceCompanyLabel : keyMeta.company,
           url: String(body.url).trim(),
           events: Array.isArray(body.events) && body.events.length > 0
             ? body.events
@@ -1975,19 +2057,19 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
         count: 13,
         firestore_companies_count: firestoreCompanies.length,
         data: [
-          { id: 'vvc', name: 'vvc (verdienende vrienden club)', tag: 'VVC', api_key: 'crm_live_vvc_verdienende_vrienden_club_2026' },
-          { id: 'quantum-initium', name: 'quantum initium', tag: 'QUANTUM_INITIUM', api_key: 'crm_live_quantum_initium_enterprise_2026' },
-          { id: 'immigratiepunt', name: 'immigratiepunt', tag: 'IMMIGRATIEPUNT', api_key: 'crm_live_immigratiepunt_portal_2026' },
-          { id: 'spontiva', name: 'spontiva', tag: 'SPONTIVA', api_key: 'crm_live_spontiva_recruitment_2026' },
-          { id: 'investbotiq', name: 'Investbotiq', tag: 'INVESTBOTIQ', api_key: 'crm_live_investbotiq_capital_2026' },
-          { id: 'boostplug', name: 'boostplug', tag: 'BOOSTPLUG', api_key: 'crm_live_boostplug_energy_iot_2026' },
-          { id: 'crmos', name: 'crmos', tag: 'CRMOS', api_key: 'crm_live_crmos_core_platform_2026' },
-          { id: 'zheavenzy', name: 'zheavenzy', tag: 'ZHEAVENZY', api_key: 'crm_live_zheavenzy_atelier_2026' },
-          { id: 'logs-rent', name: 'logs.rent', tag: 'LOGS_RENT', api_key: 'crm_live_logs_rent_logistics_2026' },
-          { id: 'djobba-works', name: 'djobba.works', tag: 'DJOBBA_WORKS', api_key: 'crm_live_djobba_works_freelance_2026' },
-          { id: 'trusting-work', name: 'trusting work', tag: 'TRUSTING_WORK', api_key: 'crm_live_trusting_work_staffing_2026' },
-          { id: 'woningvry', name: 'woningvry', tag: 'WONINGVRY', api_key: 'crm_live_woningvry_realestate_2026' },
-          { id: 'xabi-world', name: 'xabi world', tag: 'XABI_WORLD', api_key: 'crm_live_xabi_world_international_2026' },
+          { id: 'vvc', name: 'vvc (verdienende vrienden club)', tag: 'VVC' },
+          { id: 'quantum-initium', name: 'quantum initium', tag: 'QUANTUM_INITIUM' },
+          { id: 'immigratiepunt', name: 'immigratiepunt', tag: 'IMMIGRATIEPUNT' },
+          { id: 'spontiva', name: 'spontiva', tag: 'SPONTIVA' },
+          { id: 'investbotiq', name: 'Investbotiq', tag: 'INVESTBOTIQ' },
+          { id: 'boostplug', name: 'boostplug', tag: 'BOOSTPLUG' },
+          { id: 'crmos', name: 'crmos', tag: 'CRMOS' },
+          { id: 'zheavenzy', name: 'zheavenzy', tag: 'ZHEAVENZY' },
+          { id: 'logs-rent', name: 'logs.rent', tag: 'LOGS_RENT' },
+          { id: 'djobba-works', name: 'djobba.works', tag: 'DJOBBA_WORKS' },
+          { id: 'trusting-work', name: 'trusting work', tag: 'TRUSTING_WORK' },
+          { id: 'woningvry', name: 'woningvry', tag: 'WONINGVRY' },
+          { id: 'xabi-world', name: 'xabi world', tag: 'XABI_WORLD' },
         ],
         firestore_companies: firestoreCompanies,
       });

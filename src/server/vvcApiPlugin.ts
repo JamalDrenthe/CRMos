@@ -1,9 +1,6 @@
 import type { Plugin } from 'vite';
 import type { IncomingMessage, ServerResponse } from 'http';
-import { PREDEFINED_COMPANY_API_KEYS } from '../data/apiKeysData';
 import { handleCrmosApiRequest } from './crmosApiCore';
-
-export { PREDEFINED_COMPANY_API_KEYS };
 
 function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -54,6 +51,7 @@ export function vvcApiPlugin(): Plugin {
           headers,
           bodyText,
           projectId: process.env.VITE_FIREBASE_PROJECT_ID || 'crmosone-dev',
+          env: process.env as Record<string, string | undefined>,
         });
 
         res.writeHead(coreRes.status, coreRes.headers);
