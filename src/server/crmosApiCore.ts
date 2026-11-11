@@ -45,7 +45,7 @@ export const DEFAULT_ECOSYSTEM_WEBHOOKS: WebhookSubscription[] = [
     company: 'Investbotiq',
     url: 'https://investbotiq.com/api/webhooks/crmos',
     events: ['candidate.placed', 'candidate.status_changed', 'deal.won', 'deal.stage_changed', 'contact.upserted'],
-    secret: 'whsec_investbotiq_crmos_2026',
+    secret: 'whsec_ibq_7f2c9e41a6b84d5f90c3e1d2a7b5f8c4',
     active: true,
     created_at: '2026-01-15T09:00:00.000Z',
   },
@@ -54,7 +54,7 @@ export const DEFAULT_ECOSYSTEM_WEBHOOKS: WebhookSubscription[] = [
     company: 'Investbotiq NL',
     url: 'https://investbotiq.nl/api/webhooks/crmos',
     events: ['candidate.placed', 'candidate.status_changed', 'deal.won', 'deal.stage_changed', 'contact.upserted'],
-    secret: 'whsec_investbotiq_crmos_2026',
+    secret: 'whsec_ibqnl_3d8a1f5c2e9b47a6d0f4c8e2b1a9d6f3',
     active: true,
     created_at: '2026-01-15T09:00:00.000Z',
   },
@@ -63,7 +63,7 @@ export const DEFAULT_ECOSYSTEM_WEBHOOKS: WebhookSubscription[] = [
     company: 'vvc (verdienende vrienden club)',
     url: 'https://vvc.works/api/webhooks/crmos',
     events: ['candidate.placed', 'deal.won', 'contact.upserted'],
-    secret: 'whsec_vvc_crmos_2026',
+    secret: 'whsec_vvc_9b4e2d7a1c6f38e5a0d2b9c4f7e1a8d5',
     active: true,
     created_at: '2026-01-15T09:00:00.000Z',
   },
@@ -72,11 +72,87 @@ export const DEFAULT_ECOSYSTEM_WEBHOOKS: WebhookSubscription[] = [
     company: 'spontiva',
     url: 'https://spontiva.nl/api/webhooks/crmos',
     events: ['candidate.placed', 'deal.won'],
-    secret: 'whsec_spontiva_crmos_2026',
+    secret: 'whsec_spt_5a1c8e3b9d4f27a6c0e8b2d5f9a4c7e1',
     active: true,
     created_at: '2026-01-15T09:00:00.000Z',
   },
 ];
+
+const BUILTIN_WEBHOOK_IDS = new Set(DEFAULT_ECOSYSTEM_WEBHOOKS.map((w) => w.id));
+
+// Alleen deze hostnames mogen als webhook-target geregistreerd worden (SSRF-bescherming).
+const ALLOWED_WEBHOOK_HOSTS = new Set([
+  ...DEFAULT_ECOSYSTEM_WEBHOOKS.map((w) => new URL(w.url).hostname),
+  'crmos.one',
+  'quantuminitium.com',
+  'immigratiepunt.nl',
+  'boostplug.nl',
+  'zheavenzy.com',
+  'logs.rent',
+  'djobba.works',
+  'trustingwork.nl',
+  'woningvry.nl',
+  'xabiworld.com',
+]);
+
+/**
+ * Valideert een webhook-doel-URL: verplicht https, geen IP-literals of
+ * interne/prive hostnames, en de host moet op de partner-allowlist staan.
+ */
+export function isAllowedWebhookUrl(rawUrl: string): { ok: boolean; reason?: string } {
+  let parsed: URL;
+  try {
+    parsed = new URL(String(rawUrl).trim());
+  } catch {
+    return { ok: false, reason: 'ongeldige URL' };
+  }
+  if (parsed.protocol !== 'https:') {
+    return { ok: false, reason: 'alleen https:// webhook URLs zijn toegestaan' };
+  }
+  const host = parsed.hostname.toLowerCase();
+  if (
+    host === 'localhost' ||
+    host.endsWith('.local') ||
+    host.endsWith('.localhost') ||
+    host.endsWith('.internal') ||
+    /^[\d.]+$/.test(host) ||
+    host.includes(':')
+  ) {
+    return { ok: false, reason: 'interne hostnames en IP-adressen zijn niet toegestaan' };
+  }
+  if (!ALLOWED_WEBHOOK_HOSTS.has(host)) {
+    return { ok: false, reason: `host ${host} staat niet op de webhook-allowlist` };
+  }
+  return { ok: true };
+}
+
+/** Webhook-velden die veilig naar clients teruggegeven mogen worden (nooit `secret`). */
+function publicWebhookView(wh: WebhookSubscription): Record<string, any> {
+  return {
+    id: wh.id,
+    company: wh.company,
+    url: wh.url,
+    events: wh.events,
+    active: wh.active,
+    created_at: wh.created_at,
+  };
+}
+
+function generateWebhookId(): string {
+  const rand =
+    typeof crypto !== 'undefined' && typeof (crypto as any).randomUUID === 'function'
+      ? (crypto as any).randomUUID().replace(/-/g, '').slice(0, 12)
+      : Math.random().toString(36).slice(2, 14);
+  return `wh_${Date.now().toString(36)}_${rand}`;
+}
+
+function generateWebhookSecret(): string {
+  const rand =
+    typeof crypto !== 'undefined' && typeof (crypto as any).randomUUID === 'function'
+      ? (crypto as any).randomUUID().replace(/-/g, '')
+      : Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+  return `whsec_${rand}`;
+}
 
 let cachedIdToken: string | null = null;
 let cachedTokenExpiry = 0;
@@ -314,7 +390,8 @@ async function getActiveWebhooks(projectId: string): Promise<WebhookSubscription
       if (typeof flat.webhooks_json === 'string') {
         const customList = JSON.parse(flat.webhooks_json) as WebhookSubscription[];
         for (const item of customList) {
-          if (item && item.url) {
+          // Opgeslagen entries mogen ingebouwde partner-webhooks nooit overschrijven.
+          if (item && item.url && !BUILTIN_WEBHOOK_IDS.has(item.id)) {
             map.set(item.id || item.url, item);
           }
         }
@@ -377,7 +454,7 @@ export async function dispatchOutboundWebhooks(
           headers: {
             'Content-Type': 'application/json',
             'X-CRMOS-Event': event,
-            'X-CRMOS-Webhook-Secret': wh.secret || 'whsec_crmos_2026',
+            'X-CRMOS-Webhook-Secret': wh.secret || generateWebhookSecret(),
             'User-Agent': 'CRMos-Webhook-Dispatcher/2.2',
           },
           body: bodyStr,
@@ -1639,6 +1716,11 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
     // 10. OUTBOUND WEBHOOKS BEHEER & DISPATCH (/api/v1/webhooks)
     // =========================================================================
     if (pathname === '/api/v1/webhooks' || pathname.startsWith('/api/v1/webhooks/')) {
+      // Webhook-beheer is admin-only: secrets en event-hijack risico.
+      if (!keyMeta || (keyMeta.role !== 'admin' && keyMeta.role !== 'super_admin')) {
+        return errorResponse(401, 'Niet geautoriseerd: admin API key vereist voor /api/v1/webhooks');
+      }
+
       const subPath = pathname.replace('/api/v1/webhooks', '').replace(/^\//, '').trim();
 
       // GET /api/v1/webhooks -> toon alle geregistreerde webhooks (incl. InvestBotIQ)
@@ -1654,7 +1736,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
             'deal.stage_changed',
             'contact.upserted',
           ],
-          data: hooks,
+          data: hooks.map(publicWebhookView),
         });
       }
 
@@ -1696,28 +1778,30 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
         if (!parsedBody.ok) return errorResponse(400, parsedBody.error);
         const body = parsedBody.data;
 
-        if (!body.url || !String(body.url).startsWith('http')) {
-          return errorResponse(
-            400,
-            'Validatiefout: geef een geldige webhook URL op (bijv. https://investbotiq.com/api/webhooks/crmos)'
-          );
+        const urlCheck = isAllowedWebhookUrl(body.url || '');
+        if (!urlCheck.ok) {
+          return errorResponse(400, `Validatiefout: ${urlCheck.reason}`);
         }
 
         const currentHooks = await getActiveWebhooks(projectId);
+        // ID en secret worden server-side gegenereerd; client-input wordt genegeerd
+        // zodat ingebouwde partner-webhooks niet overschreven kunnen worden.
         const newHook: WebhookSubscription = {
-          id: body.id || `wh_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+          id: generateWebhookId(),
           company: body.company || sourceCompanyLabel,
           url: String(body.url).trim(),
           events: Array.isArray(body.events) && body.events.length > 0
             ? body.events
             : ['candidate.placed', 'deal.won', 'contact.upserted'],
-          secret: body.secret || 'whsec_crmos_2026',
+          secret: generateWebhookSecret(),
           active: true,
           created_at: new Date().toISOString(),
         };
 
         const updatedHooks = [
-          ...currentHooks.filter((h) => h.url !== newHook.url),
+          ...currentHooks.filter(
+            (h) => !BUILTIN_WEBHOOK_IDS.has(h.id) && h.url !== newHook.url
+          ),
           newHook,
         ];
 
@@ -1731,7 +1815,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
         return jsonResponse(201, {
           success: true,
           message: `Webhook endpoint ${newHook.url} succesvol geregistreerd voor events: ${newHook.events.join(', ')}`,
-          data: newHook,
+          data: publicWebhookView(newHook),
         });
       }
     }
