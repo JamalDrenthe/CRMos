@@ -276,7 +276,7 @@ export async function syncFirebaseUserWithFirestore(
 
   const userRole: User['role'] = isSuperAdmin
     ? 'admin'
-    : requestedRole || ((existingUserData.role as User['role']) || 'admin');
+    : requestedRole || ((existingUserData.role as User['role']) || 'agent');
   const userVvcTag =
     (existingUserData.vvc_tag as string) ||
     `vvc-usr-${fbUser.uid.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10)}`;

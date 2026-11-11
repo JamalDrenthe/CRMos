@@ -1,141 +1,251 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
+
     // Helper function om te controleren of de gebruiker ingelogd is
     function isAuthenticated() {
       return request.auth != null;
     }
 
+    // Admin: primair via custom claim `admin` (gezet via Admin SDK).
+    // Fallback op de vaste admin-e-mails, maar alleen met een geverifieerd
+    // e-mailadres zodat een ongeverifieerde self-registratie geen admin wordt.
     function isAdmin() {
       return isAuthenticated() && (
-        request.auth.token.email == 'info@jamaldrenthe.com' ||
-        request.auth.token.email == 'info@crmos.one' ||
-        request.auth.token.get('admin', false) == true
+        request.auth.token.get('admin', false) == true ||
+        (
+          request.auth.token.get('email_verified', false) == true &&
+          (
+            request.auth.token.email == 'info@jamaldrenthe.com' ||
+            request.auth.token.email == 'info@crmos.one'
+          )
+        )
       );
+    }
+
+    // Service-account van de REST API (api-agent@crmos.one): mag cross-tenant
+    // lezen/schrijven namens partner-API-keys. Primair via custom claim
+    // `service`; fallback op het geverifieerde agent-e-mailadres.
+    // NB: het agent-account MOET email_verified zijn (of claim `service: true`
+    // hebben) via de Admin SDK, anders faalt de API.
+    function isServiceAccount() {
+      return isAuthenticated() && (
+        request.auth.token.get('service', false) == true ||
+        (
+          request.auth.token.get('email_verified', false) == true &&
+          request.auth.token.email == 'api-agent@crmos.one'
+        )
+      );
+    }
+
+    function isPrivileged() {
+      return isAdmin() || isServiceAccount();
+    }
+
+    // org_id van de ingelogde gebruiker uit zijn/haar users-document
+    function userOrg() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.org_id;
+    }
+
+    // Lezen van een tenant-document: alleen eigen org, of admin/service
+    function canReadTenant() {
+      return isPrivileged() ||
+        (isAuthenticated() && resource.data.org_id == userOrg());
+    }
+
+    // Nieuw tenant-document: org_id moet de eigen org zijn
+    function canCreateTenant() {
+      return isPrivileged() ||
+        (isAuthenticated() && request.resource.data.org_id == userOrg());
+    }
+
+    // Bestaand tenant-document wijzigen/verwijderen: doc zit in eigen org
+    // en org_id mag niet veranderen
+    function canUpdateTenant() {
+      return isPrivileged() ||
+        (isAuthenticated() &&
+         resource.data.org_id == userOrg() &&
+         request.resource.data.org_id == resource.data.org_id);
     }
 
     // Gebruikersprofielen
     match /users/{userId} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin() || (isAuthenticated() && request.auth.uid == userId);
+      allow get: if isPrivileged() || (isAuthenticated() && request.auth.uid == userId);
+      // Profielen van andere users in dezelfde org zijn leesbaar (team-overzichten)
+      allow list: if isPrivileged() ||
+        (isAuthenticated() && resource.data.org_id == userOrg());
+      // Aanmaken van je eigen profiel bij registratie: geen privilege-velden
+      allow create: if isPrivileged() ||
+        (isAuthenticated() && request.auth.uid == userId &&
+         request.resource.data.get('is_super_admin', false) == false &&
+         !(request.resource.data.get('role', 'member') in ['admin', 'super_admin']));
+      // Bijwerken van je eigen profiel: privilege-velden (role, is_super_admin,
+      // org_id, company_name) mogen niet wijzigen; admin mag alles.
+      allow update: if isPrivileged() ||
+        (isAuthenticated() && request.auth.uid == userId &&
+         !request.resource.data.diff(resource.data).affectedKeys()
+            .hasAny(['role', 'is_super_admin', 'org_id', 'company_name']));
+      allow delete: if isAdmin();
     }
 
     // Organisaties en integraties / subcollecties
     match /organizations/{orgId} {
-      allow read, write: if isAuthenticated();
+      allow read: if isPrivileged() || (isAuthenticated() && orgId == userOrg());
+      // Organisatie aanmaken mag bij registratie (eigen orgId), integraties
+      // en overige wijzigingen alleen binnen eigen org of door admin/service.
+      allow create: if isPrivileged() || isAuthenticated();
+      allow update, delete: if isPrivileged() || (isAuthenticated() && orgId == userOrg());
 
       match /integrations/{integrationId} {
-        allow read, write: if isAuthenticated();
+        // Integratie-instellingen kunnen credentials bevatten: admin/service only
+        allow read, write: if isPrivileged();
       }
 
       match /{allSubcollections=**} {
-        allow read, write: if isAuthenticated();
+        allow read, write: if isPrivileged() || (isAuthenticated() && orgId == userOrg());
       }
     }
 
     // Contacten (Bi-directioneel: Web App, AI Agents & Ecosysteem)
     match /crm_contacts/{contactId} {
-      allow read: if true;
-      allow write: if isAuthenticated() || 
-                      (request.resource.data.keys().hasAll(['email']) && 
-                       (request.resource.data.vvc_tag != null || request.resource.data.company_tags != null || request.resource.data.source != null));
+      allow read: if canReadTenant();
+      allow update, delete: if canUpdateTenant();
+      // Publieke intake (upsert met email + tag/source) blijft mogelijk,
+      // maar het document moet een org_id krijgen
+      allow create: if canCreateTenant() ||
+        (request.resource.data.org_id is string &&
+         request.resource.data.keys().hasAll(['email', 'org_id']) &&
+         (request.resource.data.vvc_tag != null || request.resource.data.company_tags != null || request.resource.data.source != null));
     }
 
     // Bedrijven
     match /crm_companies/{companyId} {
-      allow read: if true;
-      allow write: if isAuthenticated() || request.resource.data.keys().hasAll(['name']);
+      allow read: if canReadTenant();
+      allow update, delete: if canUpdateTenant();
+      allow create: if canCreateTenant() ||
+        (request.resource.data.org_id is string &&
+         request.resource.data.keys().hasAll(['name', 'org_id']));
     }
 
     // Deals / Verkoopkansen
     match /crm_deals/{dealId} {
-      allow read: if true;
-      allow write: if isAuthenticated() || request.resource.data.keys().hasAll(['name', 'value']);
+      allow read: if canReadTenant();
+      allow update, delete: if canUpdateTenant();
+      allow create: if canCreateTenant() ||
+        (request.resource.data.org_id is string &&
+         request.resource.data.keys().hasAll(['name', 'value', 'org_id']));
     }
 
     // Activiteiten & taken (Interacties, notities & belstatussen van AI agents)
     match /crm_activities/{activityId} {
-      allow read: if true;
-      allow write: if isAuthenticated() || request.resource.data.keys().hasAll(['title', 'contact_id']);
+      allow read: if canReadTenant();
+      allow update, delete: if canUpdateTenant();
+      allow create: if canCreateTenant() ||
+        (request.resource.data.org_id is string &&
+         request.resource.data.keys().hasAll(['title', 'contact_id', 'org_id']));
     }
 
     // Recruitment: Kandidaten
     match /crm_candidates/{candidateId} {
-      allow read, write: if isAuthenticated();
+      allow read: if canReadTenant();
+      allow create: if canCreateTenant();
+      allow update, delete: if canUpdateTenant();
     }
 
     // Recruitment: Vacatures
     match /crm_jobs/{jobId} {
-      allow read, write: if isAuthenticated();
+      allow read: if canReadTenant();
+      allow create: if canCreateTenant();
+      allow update, delete: if canUpdateTenant();
     }
 
     // Contact Center: Belcampagnes
     match /crm_campaigns/{campaignId} {
-      allow read, write: if isAuthenticated();
+      allow read: if canReadTenant();
+      allow create: if canCreateTenant();
+      allow update, delete: if canUpdateTenant();
     }
 
     // Contact Center: Oproepen
     match /crm_calls/{callId} {
-      allow read, write: if isAuthenticated();
+      allow read: if canReadTenant();
+      allow create: if canCreateTenant();
+      allow update, delete: if canUpdateTenant();
     }
 
     // Sales: Offertes
     match /crm_quotes/{quoteId} {
-      allow read, write: if isAuthenticated();
+      allow read: if canReadTenant();
+      allow create: if canCreateTenant();
+      allow update, delete: if canUpdateTenant();
     }
 
     // Sales: Productencatalogus
     match /crm_products/{productId} {
-      allow read, write: if isAuthenticated();
+      allow read: if canReadTenant();
+      allow create: if canCreateTenant();
+      allow update, delete: if canUpdateTenant();
     }
 
     // Field Sales: Rayons & Gebieden
     match /crm_territories/{territoryId} {
-      allow read, write: if isAuthenticated();
+      allow read: if canReadTenant();
+      allow create: if canCreateTenant();
+      allow update, delete: if canUpdateTenant();
     }
 
     // Field Sales: Door-to-Door Pins
     match /crm_d2d_pins/{pinId} {
-      allow read, write: if isAuthenticated();
+      allow read: if canReadTenant();
+      allow create: if canCreateTenant();
+      allow update, delete: if canUpdateTenant();
     }
 
     // Teams & Referral Netwerk
     match /crm_teams/{teamId} {
-      allow read: if true;
-      allow write: if isAuthenticated();
+      allow read: if canReadTenant();
+      allow create: if canCreateTenant();
+      allow update, delete: if canUpdateTenant();
     }
 
     // Workflows & Automatisering
     match /crm_workflows/{workflowId} {
-      allow read, write: if isAuthenticated();
+      allow read: if canReadTenant();
+      allow create: if canCreateTenant();
+      allow update, delete: if canUpdateTenant();
     }
 
-    // Audit Logs & Activity Trail
+    // Audit Logs & Activity Trail: alleen admins/services mogen ze lezen;
+    // aanmaken mag door dezelfde org (append-only: geen update/delete)
     match /crm_audit_logs/{logId} {
-      allow read, write: if isAuthenticated();
+      allow read: if isPrivileged();
+      allow create: if isPrivileged() ||
+        (isAuthenticated() && request.resource.data.org_id == userOrg());
+      allow update, delete: if false;
     }
 
     // Gamification Profielen
     match /crm_gamification/{profileId} {
-      allow read, write: if isAuthenticated();
+      allow read: if canReadTenant();
+      allow create: if canCreateTenant();
+      allow update, delete: if canUpdateTenant();
     }
 
-    // CRMos REST API Keys
+    // CRMos REST API Keys: bevatten credentials, alleen admin/service
     match /crm_api_keys/{keyId} {
-      allow read, write: if isAuthenticated();
+      allow read, write: if isPrivileged();
     }
 
     // No Cure No Pay Sollicitaties (Publiek aanmelden, intern beheren)
     match /recruitment_candidates/{candidateId} {
-      allow read: if isAuthenticated();
+      allow read: if canReadTenant();
       allow create: if true;
-      allow update, delete: if isAuthenticated();
+      allow update, delete: if canUpdateTenant();
     }
 
-    // Integraties (HubSpot / Standalone)
+    // Integraties (HubSpot / Standalone): credentials, alleen admin/service
     match /crm_integrations/{integrationId} {
-      allow read, write: if isAuthenticated();
+      allow read, write: if isPrivileged();
     }
 
     // VVC Ecosysteem Koppeling: Veilige sync-codes
@@ -143,14 +253,17 @@ service cloud.firestore {
       // Iedereen met de unieke code mag dát specifieke document ophalen via de API
       allow get: if true;
       allow list: if false; // Voorkomt dat iemand de hele lijst kan opvragen
-      allow write: if isAuthenticated();
+      allow update, delete: if isPrivileged() ||
+        (isAuthenticated() &&
+         (!resource.data.keys().hasAny(['org_id']) ||
+          (resource.data.org_id == userOrg() && request.resource.data.org_id == resource.data.org_id)));
       allow create: if request.resource.data.keys().hasAll(['vvc_tag', 'email']);
     }
 
     // VVC API Registry: Unieke vvc_tag registraties voor VVC API & onboarding
     match /crm_vvc_registry/{vvcTag} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow write: if isPrivileged();
       allow create: if request.resource.data.keys().hasAll(['vvc_tag', 'email']) &&
                        vvcTag.matches('^vvc-.*');
     }
