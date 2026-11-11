@@ -57,7 +57,7 @@ export const DEFAULT_ECOSYSTEM_WEBHOOKS: WebhookSubscription[] = [
     company: 'Investbotiq',
     url: 'https://investbotiq.com/api/webhooks/crmos',
     events: ['candidate.placed', 'candidate.status_changed', 'deal.won', 'deal.stage_changed', 'contact.upserted'],
-    secret: 'whsec_investbotiq_crmos_2026',
+    secret: 'whsec_ibq_7f2c9e41a6b84d5f90c3e1d2a7b5f8c4',
     active: true,
     created_at: '2026-01-15T09:00:00.000Z',
   },
@@ -66,7 +66,7 @@ export const DEFAULT_ECOSYSTEM_WEBHOOKS: WebhookSubscription[] = [
     company: 'Investbotiq NL',
     url: 'https://investbotiq.nl/api/webhooks/crmos',
     events: ['candidate.placed', 'candidate.status_changed', 'deal.won', 'deal.stage_changed', 'contact.upserted'],
-    secret: 'whsec_investbotiq_crmos_2026',
+    secret: 'whsec_ibqnl_3d8a1f5c2e9b47a6d0f4c8e2b1a9d6f3',
     active: true,
     created_at: '2026-01-15T09:00:00.000Z',
   },
@@ -75,7 +75,7 @@ export const DEFAULT_ECOSYSTEM_WEBHOOKS: WebhookSubscription[] = [
     company: 'vvc (verdienende vrienden club)',
     url: 'https://vvc.works/api/webhooks/crmos',
     events: ['candidate.placed', 'deal.won', 'contact.upserted'],
-    secret: 'whsec_vvc_crmos_2026',
+    secret: 'whsec_vvc_9b4e2d7a1c6f38e5a0d2b9c4f7e1a8d5',
     active: true,
     created_at: '2026-01-15T09:00:00.000Z',
   },
@@ -84,11 +84,87 @@ export const DEFAULT_ECOSYSTEM_WEBHOOKS: WebhookSubscription[] = [
     company: 'spontiva',
     url: 'https://spontiva.nl/api/webhooks/crmos',
     events: ['candidate.placed', 'deal.won'],
-    secret: 'whsec_spontiva_crmos_2026',
+    secret: 'whsec_spt_5a1c8e3b9d4f27a6c0e8b2d5f9a4c7e1',
     active: true,
     created_at: '2026-01-15T09:00:00.000Z',
   },
 ];
+
+const BUILTIN_WEBHOOK_IDS = new Set(DEFAULT_ECOSYSTEM_WEBHOOKS.map((w) => w.id));
+
+// Alleen deze hostnames mogen als webhook-target geregistreerd worden (SSRF-bescherming).
+const ALLOWED_WEBHOOK_HOSTS = new Set([
+  ...DEFAULT_ECOSYSTEM_WEBHOOKS.map((w) => new URL(w.url).hostname),
+  'crmos.one',
+  'quantuminitium.com',
+  'immigratiepunt.nl',
+  'boostplug.nl',
+  'zheavenzy.com',
+  'logs.rent',
+  'djobba.works',
+  'trustingwork.nl',
+  'woningvry.nl',
+  'xabiworld.com',
+]);
+
+/**
+ * Valideert een webhook-doel-URL: verplicht https, geen IP-literals of
+ * interne/prive hostnames, en de host moet op de partner-allowlist staan.
+ */
+export function isAllowedWebhookUrl(rawUrl: string): { ok: boolean; reason?: string } {
+  let parsed: URL;
+  try {
+    parsed = new URL(String(rawUrl).trim());
+  } catch {
+    return { ok: false, reason: 'ongeldige URL' };
+  }
+  if (parsed.protocol !== 'https:') {
+    return { ok: false, reason: 'alleen https:// webhook URLs zijn toegestaan' };
+  }
+  const host = parsed.hostname.toLowerCase();
+  if (
+    host === 'localhost' ||
+    host.endsWith('.local') ||
+    host.endsWith('.localhost') ||
+    host.endsWith('.internal') ||
+    /^[\d.]+$/.test(host) ||
+    host.includes(':')
+  ) {
+    return { ok: false, reason: 'interne hostnames en IP-adressen zijn niet toegestaan' };
+  }
+  if (!ALLOWED_WEBHOOK_HOSTS.has(host)) {
+    return { ok: false, reason: `host ${host} staat niet op de webhook-allowlist` };
+  }
+  return { ok: true };
+}
+
+/** Webhook-velden die veilig naar clients teruggegeven mogen worden (nooit `secret`). */
+function publicWebhookView(wh: WebhookSubscription): Record<string, any> {
+  return {
+    id: wh.id,
+    company: wh.company,
+    url: wh.url,
+    events: wh.events,
+    active: wh.active,
+    created_at: wh.created_at,
+  };
+}
+
+function generateWebhookId(): string {
+  const rand =
+    typeof crypto !== 'undefined' && typeof (crypto as any).randomUUID === 'function'
+      ? (crypto as any).randomUUID().replace(/-/g, '').slice(0, 12)
+      : Math.random().toString(36).slice(2, 14);
+  return `wh_${Date.now().toString(36)}_${rand}`;
+}
+
+function generateWebhookSecret(): string {
+  const rand =
+    typeof crypto !== 'undefined' && typeof (crypto as any).randomUUID === 'function'
+      ? (crypto as any).randomUUID().replace(/-/g, '')
+      : Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+  return `whsec_${rand}`;
+}
 
 let cachedIdToken: string | null = null;
 let cachedTokenExpiry = 0;
@@ -333,7 +409,8 @@ async function getActiveWebhooks(projectId: string): Promise<WebhookSubscription
       if (typeof flat.webhooks_json === 'string') {
         const customList = JSON.parse(flat.webhooks_json) as WebhookSubscription[];
         for (const item of customList) {
-          if (item && item.url) {
+          // Opgeslagen entries mogen ingebouwde partner-webhooks nooit overschrijven.
+          if (item && item.url && !BUILTIN_WEBHOOK_IDS.has(item.id)) {
             map.set(item.id || item.url, item);
           }
         }
@@ -396,7 +473,7 @@ export async function dispatchOutboundWebhooks(
           headers: {
             'Content-Type': 'application/json',
             'X-CRMOS-Event': event,
-            'X-CRMOS-Webhook-Secret': wh.secret || 'whsec_crmos_2026',
+            'X-CRMOS-Webhook-Secret': wh.secret || generateWebhookSecret(),
             'User-Agent': 'CRMos-Webhook-Dispatcher/2.2',
           },
           body: bodyStr,
@@ -495,6 +572,89 @@ function parseJsonBody(rawBody?: string): { ok: true; data: Record<string, any> 
   }
 }
 
+// =========================================================================
+// WRITE-BEVEILIGING (mass assignment & cross-tenant IDOR)
+// - Alleen velden op de allowlist worden uit de request body overgenomen.
+// - id, org_id, company/company_name en created_at zijn nooit via de API
+//   instelbaar; create-endpoints negeren een meegegeven id en org_id.
+// - Bij updates wordt gecontroleerd dat het record bij het bedrijf van de
+//   API key hoort (master/admin keys mogen alles).
+// =========================================================================
+
+const CONTACT_EDITABLE_FIELDS = [
+  'first_name', 'firstName', 'last_name', 'lastName', 'email', 'phone', 'title',
+  'status', 'source', 'role', 'role_applied', 'vvc_tag', 'code', 'tags',
+  'company_tags', 'notes', 'note', 'message', 'team_id', 'team_name',
+  'team_status', 'referred_by_name', 'location', 'deal_model',
+  'experience_years', 'skills', 'linkedin', 'website', 'avatar_url',
+  'last_contacted_at', 'address', 'city', 'postal_code', 'country',
+];
+
+const DEAL_EDITABLE_FIELDS = [
+  'name', 'title', 'value', 'currency', 'stage', 'status', 'probability',
+  'expected_close_date', 'close_date', 'contact_id', 'contact_email', 'email',
+  'notes', 'note', 'description', 'assigned_to', 'owner', 'products',
+  'quantity', 'source',
+];
+
+const CANDIDATE_EDITABLE_FIELDS = [
+  'first_name', 'firstName', 'last_name', 'lastName', 'email', 'phone',
+  'status', 'role', 'role_applied', 'job_title', 'deal_model', 'skills',
+  'experience_years', 'location', 'source', 'notes', 'note', 'vvc_tag',
+  'code', 'tags', 'linkedin', 'cv_url', 'availability', 'salary_expectation',
+];
+
+function pickEditableFields(
+  body: Record<string, any>,
+  allowed: string[]
+): Record<string, any> {
+  const picked: Record<string, any> = {};
+  for (const field of allowed) {
+    if (body[field] !== undefined) picked[field] = body[field];
+  }
+  return picked;
+}
+
+function recordCompanyOf(record: Record<string, any>): string {
+  return String(record?.company_name || record?.company || '').trim();
+}
+
+/**
+ * Controleert of de API key records van dit bedrijf mag wijzigen.
+ * Zonder geldige key of met een master/admin key geldt geen tenant-beperking
+ * (verplichte API-authenticatie wordt door een aparte fix afgedwongen).
+ */
+function keyCanWriteRecord(keyMeta: any, record: Record<string, any>): boolean {
+  if (!keyMeta) return true;
+  if (keyMeta.tag === 'ALL' || keyMeta.role === 'super_admin' || keyMeta.role === 'admin') {
+    return true;
+  }
+  const recordCompany = recordCompanyOf(record).toLowerCase();
+  if (!recordCompany) return true;
+  const keyCompany = String(keyMeta.company || '').toLowerCase();
+  const keyTag = String(keyMeta.tag || '').toLowerCase();
+  return (
+    recordCompany === keyCompany ||
+    recordCompany === keyTag ||
+    recordCompany.includes(keyTag) ||
+    recordCompany.includes(keyCompany) ||
+    keyCompany.includes(recordCompany)
+  );
+}
+
+function tenantForbiddenResponse(
+  keyMeta: any,
+  record: Record<string, any>
+): ApiCoreResponse | null {
+  if (!keyCanWriteRecord(keyMeta, record)) {
+    return errorResponse(
+      403,
+      `Geen toegang: deze API key mag geen records van "${recordCompanyOf(record)}" wijzigen`
+    );
+  }
+  return null;
+}
+
 /**
  * Universele Request Handler voor alle `/api/v1/*` en `/api/vvc/*` routes
  */
@@ -550,6 +710,11 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
         ? 'CRMos Master Agent'
         : keyMeta.company
       : 'Externe Website / Agent';
+
+    // Bedrijf dat de API key afdwingt op nieuwe records (partner-keys kunnen
+    // geen records voor een ander bedrijf aanmaken). Master/admin is vrij.
+    const enforcedCompany =
+      keyMeta && keyMeta.tag !== 'ALL' ? keyMeta.company : null;
 
     // =========================================================================
     // 1. DEDICATED HEALTH ENDPOINT (GET /api/v1/health)
@@ -919,6 +1084,10 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
         : existingNotesHistory;
 
       if (match) {
+        // Tenant-check: een partner-key mag alleen records van het eigen bedrijf wijzigen
+        const forbidden = tenantForbiddenResponse(keyMeta, match);
+        if (forbidden) return forbidden;
+
         // UPDATE BESTAAND CONTACT (behoud bestaande velden indien niet meegegeven, merge tags & notes!)
         const firstName = payload.first_name || payload.firstName || match.first_name || '';
         const lastName = payload.last_name || payload.lastName || match.last_name || '';
@@ -927,7 +1096,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
 
         const updatedContact = {
           ...match,
-          ...payload,
+          ...pickEditableFields(payload, CONTACT_EDITABLE_FIELDS),
           id: match.id,
           email: email || match.email,
           first_name: firstName,
@@ -935,7 +1104,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
           firstName,
           lastName,
           phone: payload.phone || match.phone || '',
-          company: payload.company || match.company || sourceCompanyLabel,
+          company: match.company || enforcedCompany || sourceCompanyLabel,
           title: payload.title || payload.role_applied || match.title || 'Contact',
           vvc_tag: effectiveTag,
           code: effectiveTag,
@@ -983,9 +1152,8 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
           data: updatedContact,
         });
       } else {
-        // CREATE NIEUW CONTACT
-        const newId =
-          payload.id || `contact_agt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+        // CREATE NIEUW CONTACT (id wordt server-side gegenereerd, nooit uit de body)
+        const newId = `contact_agt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
         const effectiveVvcTag =
           vvcTag || `VVC-AGT-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
         const firstName = payload.first_name || payload.firstName || 'Nieuw';
@@ -1001,7 +1169,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
           email,
           phone: payload.phone || '',
           company:
-            payload.company || (keyMeta?.company && keyMeta.company !== 'ALL' ? keyMeta.company : 'Onbekend'),
+            enforcedCompany || payload.company || 'Onbekend',
           title: payload.title || payload.role_applied || 'Contact',
           status: payload.status || 'lead',
           source: payload.source || noteSource,
@@ -1015,7 +1183,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
           tags: finalTags,
           notes: mergedNotes,
           notes_history: mergedNotesHistory,
-          org_id: payload.org_id || 'default_org',
+          org_id: 'default_org',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
@@ -1181,8 +1349,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
           });
         }
 
-        const newId =
-          payload.id || `contact_agt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+        const newId = `contact_agt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
         const effectiveVvcTag =
           payload.vvc_tag ||
           payload.code ||
@@ -1208,7 +1375,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
           lastName,
           email: String(payload.email || '').trim().toLowerCase(),
           phone: payload.phone || '',
-          company: payload.company || sourceCompanyLabel,
+          company: enforcedCompany || payload.company || sourceCompanyLabel,
           title: payload.title || 'Contact',
           status: payload.status || 'lead',
           source: noteSource,
@@ -1221,7 +1388,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
           company_tags,
           tags,
           notes: formattedNotes,
-          org_id: payload.org_id || 'default_org',
+          org_id: 'default_org',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
@@ -1254,9 +1421,19 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
 
         const singleUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/crm_contacts/${encodeURIComponent(targetId)}`;
         const fbRes = await firestoreFetch(singleUrl);
-        const existingData: Record<string, any> = fbRes.ok
-          ? parseFirestoreFields(((await fbRes.json()) as any).fields || {})
-          : {};
+        if (!fbRes.ok) {
+          return errorResponse(404, `Contact "${targetId}" niet gevonden`);
+        }
+        const existingData: Record<string, any> = parseFirestoreFields(
+          ((await fbRes.json()) as any).fields || {}
+        );
+
+        // Tenant-check: een partner-key mag alleen records van het eigen bedrijf wijzigen
+        const forbidden = tenantForbiddenResponse(
+          keyMeta,
+          normalizeContactRecord(targetId, existingData)
+        );
+        if (forbidden) return forbidden;
 
         if (fbRes.ok && !isFullScope && !recordInKeyScope(existingData, keyMeta)) {
           return errorResponse(403, 'Forbidden: dit record valt buiten de scope van deze API key');
@@ -1279,7 +1456,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
 
         const merged = normalizeContactRecord(targetId, {
           ...existingData,
-          ...updates,
+          ...pickEditableFields(updates, CONTACT_EDITABLE_FIELDS),
           id: targetId,
           tags: mergedTags,
           company_tags: mergedCompanyTags,
@@ -1338,7 +1515,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
           return errorResponse(400, 'Validatiefout: deal name of title is verplicht');
         }
 
-        const dealId = payload.id || `deal_agt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+        const dealId = `deal_agt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
         const stage = String(payload.stage || 'lead').toLowerCase();
 
         const newDeal = {
@@ -1356,7 +1533,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
           expected_close_date:
             payload.expected_close_date || new Date(Date.now() + 30 * 86400000).toISOString(),
           notes: appendTimestampedNote('', payload.notes, sourceCompanyLabel),
-          org_id: payload.org_id || 'default_org',
+          org_id: 'default_org',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
@@ -1421,9 +1598,16 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
 
         const singleUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/crm_deals/${encodeURIComponent(targetId)}`;
         const fbRes = await firestoreFetch(singleUrl);
-        const existing: Record<string, any> = fbRes.ok
-          ? parseFirestoreFields(((await fbRes.json()) as any).fields || {})
-          : {};
+        if (!fbRes.ok) {
+          return errorResponse(404, `Deal "${targetId}" niet gevonden`);
+        }
+        const existing: Record<string, any> = parseFirestoreFields(
+          ((await fbRes.json()) as any).fields || {}
+        );
+
+        // Tenant-check: een partner-key mag alleen deals van het eigen bedrijf wijzigen
+        const forbidden = tenantForbiddenResponse(keyMeta, existing);
+        if (forbidden) return forbidden;
 
         if (fbRes.ok && !isFullScope && !recordInKeyScope(existing, keyMeta)) {
           return errorResponse(403, 'Forbidden: dit record valt buiten de scope van deze API key');
@@ -1431,7 +1615,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
 
         const merged: Record<string, any> = {
           ...existing,
-          ...updates,
+          ...pickEditableFields(updates, DEAL_EDITABLE_FIELDS),
           id: targetId,
           updated_at: new Date().toISOString(),
         };
@@ -1489,7 +1673,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
         if (!parsedBody.ok) return errorResponse(400, parsedBody.error);
         const payload = parsedBody.data;
 
-        const actId = payload.id || `act_agt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+        const actId = `act_agt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
         const assignedName = payload.assigned_to || payload.performed_by || `${sourceCompanyLabel} Agent`;
         const newActivity = {
           id: actId,
@@ -1498,7 +1682,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
           type: payload.type || 'note',
           title: payload.title || `API Activiteit: ${sourceCompanyLabel}`,
           description: payload.description || payload.notes || '',
-          company_name: payload.company_name || sourceCompanyLabel,
+          company_name: enforcedCompany || payload.company_name || sourceCompanyLabel,
           performed_by: payload.performed_by || `${sourceCompanyLabel} Agent`,
           assigned_to: assignedName,
           status: payload.status || (payload.completed === false ? 'pending' : 'completed'),
@@ -1510,7 +1694,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
             type: payload.deal_id ? 'deal' : 'contact',
             id: payload.contact_id || payload.deal_id || 'api_event',
           },
-          org_id: payload.org_id || 'default_org',
+          org_id: 'default_org',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
@@ -1560,7 +1744,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
           return errorResponse(400, 'Validatiefout: email is verplicht voor kandidaat-registratie');
         }
 
-        const candId = candidate.id || `cand_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+        const candId = `cand_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
         const effectiveVvcTag =
           candidate.vvc_tag || `VVC-CAND-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
         const roleApplied =
@@ -1593,7 +1777,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
           company: isFullScope ? candidate.company || sourceCompanyLabel : keyMeta.company,
           vvc_tag: effectiveVvcTag,
           notes: formattedNotes,
-          org_id: candidate.org_id || 'default_org',
+          org_id: 'default_org',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
@@ -1662,9 +1846,16 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
 
         const singleUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/crm_candidates/${encodeURIComponent(targetId)}`;
         const fbRes = await firestoreFetch(singleUrl);
-        const existing: Record<string, any> = fbRes.ok
-          ? parseFirestoreFields(((await fbRes.json()) as any).fields || {})
-          : {};
+        if (!fbRes.ok) {
+          return errorResponse(404, `Kandidaat "${targetId}" niet gevonden`);
+        }
+        const existing: Record<string, any> = parseFirestoreFields(
+          ((await fbRes.json()) as any).fields || {}
+        );
+
+        // Tenant-check: een partner-key mag alleen kandidaten van het eigen bedrijf wijzigen
+        const forbidden = tenantForbiddenResponse(keyMeta, existing);
+        if (forbidden) return forbidden;
 
         if (fbRes.ok && !isFullScope && !recordInKeyScope(existing, keyMeta)) {
           return errorResponse(403, 'Forbidden: dit record valt buiten de scope van deze API key');
@@ -1678,7 +1869,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
 
         const merged: Record<string, any> = {
           ...existing,
-          ...updates,
+          ...pickEditableFields(updates, CANDIDATE_EDITABLE_FIELDS),
           id: targetId,
           notes: mergedNotes,
           updated_at: new Date().toISOString(),
@@ -1713,6 +1904,11 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
     // 10. OUTBOUND WEBHOOKS BEHEER & DISPATCH (/api/v1/webhooks)
     // =========================================================================
     if (pathname === '/api/v1/webhooks' || pathname.startsWith('/api/v1/webhooks/')) {
+      // Webhook-beheer is admin-only: secrets en event-hijack risico.
+      if (!keyMeta || (keyMeta.role !== 'admin' && keyMeta.role !== 'super_admin')) {
+        return errorResponse(401, 'Niet geautoriseerd: admin API key vereist voor /api/v1/webhooks');
+      }
+
       const subPath = pathname.replace('/api/v1/webhooks', '').replace(/^\//, '').trim();
 
       // GET /api/v1/webhooks -> toon alle geregistreerde webhooks (alleen interne gebruikers)
@@ -1731,7 +1927,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
             'deal.stage_changed',
             'contact.upserted',
           ],
-          data: hooks,
+          data: hooks.map(publicWebhookView),
         });
       }
 
@@ -1779,28 +1975,30 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
         if (!parsedBody.ok) return errorResponse(400, parsedBody.error);
         const body = parsedBody.data;
 
-        if (!body.url || !String(body.url).startsWith('http')) {
-          return errorResponse(
-            400,
-            'Validatiefout: geef een geldige webhook URL op (bijv. https://investbotiq.com/api/webhooks/crmos)'
-          );
+        const urlCheck = isAllowedWebhookUrl(body.url || '');
+        if (!urlCheck.ok) {
+          return errorResponse(400, `Validatiefout: ${urlCheck.reason}`);
         }
 
         const currentHooks = await getActiveWebhooks(projectId);
+        // ID en secret worden server-side gegenereerd; client-input wordt genegeerd
+        // zodat ingebouwde partner-webhooks niet overschreven kunnen worden.
         const newHook: WebhookSubscription = {
-          id: body.id || `wh_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+          id: generateWebhookId(),
           company: isFullScope ? body.company || sourceCompanyLabel : keyMeta.company,
           url: String(body.url).trim(),
           events: Array.isArray(body.events) && body.events.length > 0
             ? body.events
             : ['candidate.placed', 'deal.won', 'contact.upserted'],
-          secret: body.secret || 'whsec_crmos_2026',
+          secret: generateWebhookSecret(),
           active: true,
           created_at: new Date().toISOString(),
         };
 
         const updatedHooks = [
-          ...currentHooks.filter((h) => h.url !== newHook.url),
+          ...currentHooks.filter(
+            (h) => !BUILTIN_WEBHOOK_IDS.has(h.id) && h.url !== newHook.url
+          ),
           newHook,
         ];
 
@@ -1814,7 +2012,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
         return jsonResponse(201, {
           success: true,
           message: `Webhook endpoint ${newHook.url} succesvol geregistreerd voor events: ${newHook.events.join(', ')}`,
-          data: newHook,
+          data: publicWebhookView(newHook),
         });
       }
     }
@@ -1875,6 +2073,79 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
         ],
         firestore_companies: firestoreCompanies,
       });
+    }
+
+    // =========================================================================
+    // 13. HUBSPOT SERVER-SIDE PROXY (GET /api/v1/hubspot/<path>?org_id=...)
+    // Verifieert de Firebase-sessie van de aanroeper en haalt het HubSpot
+    // access-token server-side op uit `crm_integrations/{org}_hubspot`, zodat
+    // de token nooit via de browser of een externe CORS-proxy loopt.
+    // =========================================================================
+    if (pathname === '/api/v1/hubspot' || pathname.startsWith('/api/v1/hubspot/')) {
+      if (method !== 'GET') {
+        return errorResponse(405, 'Alleen GET requests worden ondersteund op de HubSpot proxy');
+      }
+
+      // 1. Sessie-verificatie: Firebase ID token moet geldig zijn
+      const idToken = apiKey; // Authorization: Bearer <token> is al genormaliseerd
+      if (!idToken) {
+        return errorResponse(401, 'Authenticatie vereist: Firebase ID token ontbreekt');
+      }
+      const lookupRes = await fetch(
+        `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${DEFAULT_FIREBASE_WEB_API_KEY}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken }),
+        }
+      ).catch(() => null);
+      const lookupData = lookupRes && lookupRes.ok ? ((await lookupRes.json()) as any) : null;
+      if (!lookupData || !Array.isArray(lookupData.users) || lookupData.users.length === 0) {
+        return errorResponse(401, 'Authenticatie mislukt: ongeldige of verlopen Firebase-sessie');
+      }
+
+      // 2. HubSpot-token server-side ophalen uit de integratie-config van de org
+      const orgId = (parsedUrl.searchParams.get('org_id') || 'default_org').trim();
+      const intUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/crm_integrations/${encodeURIComponent(
+        `${orgId}_hubspot`
+      )}`;
+      const intRes = await firestoreFetch(intUrl);
+      if (!intRes.ok) {
+        return errorResponse(
+          404,
+          'Geen HubSpot-configuratie gevonden voor deze organisatie. Sla de integratie eerst op in Instellingen.'
+        );
+      }
+      const intDoc = (await intRes.json()) as any;
+      const intFlat = parseFirestoreFields(intDoc.fields || {});
+      const hsToken = String(intFlat.accessToken || intFlat.access_token || '').trim();
+      if (!hsToken) {
+        return errorResponse(404, 'HubSpot access token ontbreekt in de opgeslagen configuratie');
+      }
+
+      // 3. Proxy naar api.hubapi.com (token blijft server-side)
+      const hsPath = pathname.replace(/^\/api\/v1\/hubspot/, '') || '/';
+      const upstreamParams = new URLSearchParams(parsedUrl.searchParams);
+      upstreamParams.delete('org_id');
+      const qs = upstreamParams.toString();
+      const upstreamUrl = `https://api.hubapi.com${hsPath}${qs ? `?${qs}` : ''}`;
+
+      const upstream = await fetch(upstreamUrl, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${hsToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      const upstreamText = await upstream.text();
+      return {
+        status: upstream.status,
+        headers: {
+          'Content-Type': upstream.headers.get('content-type') || 'application/json; charset=utf-8',
+          ...CORS_HEADERS,
+        },
+        body: upstreamText,
+      };
     }
 
     return errorResponse(404, `Endpoint ${pathname} niet gevonden in CRMos API v1`);

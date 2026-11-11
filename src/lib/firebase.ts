@@ -184,8 +184,11 @@ export async function syncFirebaseUserWithFirestore(
   requestedRole?: User['role'],
   explicitName?: string
 ): Promise<{ user: User; org: Organization }> {
+  void requestedRole;
   const userRef = doc(db, 'users', fbUser.uid);
   let existingUserData: Record<string, unknown> = {};
+  const tokenResult = await fbUser.getIdTokenResult();
+  const trustedClaims = tokenResult.claims;
 
   try {
     const userSnap = await getDoc(userRef);
@@ -268,15 +271,19 @@ export async function syncFirebaseUserWithFirestore(
     console.warn('Kon organisatie niet ophalen uit Firestore, standaardwaarde gebruikt:', error);
   }
 
-  // Determine role: info@jamaldrenthe.com and info@crmos.one are always Super Admin
+  // Profile fields are client-readable, not an authority. Elevated access comes
+  // only from Firebase custom claims or the explicitly trusted owner accounts.
   const isSuperAdmin =
     fbUser.email?.toLowerCase() === 'info@jamaldrenthe.com' ||
     fbUser.email?.toLowerCase() === 'info@crmos.one' ||
-    existingUserData.is_super_admin === true;
+    trustedClaims.is_super_admin === true;
 
+  const claimedRole = trustedClaims.role;
   const userRole: User['role'] = isSuperAdmin
     ? 'admin'
-    : requestedRole || ((existingUserData.role as User['role']) || 'admin');
+    : claimedRole === 'manager' || claimedRole === 'recruiter'
+      ? claimedRole
+      : 'agent';
   const userVvcTag =
     (existingUserData.vvc_tag as string) ||
     `vvc-usr-${fbUser.uid.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10)}`;
@@ -302,7 +309,7 @@ export async function syncFirebaseUserWithFirestore(
     company_name: effectiveCompanyName,
     is_super_admin: isSuperAdmin,
     vvc_tag: userVvcTag,
-    allowed_companies: isCoreEcosystem
+    allowed_companies: isSuperAdmin
       ? ['CRMos', 'VVC', 'Quantum Initium', 'Logs Rent', 'Djobba', 'Trusting Work']
       : [effectiveCompanyName],
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Amsterdam',
