@@ -1,211 +1,71 @@
 /**
  * Seed all 14 Enterprise & Company API keys, 9 CRM Teams, and 7 Core Referral Leaders
  * directly into live Firebase Cloud Firestore (`crmosone-dev`) using Firebase Auth REST token exchange.
+ *
+ * SECURITY: dit script genereert bij elke run NIEUWE, willekeurige API keys.
+ * Alleen de SHA-256 hash wordt in Firestore (`crm_api_keys`) opgeslagen.
+ * De plaintext keys worden eenmalig naar stdout geschreven. Bewaar ze in een
+ * wachtwoordmanager en zet ze als Cloudflare secret CRMOS_API_KEYS_JSON.
+ *
+ * Vereist: CRMOS_FIREBASE_AGENT_PASSWORD (agent login) in env. Geen defaults.
  */
 
-const PROJECT_ID = process.env.VITE_FIREBASE_PROJECT_ID || 'crmosone-dev';
-const FIREBASE_WEB_API_KEY = process.env.VITE_FIREBASE_API_KEY || 'AIzaSyCsBPKp7i7Cd959bF8hZzTDtV_V_7cI9Xo';
-const AGENT_EMAIL = process.env.CRMOS_FIREBASE_AGENT_EMAIL || 'api-agent@crmos.one';
-const AGENT_PASSWORD = process.env.CRMOS_FIREBASE_AGENT_PASSWORD || 'CRMosAgent2026!Secure';
+const crypto = require('node:crypto');
 
-const KEYS_TO_SEED = [
-  {
-    id: 'key_master_jamaldrenthe',
-    name: 'Master Ecosystem Key (Jamal Drenthe)',
-    key_hash: 'crm_live_master_jamaldrenthe_2026_all_ecosystem',
-    token_preview: 'crm_live_master...',
-    full_token: 'crm_live_master_jamaldrenthe_2026_all_ecosystem',
-    company_name: 'Alle 13 Bedrijven',
-    company_tag: '#all',
-    environment: 'live',
-    scopes: ['*', 'read:all', 'write:all', 'admin'],
-    org_id: 'default_org',
-    created_by_user: 'Jamal Drenthe',
-    status: 'active',
-  },
-  {
-    id: 'key_vvc',
-    name: 'VVC API Key',
-    key_hash: 'crm_live_vvc_verdienende_vrienden_club_2026',
-    token_preview: 'crm_live_vvc...',
-    full_token: 'crm_live_vvc_verdienende_vrienden_club_2026',
-    company_name: 'vvc (verdienende vrienden club)',
-    company_tag: '#vvc',
-    environment: 'live',
-    scopes: ['vvc:*', 'read:all', 'write:all'],
-    org_id: 'default_org',
-    created_by_user: 'Jamal Drenthe',
-    status: 'active',
-  },
-  {
-    id: 'key_quantum_initium',
-    name: 'Quantum Initium API Key',
-    key_hash: 'crm_live_quantum_initium_enterprise_2026',
-    token_preview: 'crm_live_quantum...',
-    full_token: 'crm_live_quantum_initium_enterprise_2026',
-    company_name: 'quantum initium',
-    company_tag: '#quantum-initium',
-    environment: 'live',
-    scopes: ['quantum:*', 'read:all', 'write:all'],
-    org_id: 'default_org',
-    created_by_user: 'Jamal Drenthe',
-    status: 'active',
-  },
-  {
-    id: 'key_immigratiepunt',
-    name: 'Immigratiepunt API Key',
-    key_hash: 'crm_live_immigratiepunt_portal_2026',
-    token_preview: 'crm_live_immigratie...',
-    full_token: 'crm_live_immigratiepunt_portal_2026',
-    company_name: 'immigratiepunt',
-    company_tag: '#immigratiepunt',
-    environment: 'live',
-    scopes: ['immigratiepunt:*', 'read:all', 'write:all'],
-    org_id: 'default_org',
-    created_by_user: 'Jamal Drenthe',
-    status: 'active',
-  },
-  {
-    id: 'key_spontiva',
-    name: 'Spontiva API Key',
-    key_hash: 'crm_live_spontiva_recruitment_2026',
-    token_preview: 'crm_live_spontiva...',
-    full_token: 'crm_live_spontiva_recruitment_2026',
-    company_name: 'spontiva',
-    company_tag: '#spontiva',
-    environment: 'live',
-    scopes: ['spontiva:*', 'read:all', 'write:all'],
-    org_id: 'default_org',
-    created_by_user: 'Jamal Drenthe',
-    status: 'active',
-  },
-  {
-    id: 'key_investbotiq',
-    name: 'Investbotiq API Key',
-    key_hash: 'crm_live_investbotiq_capital_2026',
-    token_preview: 'crm_live_investbotiq...',
-    full_token: 'crm_live_investbotiq_capital_2026',
-    company_name: 'Investbotiq',
-    company_tag: '#investbotiq',
-    environment: 'live',
-    scopes: ['investbotiq:*', 'read:all', 'write:all'],
-    org_id: 'default_org',
-    created_by_user: 'Jamal Drenthe',
-    status: 'active',
-  },
-  {
-    id: 'key_boostplug',
-    name: 'Boostplug API Key',
-    key_hash: 'crm_live_boostplug_energy_iot_2026',
-    token_preview: 'crm_live_boostplug...',
-    full_token: 'crm_live_boostplug_energy_iot_2026',
-    company_name: 'boostplug',
-    company_tag: '#boostplug',
-    environment: 'live',
-    scopes: ['boostplug:*', 'read:all', 'write:all'],
-    org_id: 'default_org',
-    created_by_user: 'Jamal Drenthe',
-    status: 'active',
-  },
-  {
-    id: 'key_crmos',
-    name: 'CRMos Core Platform Key',
-    key_hash: 'crm_live_crmos_core_platform_2026',
-    token_preview: 'crm_live_crmos...',
-    full_token: 'crm_live_crmos_core_platform_2026',
-    company_name: 'crmos',
-    company_tag: '#crmos',
-    environment: 'live',
-    scopes: ['crmos:*', 'read:all', 'write:all', 'admin'],
-    org_id: 'default_org',
-    created_by_user: 'Jamal Drenthe',
-    status: 'active',
-  },
-  {
-    id: 'key_zheavenzy',
-    name: 'Zheavenzy API Key',
-    key_hash: 'crm_live_zheavenzy_atelier_2026',
-    token_preview: 'crm_live_zheavenzy...',
-    full_token: 'crm_live_zheavenzy_atelier_2026',
-    company_name: 'zheavenzy',
-    company_tag: '#zheavenzy',
-    environment: 'live',
-    scopes: ['zheavenzy:*', 'read:all', 'write:all'],
-    org_id: 'default_org',
-    created_by_user: 'Jamal Drenthe',
-    status: 'active',
-  },
-  {
-    id: 'key_logs_rent',
-    name: 'Logs.rent API Key',
-    key_hash: 'crm_live_logs_rent_logistics_2026',
-    token_preview: 'crm_live_logs...',
-    full_token: 'crm_live_logs_rent_logistics_2026',
-    company_name: 'logs.rent',
-    company_tag: '#logs-rent',
-    environment: 'live',
-    scopes: ['logs_rent:*', 'read:all', 'write:all'],
-    org_id: 'default_org',
-    created_by_user: 'Jamal Drenthe',
-    status: 'active',
-  },
-  {
-    id: 'key_djobba_works',
-    name: 'Djobba.works API Key',
-    key_hash: 'crm_live_djobba_works_freelance_2026',
-    token_preview: 'crm_live_djobba...',
-    full_token: 'crm_live_djobba_works_freelance_2026',
-    company_name: 'djobba.works',
-    company_tag: '#djobba-works',
-    environment: 'live',
-    scopes: ['djobba_works:*', 'read:all', 'write:all'],
-    org_id: 'default_org',
-    created_by_user: 'Jamal Drenthe',
-    status: 'active',
-  },
-  {
-    id: 'key_trusting_work',
-    name: 'Trusting Work API Key',
-    key_hash: 'crm_live_trusting_work_staffing_2026',
-    token_preview: 'crm_live_trusting...',
-    full_token: 'crm_live_trusting_work_staffing_2026',
-    company_name: 'trusting work',
-    company_tag: '#trusting-work',
-    environment: 'live',
-    scopes: ['trusting_work:*', 'read:all', 'write:all'],
-    org_id: 'default_org',
-    created_by_user: 'Jamal Drenthe',
-    status: 'active',
-  },
-  {
-    id: 'key_woningvry',
-    name: 'Woningvry API Key',
-    key_hash: 'crm_live_woningvry_realestate_2026',
-    token_preview: 'crm_live_woningvry...',
-    full_token: 'crm_live_woningvry_realestate_2026',
-    company_name: 'woningvry',
-    company_tag: '#woningvry',
-    environment: 'live',
-    scopes: ['woningvry:*', 'read:all', 'write:all'],
-    org_id: 'default_org',
-    created_by_user: 'Jamal Drenthe',
-    status: 'active',
-  },
-  {
-    id: 'key_xabi_world',
-    name: 'Xabi World API Key',
-    key_hash: 'crm_live_xabi_world_international_2026',
-    token_preview: 'crm_live_xabi...',
-    full_token: 'crm_live_xabi_world_international_2026',
-    company_name: 'xabi world',
-    company_tag: '#xabi-world',
-    environment: 'live',
-    scopes: ['xabi_world:*', 'read:all', 'write:all'],
-    org_id: 'default_org',
-    created_by_user: 'Jamal Drenthe',
-    status: 'active',
-  },
+const PROJECT_ID = process.env.VITE_FIREBASE_PROJECT_ID || 'crmosone-dev';
+const FIREBASE_WEB_API_KEY = process.env.VITE_FIREBASE_API_KEY || '';
+const AGENT_EMAIL = process.env.CRMOS_FIREBASE_AGENT_EMAIL || 'api-agent@crmos.one';
+const AGENT_PASSWORD = process.env.CRMOS_FIREBASE_AGENT_PASSWORD || '';
+
+if (!AGENT_PASSWORD || !FIREBASE_WEB_API_KEY) {
+  console.error('Zet CRMOS_FIREBASE_AGENT_PASSWORD en VITE_FIREBASE_API_KEY in je env voordat je seedt.');
+  process.exit(1);
+}
+
+const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
+const newKey = () => `crm_live_${crypto.randomBytes(24).toString('hex')}`;
+
+// Metadata per bedrijf (geen secrets)
+const COMPANY_KEY_DEFS = [
+  { id: 'master-all-companies', name: 'Master Ecosystem Key (Jamal Drenthe)', company: 'Alle 13 Bedrijven (Master View)', tag: 'ALL', role: 'super_admin', scopes: ['*'] },
+  { id: 'vvc', name: 'VVC API Key', company: 'vvc (verdienende vrienden club)', tag: 'VVC', role: 'partner', scopes: ['vvc:*'] },
+  { id: 'quantum-initium', name: 'Quantum Initium API Key', company: 'quantum initium', tag: 'QUANTUM_INITIUM', role: 'partner', scopes: ['quantum_initium:*'] },
+  { id: 'immigratiepunt', name: 'Immigratiepunt API Key', company: 'immigratiepunt', tag: 'IMMIGRATIEPUNT', role: 'partner', scopes: ['immigratiepunt:*'] },
+  { id: 'spontiva', name: 'Spontiva API Key', company: 'spontiva', tag: 'SPONTIVA', role: 'partner', scopes: ['spontiva:*'] },
+  { id: 'investbotiq', name: 'Investbotiq API Key', company: 'Investbotiq', tag: 'INVESTBOTIQ', role: 'partner', scopes: ['investbotiq:*'] },
+  { id: 'boostplug', name: 'Boostplug API Key', company: 'boostplug', tag: 'BOOSTPLUG', role: 'partner', scopes: ['boostplug:*'] },
+  { id: 'crmos', name: 'CRMos Core Platform Key', company: 'crmos', tag: 'CRMOS', role: 'admin', scopes: ['*'] },
+  { id: 'zheavenzy', name: 'Zheavenzy API Key', company: 'zheavenzy', tag: 'ZHEAVENZY', role: 'partner', scopes: ['zheavenzy:*'] },
+  { id: 'logs-rent', name: 'Logs.rent API Key', company: 'logs.rent', tag: 'LOGS_RENT', role: 'partner', scopes: ['logs_rent:*'] },
+  { id: 'djobba-works', name: 'Djobba.works API Key', company: 'djobba.works', tag: 'DJOBBA_WORKS', role: 'partner', scopes: ['djobba_works:*'] },
+  { id: 'trusting-work', name: 'Trusting Work API Key', company: 'trusting work', tag: 'TRUSTING_WORK', role: 'partner', scopes: ['trusting_work:*'] },
+  { id: 'woningvry', name: 'Woningvry API Key', company: 'woningvry', tag: 'WONINGVRY', role: 'partner', scopes: ['woningvry:*'] },
+  { id: 'xabi-world', name: 'Xabi World API Key', company: 'xabi world', tag: 'XABI_WORLD', role: 'partner', scopes: ['xabi_world:*'] },
 ];
+
+// Genereer verse keys + hun veilige (gehashte) opslagrecords
+const GENERATED_KEYS = COMPANY_KEY_DEFS.map((def) => ({ ...def, key: newKey() }));
+const KEYS_TO_SEED = GENERATED_KEYS.map((def) => ({
+  id: `key_${def.id}`,
+  name: def.name,
+  token_hash: sha256(def.key),
+  token_preview: `${def.key.substring(0, 13)}...`,
+  company: def.company,
+  company_name: def.company,
+  tag: def.tag,
+  company_tag: `#${def.tag.toLowerCase()}`,
+  role: def.role,
+  environment: 'live',
+  scopes: def.scopes,
+  org_id: 'default_org',
+  created_by_user: 'Jamal Drenthe',
+  status: 'active',
+}));
+const PUBLIC_KEYS_JSON = KEYS_TO_SEED.map(({ token_hash, ...rest }) => ({
+  ...rest,
+  key_hash: token_hash,
+}));
+
 
 const CORE_LEADERS_TO_SEED = [
   {
@@ -606,7 +466,7 @@ async function main() {
       id: 'crmos_ecosystem_registry',
       name: 'CRMos Enterprise Ecosystem Registry (13 Companies, 14 API Keys, 9 Teams)',
       org_id: 'default_org',
-      api_keys_json: JSON.stringify(KEYS_TO_SEED),
+      api_keys_json: JSON.stringify(PUBLIC_KEYS_JSON),
       teams_json: JSON.stringify(TEAMS_TO_SEED),
       total_keys: KEYS_TO_SEED.length,
       total_teams: TEAMS_TO_SEED.length,
@@ -617,9 +477,10 @@ async function main() {
   console.log(`  [${regRes.ok ? 'OK' : 'FAIL'}] organizations/crmos_ecosystem_registry -> HTTP ${regRes.status}`);
 
   for (const k of KEYS_TO_SEED) {
+    // Alleen de SHA-256 hash wordt opgeslagen; de plaintext key staat nergens in Firestore.
     const res = await patchFirestoreDoc(
-      'organizations',
-      `apikey_${k.id}`,
+      'crm_api_keys',
+      k.id,
       {
         ...k,
         entity_type: 'crm_api_key',
@@ -628,7 +489,7 @@ async function main() {
       },
       idToken
     );
-    console.log(`  [${res.ok ? 'OK' : 'FAIL'}] organizations/apikey_${k.id} (${k.company_name}) -> HTTP ${res.status}`);
+    console.log(`  [${res.ok ? 'OK' : 'FAIL'}] crm_api_keys/${k.id} (${k.company_name}) -> HTTP ${res.status}`);
   }
 
   for (const t of TEAMS_TO_SEED) {
@@ -646,6 +507,20 @@ async function main() {
     console.log(`  [${res.ok ? 'OK' : 'FAIL'}] organizations/team_${t.id} (${t.name}) -> HTTP ${res.status}`);
   }
 
+  console.log('\n=== NIEUWE API KEYS (eenmalig zichtbaar, sla veilig op) ===');
+  for (const k of GENERATED_KEYS) {
+    console.log(`${k.company} [${k.tag}]: ${k.key}`);
+  }
+  console.log('\n=== Cloudflare secret CRMOS_API_KEYS_JSON ===');
+  console.log(JSON.stringify(GENERATED_KEYS.map((k) => ({
+    id: `key_${k.id}`,
+    name: k.name,
+    company: k.company,
+    tag: k.tag,
+    role: k.role,
+    key_hash: sha256(k.key),
+    status: 'active',
+  }))));
   console.log('\nDone seeding live Firebase Cloud Firestore (`crmosone-dev`)!');
 }
 

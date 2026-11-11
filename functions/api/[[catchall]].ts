@@ -27,6 +27,7 @@ export const onRequest = async (context: {
     headers,
     bodyText,
     projectId: env?.VITE_FIREBASE_PROJECT_ID || 'crmosone-dev',
+    env: (env || {}) as Record<string, string>,
   });
 
   return new Response(coreRes.status === 204 ? null : coreRes.body, {
