@@ -1878,6 +1878,79 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
       });
     }
 
+    // =========================================================================
+    // 13. HUBSPOT SERVER-SIDE PROXY (GET /api/v1/hubspot/<path>?org_id=...)
+    // Verifieert de Firebase-sessie van de aanroeper en haalt het HubSpot
+    // access-token server-side op uit `crm_integrations/{org}_hubspot`, zodat
+    // de token nooit via de browser of een externe CORS-proxy loopt.
+    // =========================================================================
+    if (pathname === '/api/v1/hubspot' || pathname.startsWith('/api/v1/hubspot/')) {
+      if (method !== 'GET') {
+        return errorResponse(405, 'Alleen GET requests worden ondersteund op de HubSpot proxy');
+      }
+
+      // 1. Sessie-verificatie: Firebase ID token moet geldig zijn
+      const idToken = apiKey; // Authorization: Bearer <token> is al genormaliseerd
+      if (!idToken) {
+        return errorResponse(401, 'Authenticatie vereist: Firebase ID token ontbreekt');
+      }
+      const lookupRes = await fetch(
+        `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${DEFAULT_FIREBASE_WEB_API_KEY}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken }),
+        }
+      ).catch(() => null);
+      const lookupData = lookupRes && lookupRes.ok ? ((await lookupRes.json()) as any) : null;
+      if (!lookupData || !Array.isArray(lookupData.users) || lookupData.users.length === 0) {
+        return errorResponse(401, 'Authenticatie mislukt: ongeldige of verlopen Firebase-sessie');
+      }
+
+      // 2. HubSpot-token server-side ophalen uit de integratie-config van de org
+      const orgId = (parsedUrl.searchParams.get('org_id') || 'default_org').trim();
+      const intUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/crm_integrations/${encodeURIComponent(
+        `${orgId}_hubspot`
+      )}`;
+      const intRes = await firestoreFetch(intUrl);
+      if (!intRes.ok) {
+        return errorResponse(
+          404,
+          'Geen HubSpot-configuratie gevonden voor deze organisatie. Sla de integratie eerst op in Instellingen.'
+        );
+      }
+      const intDoc = (await intRes.json()) as any;
+      const intFlat = parseFirestoreFields(intDoc.fields || {});
+      const hsToken = String(intFlat.accessToken || intFlat.access_token || '').trim();
+      if (!hsToken) {
+        return errorResponse(404, 'HubSpot access token ontbreekt in de opgeslagen configuratie');
+      }
+
+      // 3. Proxy naar api.hubapi.com (token blijft server-side)
+      const hsPath = pathname.replace(/^\/api\/v1\/hubspot/, '') || '/';
+      const upstreamParams = new URLSearchParams(parsedUrl.searchParams);
+      upstreamParams.delete('org_id');
+      const qs = upstreamParams.toString();
+      const upstreamUrl = `https://api.hubapi.com${hsPath}${qs ? `?${qs}` : ''}`;
+
+      const upstream = await fetch(upstreamUrl, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${hsToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      const upstreamText = await upstream.text();
+      return {
+        status: upstream.status,
+        headers: {
+          'Content-Type': upstream.headers.get('content-type') || 'application/json; charset=utf-8',
+          ...CORS_HEADERS,
+        },
+        body: upstreamText,
+      };
+    }
+
     return errorResponse(404, `Endpoint ${pathname} niet gevonden in CRMos API v1`);
   } catch (err: unknown) {
     const msg = (err as Error)?.message || 'Interne Server API Fout';

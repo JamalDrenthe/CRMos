@@ -8,7 +8,7 @@ import {
   purgeDemoAndMockDataFromFirestore,
 } from '@/services/firestoreService';
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
-import { db, isFirebaseConfigured } from '@/lib/firebase';
+import { db, auth, isFirebaseConfigured } from '@/lib/firebase';
 import type { Contact, Company, Deal, Activity, Call, Product } from '@/types';
 
 export interface HubSpotSyncProgress {
@@ -90,42 +90,41 @@ export async function loadHubSpotConfigFromFirestore(orgId: string): Promise<Hub
   return getSavedHubSpotConfig();
 }
 
-// Helper for HubSpot API requests (tries direct first, then CORS proxy fallback for browser environments)
-async function fetchHubSpotEndpoint(path: string, accessToken: string): Promise<Record<string, unknown>> {
-  const cleanToken = accessToken.trim();
-  const targetUrl = `https://api.hubapi.com${path}`;
-  const headers = {
-    Authorization: `Bearer ${cleanToken}`,
-    'Content-Type': 'application/json',
-  };
-
-  try {
-    const response = await fetch(targetUrl, { headers });
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`HubSpot API (${response.status}): ${errText}`);
-    }
-    return (await response.json()) as Record<string, unknown>;
-  } catch (directError) {
-    // If browser CORS blocks direct api.hubapi.com call, try corsproxy fallback
-    if (directError instanceof TypeError && directError.message.toLowerCase().includes('fetch')) {
-      const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
-      const proxyRes = await fetch(proxyUrl, { headers });
-      if (!proxyRes.ok) {
-        const errText = await proxyRes.text();
-        throw new Error(`HubSpot API via proxy (${proxyRes.status}): ${errText}`);
-      }
-      return (await proxyRes.json()) as Record<string, unknown>;
-    }
-    throw directError;
+// HubSpot API requests lopen via de eigen server-side proxy (`/api/v1/hubspot/*`),
+// die de Firebase-sessie verifieert en de HubSpot-token uit Firestore haalt.
+// Zo verlaat het access token nooit het eigen domein (geen externe CORS-proxy meer).
+async function fetchHubSpotEndpoint(path: string, orgId: string): Promise<Record<string, unknown>> {
+  const user = auth.currentUser;
+  if (!user) {
+    throw new Error('Je moet ingelogd zijn om een HubSpot-synchronisatie te starten.');
   }
+  const idToken = await user.getIdToken();
+  const sep = path.includes('?') ? '&' : '?';
+  const response = await fetch(`/api/v1/hubspot${path}${sep}org_id=${encodeURIComponent(orgId)}`, {
+    headers: {
+      Authorization: `Bearer ${idToken}`,
+      'Content-Type': 'application/json',
+    },
+  });
+  if (!response.ok) {
+    const errText = await response.text();
+    let message = errText;
+    try {
+      const parsed = JSON.parse(errText) as { error?: string; message?: string };
+      message = parsed.error || parsed.message || errText;
+    } catch {
+      // plain text error
+    }
+    throw new Error(`HubSpot API (${response.status}): ${message}`);
+  }
+  return (await response.json()) as Record<string, unknown>;
 }
 
 // Fetch all pages of a HubSpot CRM v3 object
 async function fetchAllHubSpotObjects(
   objectType: string,
   properties: string[],
-  accessToken: string,
+  orgId: string,
   associations: string[] = []
 ): Promise<Array<Record<string, unknown>>> {
   const results: Array<Record<string, unknown>> = [];
@@ -146,7 +145,7 @@ async function fetchAllHubSpotObjects(
       params.set('after', after);
     }
 
-    const data = await fetchHubSpotEndpoint(`/crm/v3/objects/${objectType}?${params.toString()}`, accessToken);
+    const data = await fetchHubSpotEndpoint(`/crm/v3/objects/${objectType}?${params.toString()}`, orgId);
     const pageResults = (data.results as Array<Record<string, unknown>>) || [];
     results.push(...pageResults);
 
@@ -221,6 +220,10 @@ export async function syncAllDataFromHubSpot(
   };
   onProgress?.({ ...progress });
 
+  // 0. Sla de token eerst op in Firestore: de server-side proxy (`/api/v1/hubspot/*`)
+  // haalt hem daar op, zodat hij nooit via de browser of een externe proxy loopt.
+  await saveHubSpotConfig({ accessToken, autoSync: true }, orgId);
+
   // 1. Purge any old mock/demo records first
   await purgeDemoAndMockDataFromFirestore(orgId);
 
@@ -247,7 +250,7 @@ export async function syncAllDataFromHubSpot(
       'createdate',
       'hs_lastmodifieddate',
     ],
-    accessToken
+    orgId
   );
 
   const companyNameMap = new Map<string, string>();
@@ -316,7 +319,7 @@ export async function syncAllDataFromHubSpot(
       'createdate',
       'lastmodifieddate',
     ],
-    accessToken,
+    orgId,
     ['companies']
   );
 
@@ -398,7 +401,7 @@ export async function syncAllDataFromHubSpot(
       'createdate',
       'hs_lastmodifieddate',
     ],
-    accessToken,
+    orgId,
     ['contacts', 'companies']
   );
 
@@ -467,7 +470,7 @@ export async function syncAllDataFromHubSpot(
         'hs_timestamp',
         'hs_call_disposition',
       ],
-      accessToken,
+      orgId,
       ['contacts', 'deals']
     );
 
@@ -529,7 +532,7 @@ export async function syncAllDataFromHubSpot(
     const hsTasks = await fetchAllHubSpotObjects(
       'tasks',
       ['hs_task_subject', 'hs_task_body', 'hs_task_status', 'hs_timestamp'],
-      accessToken,
+      orgId,
       ['contacts', 'deals', 'companies']
     );
 
@@ -576,7 +579,7 @@ export async function syncAllDataFromHubSpot(
     const hsNotes = await fetchAllHubSpotObjects(
       'notes',
       ['hs_note_body', 'hs_timestamp'],
-      accessToken,
+      orgId,
       ['contacts', 'deals', 'companies']
     );
 
@@ -626,7 +629,7 @@ export async function syncAllDataFromHubSpot(
     const hsProducts = await fetchAllHubSpotObjects(
       'products',
       ['name', 'description', 'hs_sku', 'price', 'createdate'],
-      accessToken
+      orgId
     );
 
     for (const item of hsProducts) {
