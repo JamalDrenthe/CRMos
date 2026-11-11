@@ -298,12 +298,12 @@ export function RayonMap({
       el.className = 'd2d-pin-element cursor-pointer transition-transform hover:scale-125';
       const color = getStatusColor(pin.current_status, pin.is_commercial);
       const borderStyle = '2.5px solid #ffffff';
+      el.title = pin.business_name || `${pin.street} ${pin.house_number}`;
 
-      el.innerHTML = `
-        <div title="${pin.business_name || `${pin.street} ${pin.house_number}`}" style="background-color: ${color}; width: 26px; height: 26px; border-radius: ${pin.is_commercial ? '8px' : '50%'}; border: ${borderStyle}; box-shadow: 0 3px 8px rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; color: white; font-size: 10px; font-weight: 800; font-family: system-ui, sans-serif;">
-          ${pin.house_number.slice(0, 4)}
-        </div>
-      `;
+      const label = document.createElement('div');
+      label.textContent = pin.house_number.slice(0, 4);
+      label.style.cssText = `background-color: ${color}; width: 26px; height: 26px; border-radius: ${pin.is_commercial ? '8px' : '50%'}; border: ${borderStyle}; box-shadow: 0 3px 8px rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; color: white; font-size: 10px; font-weight: 800; font-family: system-ui, sans-serif;`;
+      el.appendChild(label);
 
       el.addEventListener('click', (ev) => {
         ev.stopPropagation();
