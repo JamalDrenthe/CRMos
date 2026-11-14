@@ -41,9 +41,10 @@ All of the following matter *(user)*; none is ruled out:
 4. Someone who reads the GitHub repo or JS bundle (hardcoded keys and passwords).
 
 ## Existing controls (observed)
-- Firestore rules: `users/{uid}` writes limited to owner/admin; `vvc_sync_codes` blocks `list`.
-- API: CORS preflight handling, payload validation on some endpoints, email dedup on upsert.
-- README claims SHA-256 constant-time key verification, scopes and origin allowlists; the current `main` code uses a plaintext key map instead (claim does not match code).
+- **Multi-Tenant Scoping & API Keys:** SHA-256 cryptografische hashing van API-keys tegen Firestore (`crm_api_keys`) en `CRMOS_API_KEYS_JSON`. Ingelogde gebruikers via Firebase Bearer tokens worden server-side gescoped op hun `users/{uid}` profiel (`company_name` / `org_id`); alleen geverifieerde admins behouden volledige toegang (`tag: 'ALL'`).
+- **Firestore Security Rules:** Multi-tenant isolatie via `canReadTenant()` / `canCreateTenant()` / `canUpdateTenant()`. Self-registraties kunnen nooit `default_org` claimen. Gevoelige collecties (`crm_api_keys`, `crm_integrations`, `crm_audit_logs`) zijn afgeschermd voor admins/service-accounts. Publieke intake (`recruitment_candidates`, `vvc_sync_codes`) is voorzien van strikte type- en schema-checks.
+- **Geheimen & Integraties:** Hardcoded API-sleutels, agent-wachtwoorden en webhook-secrets zijn volledig verwijderd uit de codebase en client-bundles. Webhooks draaien op dynamische secrets (`CRMOS_WEBHOOK_SECRETS_JSON`) met HTTPS-verplichting en SSRF-blokkades.
+- **CORS & Write Guards:** Allowlist per resource tegen mass-assignment op write-endpoints; fail-closed tenant checks op bewerkingen (`keyCanWriteRecord`). Twilio proxies in dev server vereisen authenticatie en valideren webhook URL's.
 
 ## Out of scope / accepted risk
 - Nothing is out of scope *(user)*: dev-only code (Vite plugins, Twilio dev proxy) and seed scripts are ranked like everything else.
