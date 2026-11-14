@@ -219,13 +219,25 @@ export async function syncFirebaseUserWithFirestore(
     return norm === c || norm.includes(c) || c.includes(norm);
   });
 
+  // Profile fields are client-readable, not an authority. Elevated access comes
+  // only from Firebase custom claims or the explicitly trusted owner accounts.
+  const isSuperAdmin =
+    (fbUser.emailVerified &&
+      (fbUser.email?.toLowerCase() === 'info@jamaldrenthe.com' ||
+        fbUser.email?.toLowerCase() === 'info@crmos.one')) ||
+    trustedClaims.is_super_admin === true ||
+    trustedClaims.admin === true;
+
   // Determine organization ID:
-  // Core ecosystem partners share the CRMos core pool ('default_org')
-  // Independent third-party companies get an isolated organization ID
-  const orgId = isCoreEcosystem
-    ? 'default_org'
-    : (existingUserData.org_id as string) ||
-      `org_${effectiveCompanyName.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 16)}_${fbUser.uid.substring(0, 4)}`;
+  // Only verified super admins or accounts already assigned to default_org
+  // by an admin may access the core pool ('default_org').
+  // Self-registered users always get an isolated organization ID.
+  const existingOrgId = existingUserData.org_id as string | undefined;
+  const orgId =
+    isSuperAdmin || existingOrgId === 'default_org'
+      ? existingOrgId || 'default_org'
+      : existingOrgId ||
+        `org_${effectiveCompanyName.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 16)}_${fbUser.uid.substring(0, 6)}`;
 
   const orgRef = doc(db, 'organizations', orgId);
 
@@ -270,13 +282,6 @@ export async function syncFirebaseUserWithFirestore(
   } catch (error) {
     console.warn('Kon organisatie niet ophalen uit Firestore, standaardwaarde gebruikt:', error);
   }
-
-  // Profile fields are client-readable, not an authority. Elevated access comes
-  // only from Firebase custom claims or the explicitly trusted owner accounts.
-  const isSuperAdmin =
-    fbUser.email?.toLowerCase() === 'info@jamaldrenthe.com' ||
-    fbUser.email?.toLowerCase() === 'info@crmos.one' ||
-    trustedClaims.is_super_admin === true;
 
   const claimedRole = trustedClaims.role;
   const userRole: User['role'] = isSuperAdmin

@@ -74,11 +74,13 @@ service cloud.firestore {
       // Profielen van andere users in dezelfde org zijn leesbaar (team-overzichten)
       allow list: if isPrivileged() ||
         (isAuthenticated() && resource.data.org_id == userOrg());
-      // Aanmaken van je eigen profiel bij registratie: geen privilege-velden
+      // Aanmaken van je eigen profiel bij registratie: geen privilege-velden en geen default_org
       allow create: if isPrivileged() ||
         (isAuthenticated() && request.auth.uid == userId &&
          request.resource.data.get('is_super_admin', false) == false &&
          request.resource.data.get('role', 'agent') == 'agent' &&
+         request.resource.data.get('org_id', '') != '' &&
+         request.resource.data.get('org_id', '') != 'default_org' &&
          request.resource.data.get('allowed_companies', []).size() == 1 &&
          request.resource.data.get('allowed_companies', [])[0] ==
            request.resource.data.get('company_name', ''));
@@ -228,10 +230,19 @@ service cloud.firestore {
       allow read, write: if isPrivileged();
     }
 
-    // No Cure No Pay Sollicitaties (Publiek aanmelden, intern beheren)
+    // No Cure No Pay Sollicitaties (Publiek aanmelden met strikte schema-validatie, intern beheren)
     match /recruitment_candidates/{candidateId} {
       allow read: if canReadTenant();
-      allow create: if true;
+      allow create: if isPrivileged() ||
+        (
+          request.resource.data.keys().hasAll(['email', 'name', 'created_at']) &&
+          request.resource.data.email is string &&
+          request.resource.data.email.size() > 3 &&
+          request.resource.data.email.size() < 255 &&
+          request.resource.data.name is string &&
+          request.resource.data.name.size() > 0 &&
+          request.resource.data.name.size() < 120
+        );
       allow update, delete: if canUpdateTenant();
     }
 
@@ -249,7 +260,15 @@ service cloud.firestore {
         (isAuthenticated() &&
          (!resource.data.keys().hasAny(['org_id']) ||
           (resource.data.org_id == userOrg() && request.resource.data.org_id == resource.data.org_id)));
-      allow create: if request.resource.data.keys().hasAll(['vvc_tag', 'email']);
+      allow create: if isPrivileged() ||
+        (
+          request.resource.data.keys().hasAll(['vvc_tag', 'email']) &&
+          request.resource.data.vvc_tag is string &&
+          request.resource.data.vvc_tag.matches('^vvc-.*') &&
+          request.resource.data.email is string &&
+          request.resource.data.email.size() > 3 &&
+          request.resource.data.email.size() < 255
+        );
     }
 
     // VVC API Registry: Unieke vvc_tag registraties voor VVC API & onboarding

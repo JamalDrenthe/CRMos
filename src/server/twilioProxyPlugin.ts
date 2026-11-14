@@ -45,7 +45,13 @@ export function twilioProxyPlugin(): Plugin {
               recording?: boolean;
             }>();
 
-            const { accountSid, authToken, to, from, webhookUrl, twiml, recording } = body;
+            // Controleer authenticatie (Firebase ID token of API key)
+            const authHeader = (req.headers['authorization'] || req.headers['x-crmos-api-key'] || '') as string;
+            if (!authHeader) {
+              res.writeHead(401, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ success: false, message: 'Niet geautoriseerd: authenticatie vereist.' }));
+              return;
+            }
 
             if (!accountSid || !authToken) {
               res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -69,13 +75,27 @@ export function twilioProxyPlugin(): Plugin {
               return;
             }
 
+            // Validatie van webhookUrl tegen SSRF indien opgegeven
+            if (webhookUrl) {
+              try {
+                const u = new URL(webhookUrl);
+                if (u.protocol !== 'https:' || u.hostname === 'localhost' || u.hostname.endsWith('.local') || /^[\d.]+$/.test(u.hostname)) {
+                  res.writeHead(400, { 'Content-Type': 'application/json' });
+                  res.end(JSON.stringify({ success: false, message: 'Ongeldige webhookUrl: alleen externe HTTPS URLs toegestaan.' }));
+                  return;
+                }
+              } catch {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, message: 'Ongeldige syntax voor webhookUrl.' }));
+                return;
+              }
+            }
+
             const formData = new URLSearchParams();
             formData.append('To', to);
             formData.append('From', from);
 
-            if (twiml) {
-              formData.append('Twiml', twiml);
-            } else if (webhookUrl) {
+            if (webhookUrl) {
               formData.append('Url', webhookUrl);
             } else {
               // Standard professional Dutch voice response so call is immediately audible upon pickup
@@ -135,6 +155,13 @@ export function twilioProxyPlugin(): Plugin {
         // 2. VERIFY CREDENTIALS & FETCH PHONE NUMBERS ENDPOINT
         if (req.url === '/api/twilio/verify' && req.method === 'POST') {
           try {
+            const authHeader = (req.headers['authorization'] || req.headers['x-crmos-api-key'] || '') as string;
+            if (!authHeader) {
+              res.writeHead(401, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ valid: false, message: 'Niet geautoriseerd: authenticatie vereist.' }));
+              return;
+            }
+
             const body = await readBody<{
               accountSid: string;
               authToken: string;

@@ -133,11 +133,16 @@ export async function resolveApiKeyMeta(
 
 /**
  * Verifieert een Firebase ID-token via de Identity Toolkit REST API.
- * Geeft een 'user'-meta terug (tag ALL: de CRMos app is intern).
+ * Haalt eventuele custom claims en het Firestore `users/{uid}` profiel op
+ * zodat reguliere app-gebruikers strikt tot hun eigen tenant/bedrijf gescoped zijn.
+ * Alleen geverifieerde admins krijgen `tag: 'ALL'`.
  */
 export async function verifyFirebaseIdToken(
   idToken: string,
-  env: Record<string, string | undefined>
+  env: Record<string, string | undefined>,
+  projectId?: string,
+  firestoreFetch?: (url: string, init?: RequestInit) => Promise<Response>,
+  parseFirestoreFields?: (fields: Record<string, any>) => Record<string, any>
 ): Promise<ApiKeyMeta | null> {
   const webApiKey = env.VITE_FIREBASE_API_KEY || env.FIREBASE_WEB_API_KEY;
   if (!idToken || !webApiKey) return null;
@@ -151,14 +156,65 @@ export async function verifyFirebaseIdToken(
       }
     );
     if (!res.ok) return null;
-    const data = (await res.json()) as { users?: Array<{ localId?: string; email?: string }> };
+    const data = (await res.json()) as {
+      users?: Array<{
+        localId?: string;
+        email?: string;
+        emailVerified?: boolean;
+        customAttributes?: string;
+      }>;
+    };
     const user = data.users?.[0];
     if (!user?.localId) return null;
+
+    let customClaims: Record<string, any> = {};
+    if (user.customAttributes) {
+      try {
+        customClaims = JSON.parse(user.customAttributes);
+      } catch {
+        customClaims = {};
+      }
+    }
+
+    const emailLower = (user.email || '').toLowerCase();
+    const isAdmin =
+      customClaims.admin === true ||
+      customClaims.is_super_admin === true ||
+      (user.emailVerified === true &&
+        (emailLower === 'info@jamaldrenthe.com' || emailLower === 'info@crmos.one'));
+
+    if (isAdmin) {
+      return {
+        id: `user_${user.localId}`,
+        name: user.email || 'CRMos Admin',
+        company: 'CRMos App',
+        tag: 'ALL',
+        role: 'super_admin',
+        via: 'firebase_auth',
+      };
+    }
+
+    // Reguliere app-gebruiker: haal bedrijfsscope op uit Firestore users/{uid}
+    let userCompany = '';
+    let userOrgId = '';
+    if (projectId && firestoreFetch && parseFirestoreFields) {
+      const profileUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${encodeURIComponent(user.localId)}`;
+      const profileRes = await firestoreFetch(profileUrl).catch(() => null);
+      if (profileRes && profileRes.ok) {
+        const docJson = (await profileRes.json()) as { fields?: Record<string, any> };
+        const profile = parseFirestoreFields(docJson.fields || {});
+        userCompany = String(profile.company_name || profile.company || '').trim();
+        userOrgId = String(profile.org_id || '').trim();
+      }
+    }
+
+    const scopedTag = userCompany || userOrgId || `__unassigned_${user.localId}`;
+
     return {
       id: `user_${user.localId}`,
       name: user.email || 'CRMos App User',
-      company: 'CRMos App',
-      tag: 'ALL',
+      company: userCompany || userOrgId || '',
+      tag: scopedTag,
       role: 'user',
       via: 'firebase_auth',
     };
@@ -173,8 +229,7 @@ export function hasFullScope(meta: ApiKeyMeta | null): boolean {
   return (
     meta.tag === 'ALL' ||
     meta.role === 'super_admin' ||
-    meta.role === 'admin' ||
-    meta.via === 'firebase_auth'
+    meta.role === 'admin'
   );
 }
 
