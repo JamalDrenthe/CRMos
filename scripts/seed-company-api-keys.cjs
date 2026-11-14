@@ -41,6 +41,12 @@ const COMPANY_KEY_DEFS = [
   { id: 'trusting-work', name: 'Trusting Work API Key', company: 'trusting work', tag: 'TRUSTING_WORK', role: 'partner', scopes: ['trusting_work:*'] },
   { id: 'woningvry', name: 'Woningvry API Key', company: 'woningvry', tag: 'WONINGVRY', role: 'partner', scopes: ['woningvry:*'] },
   { id: 'xabi-world', name: 'Xabi World API Key', company: 'xabi world', tag: 'XABI_WORLD', role: 'partner', scopes: ['xabi_world:*'] },
+  { id: 'vanguardtech', name: 'VanguardTech API Key', company: 'VanguardTech', tag: 'VANGUARDTECH', role: 'partner', scopes: ['vanguardtech:*'] },
+  { id: 'inderoos', name: 'Inderoos API Key', company: 'Inderoos', tag: 'INDEROOS', role: 'partner', scopes: ['inderoos:*'] },
+  { id: 'overskilled', name: 'Overskilled API Key', company: 'Overskilled', tag: 'OVERSKILLED', role: 'partner', scopes: ['overskilled:*'] },
+  { id: 'promptdj', name: 'PromptDJ API Key', company: 'PromptDJ', tag: 'PROMPTDJ', role: 'partner', scopes: ['promptdj:*'] },
+  { id: 'huasca', name: 'Huasca API Key', company: 'Huasca', tag: 'HUASCA', role: 'partner', scopes: ['huasca:*'] },
+  { id: 'tiptopmarketing', name: 'TipTopMarketing API Key', company: 'TipTopMarketing', tag: 'TIPTOPMARKETING', role: 'partner', scopes: ['tiptopmarketing:*'] },
 ];
 
 // Genereer verse keys + hun veilige (gehashte) opslagrecords

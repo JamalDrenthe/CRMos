@@ -274,7 +274,31 @@ export function SettingsPage() {
   const [apiKeys, setApiKeys] = useState<ApiKeyRecord[]>([]);
   const [newKeyName, setNewKeyName] = useState('');
   const [newKeyScope, setNewKeyScope] = useState('all');
+  const [newKeyCompanyTag, setNewKeyCompanyTag] = useState('VVC');
   const [generatedKey, setGeneratedKey] = useState<string | null>(null);
+
+  const API_KEY_COMPANY_OPTIONS = [
+    { tag: 'ALL', company: 'Alle 13+ Bedrijven (Master View)', role: 'super_admin' as const },
+    { tag: 'CRMOS', company: 'crmos', role: 'admin' as const },
+    { tag: 'VVC', company: 'vvc (verdienende vrienden club)', role: 'partner' as const },
+    { tag: 'INVESTBOTIQ', company: 'Investbotiq', role: 'partner' as const },
+    { tag: 'QUANTUM_INITIUM', company: 'quantum initium', role: 'partner' as const },
+    { tag: 'IMMIGRATIEPUNT', company: 'immigratiepunt', role: 'partner' as const },
+    { tag: 'SPONTIVA', company: 'spontiva', role: 'partner' as const },
+    { tag: 'BOOSTPLUG', company: 'boostplug', role: 'partner' as const },
+    { tag: 'ZHEAVENZY', company: 'zheavenzy', role: 'partner' as const },
+    { tag: 'LOGS_RENT', company: 'logs.rent', role: 'partner' as const },
+    { tag: 'DJOBBA_WORKS', company: 'djobba.works', role: 'partner' as const },
+    { tag: 'TRUSTING_WORK', company: 'trusting work', role: 'partner' as const },
+    { tag: 'WONINGVRY', company: 'woningvry', role: 'partner' as const },
+    { tag: 'XABI_WORLD', company: 'xabi world', role: 'partner' as const },
+    { tag: 'VANGUARDTECH', company: 'VanguardTech', role: 'partner' as const },
+    { tag: 'INDEROOS', company: 'Inderoos', role: 'partner' as const },
+    { tag: 'OVERSKILLED', company: 'Overskilled', role: 'partner' as const },
+    { tag: 'PROMPTDJ', company: 'PromptDJ', role: 'partner' as const },
+    { tag: 'HUASCA', company: 'Huasca', role: 'partner' as const },
+    { tag: 'TIPTOPMARKETING', company: 'TipTopMarketing', role: 'partner' as const },
+  ];
 
   // Playground Sandbox State
   const [playgroundMethod, setPlaygroundMethod] = useState<'GET' | 'POST'>('GET');
@@ -296,17 +320,29 @@ export function SettingsPage() {
   }, [effectiveOrgId]);
 
   const handleCreateApiKey = async () => {
+    if (!isSuperAdmin) {
+      toast.error('Alleen CRMos beheerders mogen intern API keys aanmaken.');
+      return;
+    }
     if (!newKeyName.trim()) {
       toast.error('Geef een omschrijving of applicatienaam op voor de API key');
       return;
     }
+    const selectedOpt =
+      API_KEY_COMPANY_OPTIONS.find((o) => o.tag === newKeyCompanyTag) ||
+      API_KEY_COMPANY_OPTIONS[2];
     const token = `crm_live_${crypto.getRandomValues(new Uint8Array(16)).reduce((acc, b) => acc + b.toString(16).padStart(2, '0'), '')}`;
     const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
     const tokenHash = Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
-    const newRecord: ApiKeyRecord = {
+    const newRecord: ApiKeyRecord & Record<string, any> = {
       id: `key_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       org_id: user?.org_id || 'default_org',
       name: newKeyName.trim(),
+      company: selectedOpt.company,
+      company_name: selectedOpt.company,
+      tag: selectedOpt.tag,
+      company_tag: `#${selectedOpt.tag.toLowerCase()}`,
+      role: selectedOpt.role,
       token_preview: `${token.substring(0, 13)}...`,
       token_hash: tokenHash,
       environment: 'live',
@@ -319,10 +355,14 @@ export function SettingsPage() {
     await saveApiKey(newRecord, user?.org_id || 'default_org');
     setGeneratedKey(token);
     setNewKeyName('');
-    toast.success('Nieuwe CRMos API Key aangemaakt!');
+    toast.success(`API Key intern toegewezen aan ${selectedOpt.company}!`);
   };
 
   const handleDeleteApiKey = async (id: string) => {
+    if (!isSuperAdmin) {
+      toast.error('Alleen CRMos beheerders mogen API keys intrekken.');
+      return;
+    }
     await deleteApiKey(id);
     setApiKeys((prev) => prev.filter((k) => k.id !== id));
     toast.info('API Key succesvol ingetrokken');
@@ -1491,69 +1531,89 @@ print(response.json())`;
             </CardHeader>
 
             <CardContent className="p-5 sm:p-6 pt-0 space-y-5">
-              {/* Key Creation Form */}
-              <div className="rounded-2xl border border-border/50 bg-muted/20 p-4 space-y-3">
-                <p className="text-xs font-semibold text-foreground">Nieuwe API Key Genereren</p>
-                <div className="flex flex-col sm:flex-row gap-2.5">
-                  <Input
-                    placeholder="Applicatienaam (bijv. VVC Funnel, Boostplug Portal)"
-                    value={newKeyName}
-                    onChange={(e) => setNewKeyName(e.target.value)}
-                    className="h-9 text-xs rounded-xl flex-1"
-                  />
-                  <select
-                    value={newKeyScope}
-                    onChange={(e) => setNewKeyScope(e.target.value)}
-                    className="h-9 text-xs rounded-xl bg-background border border-input px-3 text-foreground"
-                  >
-                    <option value="all">Volledige Toegang (*)</option>
-                    <option value="read:contacts">Alleen Contacten Lezen</option>
-                    <option value="read:vvc">Alleen VVC Validatie</option>
-                    <option value="apply:jobs">Kandidaten Sollicitaties</option>
-                  </select>
-                  <Button
-                    onClick={handleCreateApiKey}
-                    className="h-9 rounded-xl px-5 text-xs font-semibold shrink-0 gap-1.5"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    <span>Sleutel Genereren</span>
-                  </Button>
-                </div>
-
-                {/* Show Newly Generated Key Banner */}
-                {generatedKey && (
-                  <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 space-y-2 animate-in fade-in">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-500">
-                        <Check className="h-3.5 w-3.5" />
-                        <span>Sleutel Aangemaakt! Bewaar deze direct veilig:</span>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          navigator.clipboard.writeText(generatedKey);
-                          toast.success('API Key naar klembord gekopieerd!');
-                        }}
-                        className="h-7 text-xs gap-1 rounded-lg hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400"
-                      >
-                        <Copy className="h-3 w-3" />
-                        <span>Kopiëren</span>
-                      </Button>
-                    </div>
-                    <p className="font-mono text-xs bg-background/80 p-2 rounded-lg border border-border/50 text-foreground break-all select-all">
-                      {generatedKey}
-                    </p>
+              {/* Key Creation Form (Alleen zichtbaar en beschikbaar voor CRMos beheerders) */}
+              {isSuperAdmin ? (
+                <div className="rounded-2xl border border-border/50 bg-muted/20 p-4 space-y-3">
+                  <p className="text-xs font-semibold text-foreground">Nieuwe API Key Intern Toekennen</p>
+                  <div className="flex flex-col sm:flex-row gap-2.5">
+                    <Input
+                      placeholder="Applicatienaam (bijv. VVC Funnel, VanguardTech Sync)"
+                      value={newKeyName}
+                      onChange={(e) => setNewKeyName(e.target.value)}
+                      className="h-9 text-xs rounded-xl flex-1"
+                    />
+                    <select
+                      value={newKeyCompanyTag}
+                      onChange={(e) => setNewKeyCompanyTag(e.target.value)}
+                      className="h-9 text-xs rounded-xl bg-background border border-input px-3 text-foreground"
+                    >
+                      {API_KEY_COMPANY_OPTIONS.map((opt) => (
+                        <option key={opt.tag} value={opt.tag}>
+                          {opt.company} ({opt.tag})
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={newKeyScope}
+                      onChange={(e) => setNewKeyScope(e.target.value)}
+                      className="h-9 text-xs rounded-xl bg-background border border-input px-3 text-foreground"
+                    >
+                      <option value="all">Volledige Toegang (*)</option>
+                      <option value="read:contacts">Alleen Contacten Lezen</option>
+                      <option value="read:vvc">Alleen VVC Validatie</option>
+                      <option value="apply:jobs">Kandidaten Sollicitaties</option>
+                    </select>
+                    <Button
+                      onClick={handleCreateApiKey}
+                      className="h-9 rounded-xl px-5 text-xs font-semibold shrink-0 gap-1.5"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      <span>Sleutel Toekennen</span>
+                    </Button>
                   </div>
-                )}
-              </div>
+
+                  {/* Show Newly Generated Key Banner */}
+                  {generatedKey && (
+                    <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 space-y-2 animate-in fade-in">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-500">
+                          <Check className="h-3.5 w-3.5" />
+                          <span>Sleutel Aangemaakt! Bewaar deze direct veilig:</span>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            navigator.clipboard.writeText(generatedKey);
+                            toast.success('API Key naar klembord gekopieerd!');
+                          }}
+                          className="h-7 text-xs gap-1 rounded-lg hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400"
+                        >
+                          <Copy className="h-3 w-3" />
+                          <span>Kopiëren</span>
+                        </Button>
+                      </div>
+                      <p className="font-mono text-xs bg-background/80 p-2 rounded-lg border border-border/50 text-foreground break-all select-all">
+                        {generatedKey}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4 space-y-1.5">
+                  <p className="text-xs font-semibold text-foreground">Intern API-Sleutelbeheer</p>
+                  <p className="text-xs text-muted-foreground">
+                    API-sleutels worden uitsluitend intern door CRMos uitgegeven en toegewezen aan gekoppelde bedrijven. Nieuwe bedrijven kunnen een toegangscode aanvragen via het CRMos beheerteam.
+                  </p>
+                </div>
+              )}
 
               {/* Active Keys List */}
               <div className="space-y-2">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Actieve Sleutels ({apiKeys.length})</p>
                 {apiKeys.length === 0 ? (
                   <div className="p-4 rounded-2xl border border-dashed border-border/60 text-center text-xs text-muted-foreground">
-                    Nog geen extra API keys aangemaakt. De standaard CRMos sandbox gebruikt de ingebouwde master key.
+                    Nog geen extra API keys zichtbaar voor deze organisatie.
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -1565,6 +1625,11 @@ print(response.json())`;
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
                             <span className="font-semibold text-xs text-foreground">{key.name}</span>
+                            {(key as any).tag && (
+                              <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-600 border-emerald-500/20 py-0">
+                                {(key as any).tag}
+                              </Badge>
+                            )}
                             <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/20 py-0">
                               {key.scopes?.join(', ') || '*'}
                             </Badge>
@@ -1591,15 +1656,17 @@ print(response.json())`;
                               <span>Kopiëren</span>
                             </Button>
                           )}
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleDeleteApiKey(key.id)}
-                            className="h-8 text-xs gap-1 rounded-xl text-red-500 hover:text-red-600 hover:bg-red-500/10"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                            <span>Intrekken</span>
-                          </Button>
+                          {isSuperAdmin && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleDeleteApiKey(key.id)}
+                              className="h-8 text-xs gap-1 rounded-xl text-red-500 hover:text-red-600 hover:bg-red-500/10"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                              <span>Intrekken</span>
+                            </Button>
+                          )}
                         </div>
                       </div>
                     ))}

@@ -350,6 +350,26 @@ async function saveToFirestoreRest(
   }
 }
 
+async function deleteFromFirestoreRest(
+  projectId: string,
+  collection: string,
+  docId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${collection}/${encodeURIComponent(
+      docId
+    )}`;
+    const res = await firestoreFetch(url, { method: 'DELETE' });
+    if (res.ok) {
+      return { success: true };
+    }
+    const errText = await res.text();
+    return { success: false, error: errText };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Firestore REST delete failed' };
+  }
+}
+
 /**
  * Formatteert een timestamp voor de notitie-historie: YYYY-MM-DD HH:mm
  */
@@ -1496,6 +1516,43 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
           data: merged,
         });
       }
+
+      if (method === 'DELETE') {
+        const targetId = contactIdFromPath || parsedUrl.searchParams.get('id');
+        if (!targetId) {
+          return errorResponse(
+            400,
+            'Validatiefout: geef een contact ID op via /api/v1/contacts/{id} of ?id=...'
+          );
+        }
+
+        const singleUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/crm_contacts/${encodeURIComponent(targetId)}`;
+        const fbRes = await firestoreFetch(singleUrl);
+        if (!fbRes.ok) {
+          return errorResponse(404, `Contact "${targetId}" niet gevonden`);
+        }
+        const existingData: Record<string, any> = parseFirestoreFields(
+          ((await fbRes.json()) as any).fields || {}
+        );
+        const normalizedExisting = normalizeContactRecord(targetId, existingData);
+        const forbidden = tenantForbiddenResponse(keyMeta, normalizedExisting);
+        if (forbidden) return forbidden;
+        if (!isFullScope && !recordInKeyScope(normalizedExisting, keyMeta)) {
+          return errorResponse(403, 'Forbidden: dit record valt buiten de scope van deze API key');
+        }
+
+        const delRes = await deleteFromFirestoreRest(projectId, 'crm_contacts', targetId);
+        if (!delRes.success) {
+          return errorResponse(500, `Fout bij verwijderen contact: ${delRes.error}`);
+        }
+
+        return jsonResponse(200, {
+          success: true,
+          action: 'deleted',
+          id: targetId,
+          message: `Contact ${targetId} succesvol verwijderd`,
+        });
+      }
     }
 
     // =========================================================================
@@ -1660,6 +1717,39 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
           message: `Deal ${targetId} bijgewerkt`,
           data: merged,
           webhook_dispatched: webhookResult,
+        });
+      }
+
+      if (method === 'DELETE') {
+        const targetId = dealIdFromPath || parsedUrl.searchParams.get('id');
+        if (!targetId) {
+          return errorResponse(400, 'Validatiefout: geef een deal ID op via /api/v1/deals/{id} of ?id=...');
+        }
+
+        const singleUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/crm_deals/${encodeURIComponent(targetId)}`;
+        const fbRes = await firestoreFetch(singleUrl);
+        if (!fbRes.ok) {
+          return errorResponse(404, `Deal "${targetId}" niet gevonden`);
+        }
+        const existing: Record<string, any> = parseFirestoreFields(
+          ((await fbRes.json()) as any).fields || {}
+        );
+        const forbidden = tenantForbiddenResponse(keyMeta, existing);
+        if (forbidden) return forbidden;
+        if (!isFullScope && !recordInKeyScope(existing, keyMeta)) {
+          return errorResponse(403, 'Forbidden: dit record valt buiten de scope van deze API key');
+        }
+
+        const delRes = await deleteFromFirestoreRest(projectId, 'crm_deals', targetId);
+        if (!delRes.success) {
+          return errorResponse(500, `Fout bij verwijderen deal: ${delRes.error}`);
+        }
+
+        return jsonResponse(200, {
+          success: true,
+          action: 'deleted',
+          id: targetId,
+          message: `Deal ${targetId} succesvol verwijderd`,
         });
       }
     }
@@ -1916,6 +2006,42 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
           message: `Kandidaat ${targetId} bijgewerkt${isPlaced ? ' & Outbound Webhook naar ecosysteem verstuurd' : ''}`,
           data: merged,
           webhook_dispatched: webhookResult,
+        });
+      }
+
+      if (method === 'DELETE') {
+        const targetId = candidateIdFromPath || parsedUrl.searchParams.get('id');
+        if (!targetId) {
+          return errorResponse(
+            400,
+            'Validatiefout: geef een kandidaat ID op via /api/v1/candidates/{id} of ?id=...'
+          );
+        }
+
+        const singleUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/crm_candidates/${encodeURIComponent(targetId)}`;
+        const fbRes = await firestoreFetch(singleUrl);
+        if (!fbRes.ok) {
+          return errorResponse(404, `Kandidaat "${targetId}" niet gevonden`);
+        }
+        const existing: Record<string, any> = parseFirestoreFields(
+          ((await fbRes.json()) as any).fields || {}
+        );
+        const forbidden = tenantForbiddenResponse(keyMeta, existing);
+        if (forbidden) return forbidden;
+        if (!isFullScope && !recordInKeyScope(existing, keyMeta)) {
+          return errorResponse(403, 'Forbidden: dit record valt buiten de scope van deze API key');
+        }
+
+        const delRes = await deleteFromFirestoreRest(projectId, 'crm_candidates', targetId);
+        if (!delRes.success) {
+          return errorResponse(500, `Fout bij verwijderen kandidaat: ${delRes.error}`);
+        }
+
+        return jsonResponse(200, {
+          success: true,
+          action: 'deleted',
+          id: targetId,
+          message: `Kandidaat ${targetId} succesvol verwijderd`,
         });
       }
     }
