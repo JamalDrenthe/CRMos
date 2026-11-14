@@ -63,6 +63,22 @@ await t('geverifieerd admin-email kan profiel schrijven', assertSucceeds(updateD
 await t('orgB user kan profiel orgA niet lezen', assertFails(getDoc(doc(mallory, 'users/alice'))));
 // Anonymous read of tenant data denied
 await t('anoniem kan kandidaat niet lezen', assertFails(getDoc(doc(anon, 'crm_candidates/candA'))));
+// Self-registration into default_org denied, isolated org allowed
+const newSignup = testEnv.authenticatedContext('newuser1').firestore();
+await t('self-registratie met default_org geweigerd', assertFails(setDoc(doc(newSignup, 'users/newuser1'), {
+  org_id: 'default_org',
+  role: 'agent',
+  is_super_admin: false,
+  company_name: 'VVC',
+  allowed_companies: ['VVC'],
+})));
+await t('self-registratie met eigen geisoleerde org_id toegestaan', assertSucceeds(setDoc(doc(newSignup, 'users/newuser1'), {
+  org_id: 'org_vvc_newuser1',
+  role: 'agent',
+  is_super_admin: false,
+  company_name: 'VVC',
+  allowed_companies: ['VVC'],
+})));
 
 await testEnv.cleanup();
 console.log(`\n${pass} passed, ${fail} failed`);

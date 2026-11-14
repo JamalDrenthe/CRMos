@@ -57,7 +57,6 @@ export const DEFAULT_ECOSYSTEM_WEBHOOKS: WebhookSubscription[] = [
     company: 'Investbotiq',
     url: 'https://investbotiq.com/api/webhooks/crmos',
     events: ['candidate.placed', 'candidate.status_changed', 'deal.won', 'deal.stage_changed', 'contact.upserted'],
-    secret: 'whsec_ibq_7f2c9e41a6b84d5f90c3e1d2a7b5f8c4',
     active: true,
     created_at: '2026-01-15T09:00:00.000Z',
   },
@@ -66,7 +65,6 @@ export const DEFAULT_ECOSYSTEM_WEBHOOKS: WebhookSubscription[] = [
     company: 'Investbotiq NL',
     url: 'https://investbotiq.nl/api/webhooks/crmos',
     events: ['candidate.placed', 'candidate.status_changed', 'deal.won', 'deal.stage_changed', 'contact.upserted'],
-    secret: 'whsec_ibqnl_3d8a1f5c2e9b47a6d0f4c8e2b1a9d6f3',
     active: true,
     created_at: '2026-01-15T09:00:00.000Z',
   },
@@ -75,7 +73,6 @@ export const DEFAULT_ECOSYSTEM_WEBHOOKS: WebhookSubscription[] = [
     company: 'vvc (verdienende vrienden club)',
     url: 'https://vvc.works/api/webhooks/crmos',
     events: ['candidate.placed', 'deal.won', 'contact.upserted'],
-    secret: 'whsec_vvc_9b4e2d7a1c6f38e5a0d2b9c4f7e1a8d5',
     active: true,
     created_at: '2026-01-15T09:00:00.000Z',
   },
@@ -84,7 +81,6 @@ export const DEFAULT_ECOSYSTEM_WEBHOOKS: WebhookSubscription[] = [
     company: 'spontiva',
     url: 'https://spontiva.nl/api/webhooks/crmos',
     events: ['candidate.placed', 'deal.won'],
-    secret: 'whsec_spt_5a1c8e3b9d4f27a6c0e8b2d5f9a4c7e1',
     active: true,
     created_at: '2026-01-15T09:00:00.000Z',
   },
@@ -398,8 +394,26 @@ function appendTimestampedNote(
 async function getActiveWebhooks(projectId: string): Promise<WebhookSubscription[]> {
   const map = new Map<string, WebhookSubscription>();
   for (const wh of DEFAULT_ECOSYSTEM_WEBHOOKS) {
-    map.set(wh.id, wh);
+    map.set(wh.id, { ...wh });
   }
+
+  // Haal optionele geheimen uit env (bijv. CRMOS_WEBHOOK_SECRETS_JSON: {"wh_investbotiq_prod": "whsec_..."})
+  const envSecretsRaw = runtimeEnv.CRMOS_WEBHOOK_SECRETS_JSON || runtimeEnv.WEBHOOK_SECRETS_JSON;
+  let envSecrets: Record<string, string> = {};
+  if (envSecretsRaw) {
+    try {
+      envSecrets = JSON.parse(envSecretsRaw);
+    } catch {
+      envSecrets = {};
+    }
+  }
+
+  for (const [id, wh] of map.entries()) {
+    if (envSecrets[id]) {
+      wh.secret = envSecrets[id];
+    }
+  }
+
   try {
     const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/organizations/crmos_webhooks_registry`;
     const res = await firestoreFetch(url);
@@ -703,10 +717,16 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
       parseFirestoreFields
     );
     if (!keyMeta && apiKey) {
-      keyMeta = await verifyFirebaseIdToken(apiKey, runtimeEnv);
+      keyMeta = await verifyFirebaseIdToken(
+        apiKey,
+        runtimeEnv,
+        projectId,
+        firestoreFetch,
+        parseFirestoreFields
+      );
     }
     const sourceCompanyLabel = keyMeta
-      ? keyMeta.tag === 'ALL'
+      ? hasFullScope(keyMeta)
         ? 'CRMos Master Agent'
         : keyMeta.company
       : 'Externe Website / Agent';
@@ -714,7 +734,7 @@ export async function handleCrmosApiRequest(req: ApiCoreRequest): Promise<ApiCor
     // Bedrijf dat de API key afdwingt op nieuwe records (partner-keys kunnen
     // geen records voor een ander bedrijf aanmaken). Master/admin is vrij.
     const enforcedCompany =
-      keyMeta && keyMeta.tag !== 'ALL' ? keyMeta.company : null;
+      keyMeta && !hasFullScope(keyMeta) ? keyMeta.company : null;
 
     // =========================================================================
     // 1. DEDICATED HEALTH ENDPOINT (GET /api/v1/health)
