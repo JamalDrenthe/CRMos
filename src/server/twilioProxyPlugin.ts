@@ -45,6 +45,8 @@ export function twilioProxyPlugin(): Plugin {
               recording?: boolean;
             }>();
 
+            const { accountSid, authToken, to, from, webhookUrl, twiml, recording } = body;
+
             // Controleer authenticatie (Firebase ID token of API key)
             const authHeader = (req.headers['authorization'] || req.headers['x-crmos-api-key'] || '') as string;
             if (!authHeader) {
@@ -98,8 +100,9 @@ export function twilioProxyPlugin(): Plugin {
             if (webhookUrl) {
               formData.append('Url', webhookUrl);
             } else {
-              // Standard professional Dutch voice response so call is immediately audible upon pickup
-              const defaultTwiml = `
+              // Standaard TwiML: custom Twiml uit de request, anders een
+              // professioneel Nederlands voice-bericht zodat de oproep direct klinkt
+              const twimlBody = twiml || `
                 <Response>
                   <Say language="nl-NL" voice="Polly.Lotte">
                     Welkom bij CRMos. Dit is een testoproep via uw Twilio spraakverbinding.
@@ -111,7 +114,7 @@ export function twilioProxyPlugin(): Plugin {
                   </Say>
                 </Response>
               `.trim();
-              formData.append('Twiml', defaultTwiml);
+              formData.append('Twiml', twimlBody);
             }
 
             if (recording) {
